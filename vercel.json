@@ -1,5 +1,8 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist"
-}
+# PDF Quotation v7.2
+
+- ออกแบบใบเสนอราคาใหม่ทั้งหมด
+- จัดวาง A4 แนวตั้งและบังคับให้อยู่ใน 1 หน้า
+- แสดงช่องทางราคา Retail / Agent ชัดเจน
+- ลดรายละเอียดซ้ำและจัด Inclusions แบบกระชับ
+- เพิ่ม Grand Total, จำนวนเงินตัวอักษร, เงื่อนไข และลายเซ็นในหน้าเดียว
+- ใช้ Print > Save as PDF จาก Browser ได้ทันที

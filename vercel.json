@@ -1,24 +1,5 @@
-# Bhutan Center Pricing System
-
-ระบบคำนวณและจัดการราคาทัวร์ภูฏาน สร้างด้วย React + TypeScript + Vite
-
-## Deploy บน Vercel
-
-1. อัปโหลดไฟล์ทั้งหมดเข้า GitHub
-2. ใน Vercel เลือก **Add New → Project**
-3. Import repository นี้
-4. Framework Preset เลือก **Vite**
-5. Build Command: `npm run build`
-6. Output Directory: `dist`
-7. กด Deploy
-
-## ใช้งานในเครื่อง
-
-```bash
-npm install
-npm run dev
-```
-
-## สำคัญก่อนใช้งานจริง
-
-เวอร์ชันนี้ยังใช้ `localStorage` และระบบเข้าสู่ระบบแบบ Demo ข้อมูลจึงไม่ซิงก์ข้ามเครื่อง ดูขั้นตอนเชื่อมฐานข้อมูลจริงใน [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist"
+}

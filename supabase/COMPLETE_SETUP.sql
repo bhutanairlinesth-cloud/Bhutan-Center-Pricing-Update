@@ -118,6 +118,8 @@ $$;
 
 alter table public.profiles enable row level security;
 alter table public.app_settings add column if not exists agent_ticket_price_thb numeric not null default 25220;
+alter table public.app_settings add column if not exists agent_ticket_discount_percent numeric not null default 3;
+alter table public.app_settings add column if not exists agent_margin_thb numeric not null default 3000;
 update public.app_settings set agent_ticket_price_thb = 25220 where agent_ticket_price_thb is null;
 
 alter table public.app_settings enable row level security;
@@ -152,8 +154,15 @@ for all to authenticated using (public.is_admin()) with check (public.is_admin()
 
 grant execute on function public.is_admin() to authenticated;
 
-insert into public.app_settings values
-('00000000-0000-0000-0000-000000000001',35,26000,6500,40,5000,250,200,180,300,240,220,3,3000,now())
+insert into public.app_settings (
+  id, exchange_rate_usd, ticket_price_thb, airport_tax_thb, visa_fee_usd, margin_thb,
+  hotel_3_star_pax1_usd, hotel_3_star_pax2_usd, hotel_3_star_pax3_plus_usd,
+  hotel_4_star_pax1_usd, hotel_4_star_pax2_usd, hotel_4_star_pax3_plus_usd,
+  agent_ticket_price_thb, agent_ticket_discount_percent, agent_margin_thb, updated_at
+) values (
+  '00000000-0000-0000-0000-000000000001', 35, 26000, 6500, 40, 5000,
+  250, 200, 180, 300, 240, 220, 25220, 3, 3000, now()
+)
 on conflict (id) do nothing;
 
 insert into public.hotels (id,name,category,pax1_usd,pax2_usd,pax3_plus_usd) values

@@ -1,8 +1,12 @@
 import { GlobalSettings, Hotel, TourPackage, User } from '../types';
-import { mockDb } from './mockDb';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { mockDb } from './mockDb';
 
 const SETTINGS_ID = '00000000-0000-0000-0000-000000000001';
+
+function fail(error: any, fallback: string): never {
+  throw new Error(error?.message || fallback);
+}
 
 function mapSettings(row: any): GlobalSettings {
   return {
@@ -24,6 +28,7 @@ function mapSettings(row: any): GlobalSettings {
 }
 
 function settingsRow(settings: GlobalSettings) {
+  const agentPrice = settings.agentTicketPriceTHB ?? 25220;
   return {
     id: SETTINGS_ID,
     exchange_rate_usd: settings.exchangeRateUSD,
@@ -37,8 +42,10 @@ function settingsRow(settings: GlobalSettings) {
     hotel_4_star_pax1_usd: settings.hotel4StarPax1USD,
     hotel_4_star_pax2_usd: settings.hotel4StarPax2USD,
     hotel_4_star_pax3_plus_usd: settings.hotel4StarPax3PlusUSD,
-    agent_ticket_price_thb: settings.agentTicketPriceTHB ?? 25220,
-    agent_ticket_discount_percent: settings.ticketPriceTHB > 0 ? Number((((settings.ticketPriceTHB - (settings.agentTicketPriceTHB ?? 25220)) / settings.ticketPriceTHB) * 100).toFixed(4)) : 0,
+    agent_ticket_price_thb: agentPrice,
+    agent_ticket_discount_percent: settings.ticketPriceTHB > 0
+      ? Number((((settings.ticketPriceTHB - agentPrice) / settings.ticketPriceTHB) * 100).toFixed(4))
+      : 0,
     agent_margin_thb: settings.agentMarginTHB ?? 3000,
     updated_at: new Date().toISOString(),
   };
@@ -48,7 +55,11 @@ const mapHotel = (row: any): Hotel => ({
   id: row.id,
   name: row.name,
   category: row.category,
-  rates: { pax1USD: Number(row.pax1_usd), pax2USD: Number(row.pax2_usd), pax3PlusUSD: Number(row.pax3_plus_usd) },
+  rates: {
+    pax1USD: Number(row.pax1_usd),
+    pax2USD: Number(row.pax2_usd),
+    pax3PlusUSD: Number(row.pax3_plus_usd),
+  },
 });
 
 const hotelRow = (hotel: Hotel) => ({
@@ -66,7 +77,7 @@ const mapPackage = (row: any): TourPackage => ({
   name: row.name,
   nights: Number(row.nights),
   rates: row.rates,
-  hotelRates: row.hotel_rates,
+  hotelRates: row.hotel_rates ?? undefined,
 });
 
 const packageRow = (pkg: TourPackage) => ({
@@ -86,10 +97,6 @@ const mapUser = (row: any): User => ({
   createdAt: row.created_at,
 });
 
-function fail(error: any, fallback: string): never {
-  throw new Error(error?.message || fallback);
-}
-
 export const database = {
   mode: isSupabaseConfigured ? 'supabase' as const : 'local' as const,
 
@@ -97,10 +104,9 @@ export const database = {
     if (!isSupabaseConfigured) return mockDb.getSettings();
     const { data, error } = await supabase.from('app_settings').select('*').eq('id', SETTINGS_ID).maybeSingle();
     if (error) fail(error, 'โหลดการตั้งค่าไม่สำเร็จ');
-    if (!data) throw new Error('ไม่พบ app_settings กรุณารัน schema.sql');
+    if (!data) throw new Error('ไม่พบข้อมูล app_settings กรุณารัน COMPLETE_SETUP.sql');
     return mapSettings(data);
   },
-
   async saveSettings(settings: GlobalSettings): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.saveSettings(settings);
     const { error } = await supabase.from('app_settings').upsert(settingsRow(settings));
@@ -113,13 +119,11 @@ export const database = {
     if (error) fail(error, 'โหลดโรงแรมไม่สำเร็จ');
     return (data || []).map(mapHotel);
   },
-
   async saveHotel(hotel: Hotel): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.saveHotel(hotel);
     const { error } = await supabase.from('hotels').upsert(hotelRow(hotel));
     if (error) fail(error, 'บันทึกโรงแรมไม่สำเร็จ');
   },
-
   async deleteHotel(id: string): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.deleteHotel(id);
     const { error } = await supabase.from('hotels').delete().eq('id', id);
@@ -132,13 +136,11 @@ export const database = {
     if (error) fail(error, 'โหลดโปรแกรมทัวร์ไม่สำเร็จ');
     return (data || []).map(mapPackage);
   },
-
   async savePackage(pkg: TourPackage): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.savePackage(pkg);
     const { error } = await supabase.from('tour_packages').upsert(packageRow(pkg));
     if (error) fail(error, 'บันทึกโปรแกรมทัวร์ไม่สำเร็จ');
   },
-
   async deletePackage(id: string): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.deletePackage(id);
     const { error } = await supabase.from('tour_packages').delete().eq('id', id);
@@ -151,7 +153,6 @@ export const database = {
     if (error) fail(error, 'โหลดผู้ใช้งานไม่สำเร็จ');
     return (data || []).map(mapUser);
   },
-
   async saveUser(user: User): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.saveUser(user);
     const { error } = await supabase.from('profiles').upsert({
@@ -164,7 +165,6 @@ export const database = {
     });
     if (error) fail(error, 'บันทึกผู้ใช้งานไม่สำเร็จ');
   },
-
   async deleteUser(id: string): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.deleteUser(id);
     const { error } = await supabase.from('profiles').delete().eq('id', id);

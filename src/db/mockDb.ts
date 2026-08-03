@@ -1,330 +1,110 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+import { GlobalSettings, Hotel, TourPackage, User } from '../types';
 
-import { User, Hotel, TourPackage, GlobalSettings } from '../types';
-
-// Default Users (Database seed)
 const DEFAULT_USERS: User[] = [
-  {
-    id: 'usr_1',
-    name: 'Bhutan Airlines TH',
-    email: 'BhutanairlinesTH@gmail.com',
-    role: 'admin',
-    createdAt: '2026-06-29T23:04:21-07:00'
-  },
-  {
-    id: 'usr_2',
-    name: 'Dechen Wangchuck (Sales)',
-    email: 'sales@bhutancenter.com',
-    role: 'sales',
-    createdAt: '2026-06-29T23:04:21-07:00'
-  }
+  { id: 'usr_1', name: 'OMG Experience Admin', email: 'info@omgexp.com', role: 'admin', createdAt: new Date().toISOString() },
+  { id: 'usr_2', name: 'Sales Team', email: 'sales@omgexp.com', role: 'sales', createdAt: new Date().toISOString() },
 ];
 
-// Default Hotels with the user's requested rates per category
 const DEFAULT_HOTELS: Hotel[] = [
-  {
-    id: 'htl_3s_1',
-    name: 'Hotel Thimphu Tower',
-    category: '3 Stars',
-    rates: {
-      pax1USD: 250,
-      pax2USD: 200,
-      pax3PlusUSD: 180
-    }
-  },
-  {
-    id: 'htl_3s_2',
-    name: 'Phuentsholing Lodge',
-    category: '3 Stars',
-    rates: {
-      pax1USD: 240,
-      pax2USD: 190,
-      pax3PlusUSD: 170
-    }
-  },
-  {
-    id: 'htl_4s_1',
-    name: 'Ariana Bhutan Resort',
-    category: '4 Stars',
-    rates: {
-      pax1USD: 300,
-      pax2USD: 240,
-      pax3PlusUSD: 220
-    }
-  },
-  {
-    id: 'htl_4s_2',
-    name: 'Zhiwa Ling Heritage',
-    category: '4 Stars',
-    rates: {
-      pax1USD: 320,
-      pax2USD: 260,
-      pax3PlusUSD: 230
-    }
-  },
-  {
-    id: 'htl_5s_1',
-    name: 'Taj Tashi Thimphu',
-    category: '5 Stars',
-    rates: {
-      pax1USD: 450,
-      pax2USD: 380,
-      pax3PlusUSD: 350
-    }
-  },
-  {
-    id: 'htl_5s_2',
-    name: 'Amankora Paro Lodge',
-    category: '5 Stars',
-    rates: {
-      pax1USD: 550,
-      pax2USD: 480,
-      pax3PlusUSD: 440
-    }
-  }
+  { id: 'htl_3s_1', name: 'Hotel Thimphu Tower', category: '3 Stars', rates: { pax1USD: 250, pax2USD: 200, pax3PlusUSD: 180 } },
+  { id: 'htl_3s_2', name: 'Phuentsholing Lodge', category: '3 Stars', rates: { pax1USD: 240, pax2USD: 190, pax3PlusUSD: 170 } },
+  { id: 'htl_4s_1', name: 'Ariana Bhutan Resort', category: '4 Stars', rates: { pax1USD: 300, pax2USD: 240, pax3PlusUSD: 220 } },
+  { id: 'htl_4s_2', name: 'Zhiwa Ling Heritage', category: '4 Stars', rates: { pax1USD: 320, pax2USD: 260, pax3PlusUSD: 230 } },
+  { id: 'htl_5s_1', name: 'Taj Tashi Thimphu', category: '5 Stars', rates: { pax1USD: 450, pax2USD: 380, pax3PlusUSD: 350 } },
+  { id: 'htl_5s_2', name: 'Amankora Paro Lodge', category: '5 Stars', rates: { pax1USD: 550, pax2USD: 480, pax3PlusUSD: 440 } },
 ];
 
-// Default Tour Packages
 const DEFAULT_PACKAGES: TourPackage[] = [
   {
-    id: 'pkg_1',
-    name: '4 Days 3 Nights (JOURNEY TO BHUTAN)',
-    nights: 3,
-    rates: {
-      pax1USD: 250,
-      pax2USD: 200,
-      pax3PlusUSD: 180
-    },
+    id: 'pkg_1', name: '4 Days 3 Nights (JOURNEY TO BHUTAN)', nights: 3,
+    rates: { pax1USD: 250, pax2USD: 200, pax3PlusUSD: 180 },
     hotelRates: {
       star3: { pax1USD: 250, pax2USD: 200, pax3PlusUSD: 180 },
       star4: { pax1USD: 300, pax2USD: 240, pax3PlusUSD: 220 },
-      star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 }
-    }
+      star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 },
+    },
   },
   {
-    id: 'pkg_2',
-    name: '5 Days 4 Nights (WONDERS OF BHUTAN)',
-    nights: 4,
-    rates: {
-      pax1USD: 260,
-      pax2USD: 210,
-      pax3PlusUSD: 190
-    },
+    id: 'pkg_2', name: '5 Days 4 Nights (WONDERS OF BHUTAN)', nights: 4,
+    rates: { pax1USD: 260, pax2USD: 210, pax3PlusUSD: 190 },
     hotelRates: {
       star3: { pax1USD: 250, pax2USD: 200, pax3PlusUSD: 180 },
       star4: { pax1USD: 300, pax2USD: 240, pax3PlusUSD: 220 },
-      star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 }
-    }
+      star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 },
+    },
   },
   {
-    id: 'pkg_3',
-    name: '6 Days 5 Nights (THE ULTIMATE BHUTAN)',
-    nights: 5,
-    rates: {
-      pax1USD: 270,
-      pax2USD: 220,
-      pax3PlusUSD: 200
-    },
+    id: 'pkg_3', name: '6 Days 5 Nights (THE ULTIMATE BHUTAN)', nights: 5,
+    rates: { pax1USD: 270, pax2USD: 220, pax3PlusUSD: 200 },
     hotelRates: {
       star3: { pax1USD: 250, pax2USD: 200, pax3PlusUSD: 180 },
       star4: { pax1USD: 300, pax2USD: 240, pax3PlusUSD: 220 },
-      star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 }
-    }
-  }
+      star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 },
+    },
+  },
 ];
 
-// Default Global Configuration and pricing rates
 const DEFAULT_SETTINGS: GlobalSettings = {
-  exchangeRateUSD: 35,       // Default 35
-  ticketPriceTHB: 26000,     // Default 26,000 THB
-  airportTaxTHB: 6500,       // Default 6,500 THB
-  visaFeeUSD: 40,            // Default 40 USD
-  marginTHB: 5000,           // Default 5,000 THB
-  hotel3StarPax1USD: 250,    // 3 Star Hotel 1 Passenger rate
-  hotel3StarPax2USD: 200,    // 3 Star Hotel 2 Passengers rate
-  hotel3StarPax3PlusUSD: 180,// 3 Star Hotel 3+ Passengers rate
-  hotel4StarPax1USD: 300,    // 4 Star Hotel 1 Passenger rate
-  hotel4StarPax2USD: 240,    // 4 Star Hotel 2 Passengers rate
-  hotel4StarPax3PlusUSD: 220, // 4 Star Hotel 3+ Passengers rate
-  agentTicketPriceTHB: 25220,    // Default Agent fare (3% below 26,000)
-  agentTicketDiscountPercent: 3, // Display/derived discount
-  agentMarginTHB: 3000       // Default 3,000 THB margin
+  exchangeRateUSD: 35,
+  ticketPriceTHB: 26000,
+  airportTaxTHB: 6500,
+  visaFeeUSD: 40,
+  marginTHB: 5000,
+  hotel3StarPax1USD: 250,
+  hotel3StarPax2USD: 200,
+  hotel3StarPax3PlusUSD: 180,
+  hotel4StarPax1USD: 300,
+  hotel4StarPax2USD: 240,
+  hotel4StarPax3PlusUSD: 220,
+  agentTicketPriceTHB: 25220,
+  agentTicketDiscountPercent: 3,
+  agentMarginTHB: 3000,
 };
 
-const STORAGE_KEYS = {
-  USERS: 'bhutan_pricing_users',
-  HOTELS: 'bhutan_pricing_hotels',
-  PACKAGES: 'bhutan_pricing_packages',
-  SETTINGS: 'bhutan_pricing_settings'
+const KEYS = {
+  users: 'bhutan_v10_users',
+  hotels: 'bhutan_v10_hotels',
+  packages: 'bhutan_v10_packages',
+  settings: 'bhutan_v10_settings',
 };
+
+function read<T>(key: string, fallback: T): T {
+  const current = localStorage.getItem(key);
+  if (!current) {
+    localStorage.setItem(key, JSON.stringify(fallback));
+    return fallback;
+  }
+  try { return JSON.parse(current) as T; } catch { return fallback; }
+}
 
 export const mockDb = {
-  // --- USERS ---
-  getUsers(): User[] {
-    const data = localStorage.getItem(STORAGE_KEYS.USERS);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(DEFAULT_USERS));
-      return DEFAULT_USERS;
-    }
-    return JSON.parse(data);
+  getUsers: () => read<User[]>(KEYS.users, DEFAULT_USERS),
+  saveUser(user: User) {
+    const list = this.getUsers();
+    const index = list.findIndex((x) => x.id === user.id);
+    if (index >= 0) list[index] = user; else list.push(user);
+    localStorage.setItem(KEYS.users, JSON.stringify(list));
   },
+  deleteUser(id: string) { localStorage.setItem(KEYS.users, JSON.stringify(this.getUsers().filter((x) => x.id !== id))); },
 
-  saveUser(user: User): User {
-    const users = this.getUsers();
-    const index = users.findIndex(u => u.id === user.id);
-    if (index >= 0) {
-      users[index] = user;
-    } else {
-      users.push(user);
-    }
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-    return user;
+  getHotels: () => read<Hotel[]>(KEYS.hotels, DEFAULT_HOTELS),
+  saveHotel(hotel: Hotel) {
+    const list = this.getHotels();
+    const index = list.findIndex((x) => x.id === hotel.id);
+    if (index >= 0) list[index] = hotel; else list.push(hotel);
+    localStorage.setItem(KEYS.hotels, JSON.stringify(list));
   },
+  deleteHotel(id: string) { localStorage.setItem(KEYS.hotels, JSON.stringify(this.getHotels().filter((x) => x.id !== id))); },
 
-  deleteUser(id: string): void {
-    const users = this.getUsers();
-    const filtered = users.filter(u => u.id !== id);
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(filtered));
+  getPackages: () => read<TourPackage[]>(KEYS.packages, DEFAULT_PACKAGES),
+  savePackage(pkg: TourPackage) {
+    const list = this.getPackages();
+    const index = list.findIndex((x) => x.id === pkg.id);
+    if (index >= 0) list[index] = pkg; else list.push(pkg);
+    localStorage.setItem(KEYS.packages, JSON.stringify(list));
   },
+  deletePackage(id: string) { localStorage.setItem(KEYS.packages, JSON.stringify(this.getPackages().filter((x) => x.id !== id))); },
 
-  // --- HOTELS ---
-  getHotels(): Hotel[] {
-    const data = localStorage.getItem(STORAGE_KEYS.HOTELS);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.HOTELS, JSON.stringify(DEFAULT_HOTELS));
-      return DEFAULT_HOTELS;
-    }
-    return JSON.parse(data);
-  },
-
-  saveHotel(hotel: Hotel): Hotel {
-    const hotels = this.getHotels();
-    const index = hotels.findIndex(h => h.id === hotel.id);
-    if (index >= 0) {
-      hotels[index] = hotel;
-    } else {
-      hotels.push(hotel);
-    }
-    localStorage.setItem(STORAGE_KEYS.HOTELS, JSON.stringify(hotels));
-    return hotel;
-  },
-
-  deleteHotel(id: string): void {
-    const hotels = this.getHotels();
-    const filtered = hotels.filter(h => h.id !== id);
-    localStorage.setItem(STORAGE_KEYS.HOTELS, JSON.stringify(filtered));
-  },
-
-  // --- PACKAGES ---
-  getPackages(): TourPackage[] {
-    const data = localStorage.getItem(STORAGE_KEYS.PACKAGES);
-    let parsed: TourPackage[] = [];
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.PACKAGES, JSON.stringify(DEFAULT_PACKAGES));
-      parsed = DEFAULT_PACKAGES;
-    } else {
-      parsed = JSON.parse(data);
-    }
-
-    // Ensure hotelRates exists and name is updated for all standard packages
-    let updated = false;
-    const migration = parsed.map(pkg => {
-      // Migrate names if they are old default names
-      if (pkg.id === 'pkg_1' && pkg.name !== '4 Days 3 Nights (JOURNEY TO BHUTAN)') {
-        pkg.name = '4 Days 3 Nights (JOURNEY TO BHUTAN)';
-        updated = true;
-      } else if (pkg.id === 'pkg_2' && pkg.name !== '5 Days 4 Nights (WONDERS OF BHUTAN)') {
-        pkg.name = '5 Days 4 Nights (WONDERS OF BHUTAN)';
-        updated = true;
-      } else if (pkg.id === 'pkg_3' && pkg.name !== '6 Days 5 Nights (THE ULTIMATE BHUTAN)') {
-        pkg.name = '6 Days 5 Nights (THE ULTIMATE BHUTAN)';
-        updated = true;
-      }
-
-      if (!pkg.hotelRates) {
-        pkg.hotelRates = {
-          star3: {
-            pax1USD: pkg.rates?.pax1USD ?? 250,
-            pax2USD: pkg.rates?.pax2USD ?? 200,
-            pax3PlusUSD: pkg.rates?.pax3PlusUSD ?? 180
-          },
-          star4: {
-            pax1USD: (pkg.rates?.pax1USD ?? 250) + 50,
-            pax2USD: (pkg.rates?.pax2USD ?? 200) + 40,
-            pax3PlusUSD: (pkg.rates?.pax3PlusUSD ?? 180) + 40
-          },
-          star5: {
-            pax1USD: 500,
-            pax2USD: 420,
-            pax3PlusUSD: 380
-          }
-        };
-        updated = true;
-      }
-      return pkg;
-    });
-
-    if (updated) {
-      localStorage.setItem(STORAGE_KEYS.PACKAGES, JSON.stringify(migration));
-      return migration;
-    }
-    return parsed;
-  },
-
-  savePackage(pkg: TourPackage): TourPackage {
-    const packages = this.getPackages();
-    const index = packages.findIndex(p => p.id === pkg.id);
-    if (index >= 0) {
-      packages[index] = pkg;
-    } else {
-      packages.push(pkg);
-    }
-    localStorage.setItem(STORAGE_KEYS.PACKAGES, JSON.stringify(packages));
-    return pkg;
-  },
-
-  deletePackage(id: string): void {
-    const packages = this.getPackages();
-    const filtered = packages.filter(p => p.id !== id);
-    localStorage.setItem(STORAGE_KEYS.PACKAGES, JSON.stringify(filtered));
-  },
-
-  // --- SETTINGS ---
-  getSettings(): GlobalSettings {
-    const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    if (!data) {
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SETTINGS));
-      return DEFAULT_SETTINGS;
-    }
-    const parsed = JSON.parse(data);
-    // Dynamic migration for Agent Pricing fields if missing
-    if (parsed.agentTicketPriceTHB === undefined || parsed.agentTicketDiscountPercent === undefined || parsed.agentMarginTHB === undefined) {
-      const migrated = {
-        ...DEFAULT_SETTINGS,
-        ...parsed,
-        agentTicketPriceTHB: parsed.agentTicketPriceTHB !== undefined ? parsed.agentTicketPriceTHB : 25220,
-        agentTicketDiscountPercent: parsed.agentTicketDiscountPercent !== undefined ? parsed.agentTicketDiscountPercent : 3,
-        agentMarginTHB: parsed.agentMarginTHB !== undefined ? parsed.agentMarginTHB : 3000
-      };
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(migrated));
-      return migrated;
-    }
-    return parsed;
-  },
-
-  saveSettings(settings: GlobalSettings): GlobalSettings {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-    return settings;
-  },
-
-  // --- UTILITY ---
-  resetToDefaults(): void {
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(DEFAULT_USERS));
-    localStorage.setItem(STORAGE_KEYS.HOTELS, JSON.stringify(DEFAULT_HOTELS));
-    localStorage.setItem(STORAGE_KEYS.PACKAGES, JSON.stringify(DEFAULT_PACKAGES));
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SETTINGS));
-  }
+  getSettings: () => ({ ...DEFAULT_SETTINGS, ...read<GlobalSettings>(KEYS.settings, DEFAULT_SETTINGS) }),
+  saveSettings(settings: GlobalSettings) { localStorage.setItem(KEYS.settings, JSON.stringify(settings)); },
 };

@@ -1,4 +1,4 @@
-import { GlobalSettings, Hotel, PricingInput, PricingResult, RateByPax, TourPackage } from '../types';
+import { GlobalSettings, PricingInput, PricingResult, RateByPax, TourPackage } from '../types';
 
 const BUSINESS_UPGRADE_THB = 15000;
 
@@ -18,18 +18,14 @@ export function calculatePrice(
   input: PricingInput,
   settings: GlobalSettings,
   packages: TourPackage[],
-  hotels: Hotel[],
 ): PricingResult | null {
   const pkg = packages.find((item) => item.id === input.packageId);
   if (!pkg) return null;
-  const hotel = hotels.find((item) => item.id === input.hotelId);
   const pax = Math.max(1, input.passengerCount || 1);
   const exchange = Number(settings.exchangeRateUSD || 0);
 
-  // Use the selected hotel's rate first, while keeping package rates as a safe fallback.
-  const groundRateUSD = hotel
-    ? selectPaxRate(hotel.rates, pax)
-    : packageFallbackRate(pkg, input.hotelCategory, pax);
+  // Ground pricing is based on the selected hotel level in the package, not a specific hotel name.
+  const groundRateUSD = packageFallbackRate(pkg, input.hotelCategory, pax);
 
   const groundUSD = groundRateUSD * pkg.nights;
   const groundTHB = groundUSD * exchange;
@@ -55,7 +51,6 @@ export function calculatePrice(
     packageName: pkg.name,
     nights: pkg.nights,
     passengerCount: pax,
-    hotelName: hotel?.name || input.hotelCategory,
     hotelCategory: input.hotelCategory,
     travelDate: input.travelDate,
     exchangeRate: exchange,

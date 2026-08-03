@@ -102,7 +102,7 @@ export default function App() {
 
   return <>
     {!currentUser && <Login users={users} onSuccess={loginSuccess}/>} 
-    {currentUser && settings && workspace === 'front' && <FrontOffice settings={settings} hotels={hotels} packages={packages} currentUser={currentUser} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
+    {currentUser && settings && workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
     {currentUser && settings && workspace === 'admin' && currentUser.role === 'admin' && <Admin
       settings={settings} hotels={hotels} packages={packages} users={users} currentUser={currentUser} mode={database.mode}
       onBack={() => setWorkspace('front')} onLogout={logout} onRefresh={refresh}

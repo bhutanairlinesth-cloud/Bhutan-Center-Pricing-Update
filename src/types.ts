@@ -58,7 +58,6 @@ export interface PricingInput {
   packageId: string;
   passengerCount: number;
   hotelCategory: HotelCategory;
-  hotelId: string;
   travelDate: string;
   businessUpgradeCount: number;
 }
@@ -68,7 +67,6 @@ export interface PricingResult {
   packageName: string;
   nights: number;
   passengerCount: number;
-  hotelName: string;
   hotelCategory: HotelCategory;
   travelDate: string;
   exchangeRate: number;

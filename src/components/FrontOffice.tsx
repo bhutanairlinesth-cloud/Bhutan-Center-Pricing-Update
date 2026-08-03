@@ -4,7 +4,7 @@ import {
   ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LogOut, Plane,
   Settings2, ShieldCheck, Sparkles, Users, WalletCards,
 } from 'lucide-react';
-import { CustomerDetails, GlobalSettings, Hotel, HotelCategory, PricingChannel, PricingInput, TourPackage, User } from '../types';
+import { CustomerDetails, GlobalSettings, HotelCategory, PricingChannel, PricingInput, TourPackage, User } from '../types';
 import { useI18n, LanguageSwitch } from '../i18n';
 import { calculatePrice } from '../utils/pricing';
 import { formatDate, formatNumber, formatTHB, formatUSD, makeQuotationNo } from '../utils/format';
@@ -13,7 +13,6 @@ import { Modal } from './Ui';
 
 interface FrontOfficeProps {
   settings: GlobalSettings;
-  hotels: Hotel[];
   packages: TourPackage[];
   currentUser: User;
   onOpenAdmin: () => void;
@@ -22,17 +21,15 @@ interface FrontOfficeProps {
 
 const emptyCustomer: CustomerDetails = { name: '', phone: '', email: '', note: '' };
 
-export function FrontOffice({ settings, hotels, packages, currentUser, onOpenAdmin, onLogout }: FrontOfficeProps) {
+export function FrontOffice({ settings, packages, currentUser, onOpenAdmin, onLogout }: FrontOfficeProps) {
   const { t, language } = useI18n();
   const firstPackage = packages[0];
   const firstCategory: HotelCategory = '3 Stars';
-  const firstHotel = hotels.find((hotel) => hotel.category === firstCategory);
   const [input, setInput] = useState<PricingInput>({
     channel: 'retail',
     packageId: firstPackage?.id || '',
     passengerCount: 2,
     hotelCategory: firstCategory,
-    hotelId: firstHotel?.id || '',
     travelDate: '',
     businessUpgradeCount: 0,
   });
@@ -45,14 +42,8 @@ export function FrontOffice({ settings, hotels, packages, currentUser, onOpenAdm
     if (!input.packageId && packages[0]) setInput((value) => ({ ...value, packageId: packages[0].id }));
   }, [packages, input.packageId]);
 
-  const filteredHotels = useMemo(() => hotels.filter((hotel) => hotel.category === input.hotelCategory), [hotels, input.hotelCategory]);
-  useEffect(() => {
-    if (!filteredHotels.some((hotel) => hotel.id === input.hotelId)) {
-      setInput((value) => ({ ...value, hotelId: filteredHotels[0]?.id || '' }));
-    }
-  }, [filteredHotels, input.hotelId]);
 
-  const result = useMemo(() => calculatePrice(input, settings, packages, hotels), [input, settings, packages, hotels]);
+  const result = useMemo(() => calculatePrice(input, settings, packages), [input, settings, packages]);
   const selectedPackage = packages.find((pkg) => pkg.id === input.packageId);
   const agentDiscount = settings.ticketPriceTHB > 0
     ? ((settings.ticketPriceTHB - (settings.agentTicketPriceTHB ?? 25220)) / settings.ticketPriceTHB) * 100
@@ -97,15 +88,14 @@ export function FrontOffice({ settings, hotels, packages, currentUser, onOpenAdm
 
           <div className="section-divider"/>
           <div className="section-block">
-            <div className="section-title"><span>02</span><div><h2>{t('tripDetails')}</h2><p>{packages.length} packages · {hotels.length} hotels</p></div></div>
+            <div className="section-title"><span>02</span><div><h2>{t('tripDetails')}</h2><p>{packages.length} packages · 3 hotel levels</p></div></div>
             <div className="form-grid">
               <label className="field span-2"><span>{t('package')}</span><div className="select-wrap"><Plane/><select value={input.packageId} onChange={(event) => update('packageId', event.target.value)}>{packages.map((pkg) => <option value={pkg.id} key={pkg.id}>{pkg.name}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{t('passengers')}</span><div className="select-wrap"><Users/><select value={input.passengerCount} onChange={(event) => {
                 const pax = Number(event.target.value); setInput((value) => ({ ...value, passengerCount: pax, businessUpgradeCount: Math.min(value.businessUpgradeCount, pax) }));
               }}>{Array.from({ length: 15 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{pax >= 10 ? ` · ${t('groupDiscount')}` : ''}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{t('travelDate')}</span><div className="input-with-icon simple"><CalendarDays/><input type="date" value={input.travelDate} onChange={(event) => update('travelDate', event.target.value)}/></div></label>
-              <label className="field"><span>{t('hotelLevel')}</span><div className="select-wrap"><Building2/><select value={input.hotelCategory} onChange={(event) => update('hotelCategory', event.target.value as HotelCategory)}><option value="3 Stars">3 Stars</option><option value="4 Stars">4 Stars</option><option value="5 Stars">5 Stars</option></select><ChevronDown/></div></label>
-              <label className="field"><span>{t('hotel')}</span><div className="select-wrap"><HotelIcon/><select value={input.hotelId} onChange={(event) => update('hotelId', event.target.value)}>{filteredHotels.map((hotel) => <option value={hotel.id} key={hotel.id}>{hotel.name}</option>)}</select><ChevronDown/></div></label>
+              <label className="field span-2"><span>{t('hotelLevel')}</span><div className="select-wrap"><Building2/><select value={input.hotelCategory} onChange={(event) => update('hotelCategory', event.target.value as HotelCategory)}><option value="3 Stars">3 Stars</option><option value="4 Stars">4 Stars</option><option value="5 Stars">5 Stars</option></select><ChevronDown/></div></label>
             </div>
           </div>
 
@@ -179,14 +169,14 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
       <section className="quote-trip-card">
         <div><span>{t('package')}</span><strong>{result.packageName}</strong></div>
         <div><span>{t('travelDate')}</span><strong>{result.travelDate ? formatDate(result.travelDate, language) : '-'}</strong></div>
-        <div><span>{t('hotel')}</span><strong>{result.hotelName}</strong><small>{result.hotelCategory}</small></div>
+        <div><span>{t('hotelLevel')}</span><strong>{result.hotelCategory}</strong><small>{result.nights} {t('nights')}</small></div>
         <div><span>{t('passengers')}</span><strong>{result.passengerCount} {t('people')}</strong><small>{result.nights} {t('nights')}</small></div>
       </section>
       <section className="quote-price-table">
         <div className="quote-table-head"><span>{t('pricingDetails')}</span><span>{t('perPerson')}</span><span>{t('groupTotal')}</span></div>
         <QuoteRow label={t('flight')} detail={result.hasGroupFlightDiscount ? t('groupDiscount') : 'Economy class'} each={result.airTicketPerPerson} total={result.airTicketPerPerson * result.passengerCount} language={language}/>
         <QuoteRow label={t('airportTax')} detail="Airport & operational taxes" each={result.airportTaxPerPerson} total={result.airportTaxPerPerson * result.passengerCount} language={language}/>
-        <QuoteRow label={t('ground')} detail={`${result.hotelName} · ${result.nights} ${t('nights')}`} each={result.groundCostTHBPerPerson} total={result.groundCostTHBPerPerson * result.passengerCount} language={language}/>
+        <QuoteRow label={t('ground')} detail={`${result.hotelCategory} · ${result.nights} ${t('nights')}`} each={result.groundCostTHBPerPerson} total={result.groundCostTHBPerPerson * result.passengerCount} language={language}/>
         <QuoteRow label={t('visa')} detail={`${formatUSD(result.visaUSDPerPerson)} / person`} each={result.visaTHBPerPerson} total={result.visaTHBPerPerson * result.passengerCount} language={language}/>
         {result.businessUpgradeCount > 0 && <QuoteRow label={t('businessUpgrade')} detail={`${result.businessUpgradeCount} ${t('people')}`} each={result.businessUpgradePerPerson} total={result.businessUpgradeTotal} language={language}/>} 
       </section>

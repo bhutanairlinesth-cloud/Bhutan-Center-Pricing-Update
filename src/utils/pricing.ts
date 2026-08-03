@@ -33,9 +33,13 @@ export function calculatePrice(
   const visaTHB = visaUSD * exchange;
   const retailTicket = Number(settings.ticketPriceTHB || 0);
   const agentTicket = Number(settings.agentTicketPriceTHB ?? 25220);
-  const hasGroupFlightDiscount = pax >= 10;
+  const groupDiscountMinPax = Math.max(1, Math.round(Number(settings.groupDiscountMinPax ?? 10)));
+  const groupDiscountPercent = Math.min(100, Math.max(0, Number(settings.groupDiscountPercent ?? 10)));
+  const hasGroupFlightDiscount = groupDiscountPercent > 0 && pax >= groupDiscountMinPax;
   const selectedTicket = input.channel === 'agent' ? agentTicket : retailTicket;
-  const airTicket = hasGroupFlightDiscount ? selectedTicket * 0.9 : selectedTicket;
+  const airTicket = hasGroupFlightDiscount
+    ? Math.round(selectedTicket * (1 - groupDiscountPercent / 100))
+    : selectedTicket;
   const tax = Number(settings.airportTaxTHB || 0);
   const margin = input.channel === 'agent' ? Number(settings.agentMarginTHB ?? 3000) : Number(settings.marginTHB || 0);
   const baseCost = airTicket + tax + groundTHB + visaTHB;
@@ -72,5 +76,6 @@ export function calculatePrice(
     groupTotal,
     groupProfit: profit * pax,
     hasGroupFlightDiscount,
+    groupDiscountPercentApplied: hasGroupFlightDiscount ? groupDiscountPercent : 0,
   };
 }

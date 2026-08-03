@@ -48,6 +48,12 @@ export function FrontOffice({ settings, packages, currentUser, onOpenAdmin, onLo
   const agentDiscount = settings.ticketPriceTHB > 0
     ? ((settings.ticketPriceTHB - (settings.agentTicketPriceTHB ?? 25220)) / settings.ticketPriceTHB) * 100
     : 0;
+  const groupDiscountMinPax = Math.max(1, Math.round(settings.groupDiscountMinPax ?? 10));
+  const groupDiscountPercent = Math.min(100, Math.max(0, settings.groupDiscountPercent ?? 10));
+  const groupDiscountDisplay = formatNumber(groupDiscountPercent, Number.isInteger(groupDiscountPercent) ? 0 : 2);
+  const groupDiscountLabel = language === 'th'
+    ? `ลด ${groupDiscountDisplay}%`
+    : `${groupDiscountDisplay}% off`;
 
   function update<K extends keyof PricingInput>(key: K, value: PricingInput[K]) {
     setInput((current) => ({ ...current, [key]: value }));
@@ -93,7 +99,7 @@ export function FrontOffice({ settings, packages, currentUser, onOpenAdmin, onLo
               <label className="field span-2"><span>{t('package')}</span><div className="select-wrap"><Plane/><select value={input.packageId} onChange={(event) => update('packageId', event.target.value)}>{packages.map((pkg) => <option value={pkg.id} key={pkg.id}>{pkg.name}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{t('passengers')}</span><div className="select-wrap"><Users/><select value={input.passengerCount} onChange={(event) => {
                 const pax = Number(event.target.value); setInput((value) => ({ ...value, passengerCount: pax, businessUpgradeCount: Math.min(value.businessUpgradeCount, pax) }));
-              }}>{Array.from({ length: 15 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{pax >= 10 ? ` · ${t('groupDiscount')}` : ''}</option>)}</select><ChevronDown/></div></label>
+              }}>{Array.from({ length: 15 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{pax >= groupDiscountMinPax && groupDiscountPercent > 0 ? ` · ${groupDiscountLabel}` : ''}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{t('travelDate')}</span><div className="input-with-icon simple"><CalendarDays/><input type="date" value={input.travelDate} onChange={(event) => update('travelDate', event.target.value)}/></div></label>
               <label className="field span-2"><span>{t('hotelLevel')}</span><div className="select-wrap"><Building2/><select value={input.hotelCategory} onChange={(event) => update('hotelCategory', event.target.value as HotelCategory)}><option value="3 Stars">3 Stars</option><option value="4 Stars">4 Stars</option><option value="5 Stars">5 Stars</option></select><ChevronDown/></div></label>
             </div>
@@ -110,7 +116,7 @@ export function FrontOffice({ settings, packages, currentUser, onOpenAdmin, onLo
           <div className="summary-top"><span className={`channel-badge ${input.channel}`}>{input.channel === 'retail' ? t('retail') : t('agent')}</span><span className="live-dot"><i/> LIVE</span></div>
           <div className="summary-hero"><span>{t('perPerson')}</span><strong>{formatTHB(result?.sellingPricePerPerson || 0, language)}</strong><small>{selectedPackage?.nights || 0} {t('nights')} · {input.passengerCount} {t('people')}</small></div>
           <div className="summary-lines">
-            <PriceLine icon={<Plane/>} label={t('flight')} value={formatTHB(result?.airTicketPerPerson || 0, language)} note={result?.hasGroupFlightDiscount ? t('groupDiscount') : undefined}/>
+            <PriceLine icon={<Plane/>} label={t('flight')} value={formatTHB(result?.airTicketPerPerson || 0, language)} note={result?.hasGroupFlightDiscount ? groupDiscountLabel : undefined}/>
             <PriceLine icon={<WalletCards/>} label={t('airportTax')} value={formatTHB(result?.airportTaxPerPerson || 0, language)}/>
             <PriceLine icon={<HotelIcon/>} label={t('ground')} value={formatTHB(result?.groundCostTHBPerPerson || 0, language)} note={`${formatUSD(result?.groundRateUSDPerPersonPerNight || 0)} / night`}/>
             <PriceLine icon={<ShieldCheck/>} label={t('visa')} value={formatTHB(result?.visaTHBPerPerson || 0, language)} note={formatUSD(result?.visaUSDPerPerson || 0)}/>
@@ -174,7 +180,7 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
       </section>
       <section className="quote-price-table">
         <div className="quote-table-head"><span>{t('pricingDetails')}</span><span>{t('perPerson')}</span><span>{t('groupTotal')}</span></div>
-        <QuoteRow label={t('flight')} detail={result.hasGroupFlightDiscount ? t('groupDiscount') : 'Economy class'} each={result.airTicketPerPerson} total={result.airTicketPerPerson * result.passengerCount} language={language}/>
+        <QuoteRow label={t('flight')} detail={result.hasGroupFlightDiscount ? `${t('groupDiscount')} ${formatNumber(result.groupDiscountPercentApplied, 2)}%` : 'Economy class'} each={result.airTicketPerPerson} total={result.airTicketPerPerson * result.passengerCount} language={language}/>
         <QuoteRow label={t('airportTax')} detail="Airport & operational taxes" each={result.airportTaxPerPerson} total={result.airportTaxPerPerson * result.passengerCount} language={language}/>
         <QuoteRow label={t('ground')} detail={`${result.hotelCategory} · ${result.nights} ${t('nights')}`} each={result.groundCostTHBPerPerson} total={result.groundCostTHBPerPerson * result.passengerCount} language={language}/>
         <QuoteRow label={t('visa')} detail={`${formatUSD(result.visaUSDPerPerson)} / person`} each={result.visaTHBPerPerson} total={result.visaTHBPerPerson * result.passengerCount} language={language}/>

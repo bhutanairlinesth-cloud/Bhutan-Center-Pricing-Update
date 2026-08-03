@@ -59,6 +59,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   agentTicketPriceTHB: 25220,
   agentTicketDiscountPercent: 3,
   agentMarginTHB: 3000,
+  groupDiscountMinPax: 10,
+  groupDiscountPercent: 10,
 };
 
 const KEYS = {

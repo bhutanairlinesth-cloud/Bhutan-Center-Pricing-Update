@@ -24,6 +24,8 @@ function mapSettings(row: any): GlobalSettings {
     agentTicketPriceTHB: Number(row.agent_ticket_price_thb ?? 25220),
     agentTicketDiscountPercent: Number(row.agent_ticket_discount_percent ?? 3),
     agentMarginTHB: Number(row.agent_margin_thb ?? 3000),
+    groupDiscountMinPax: Number(row.group_discount_min_pax ?? 10),
+    groupDiscountPercent: Number(row.group_discount_percent ?? 10),
   };
 }
 
@@ -47,6 +49,8 @@ function settingsRow(settings: GlobalSettings) {
       ? Number((((settings.ticketPriceTHB - agentPrice) / settings.ticketPriceTHB) * 100).toFixed(4))
       : 0,
     agent_margin_thb: settings.agentMarginTHB ?? 3000,
+    group_discount_min_pax: Math.max(1, Math.round(settings.groupDiscountMinPax ?? 10)),
+    group_discount_percent: Math.min(100, Math.max(0, settings.groupDiscountPercent ?? 10)),
     updated_at: new Date().toISOString(),
   };
 }

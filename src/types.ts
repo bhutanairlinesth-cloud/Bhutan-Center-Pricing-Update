@@ -51,6 +51,8 @@ export interface GlobalSettings {
   agentTicketPriceTHB?: number;
   agentTicketDiscountPercent?: number;
   agentMarginTHB?: number;
+  groupDiscountMinPax?: number;
+  groupDiscountPercent?: number;
 }
 
 export interface PricingInput {
@@ -88,6 +90,7 @@ export interface PricingResult {
   groupTotal: number;
   groupProfit: number;
   hasGroupFlightDiscount: boolean;
+  groupDiscountPercentApplied: number;
 }
 
 export interface CustomerDetails {

@@ -199,6 +199,84 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 .summary-foot { margin-top: 14px; display: flex; align-items: center; justify-content: center; gap: 7px; color: #8c9691; font-size: 8px; }
 .summary-foot svg { width: 14px; height: 14px; }
 
+
+/* v10.2 — Readability pass */
+.front-shell, .admin-shell, .login-shell { font-size: 16px; }
+.front-header { min-height: 82px; }
+.front-main { max-width: 1440px; }
+.page-intro .eyebrow, .admin-hero .eyebrow { font-size: 12px; }
+.page-intro p, .admin-hero p { font-size: 14px; line-height: 1.65; }
+.section-title > span { width: 38px; height: 38px; font-size: 12px; }
+.section-title h2 { font-size: 20px; }
+.section-title p { margin-top: 4px; font-size: 12px; }
+.field > span { margin-bottom: 8px; font-size: 13px; font-weight: 750; }
+.field input, .field select, .field textarea { min-height: 52px; font-size: 16px; }
+.input-with-icon > svg, .select-wrap > svg:first-child { width: 19px; height: 19px; }
+.channel-card { min-height: 132px; padding: 20px; }
+.channel-card b { font-size: 17px; }
+.channel-card small { font-size: 13px; line-height: 1.6; }
+.channel-card em { font-size: 12px; }
+.upgrade-copy b { font-size: 15px; }
+.upgrade-copy span { font-size: 12px; line-height: 1.5; }
+.stepper { height: 44px; }
+.stepper strong { font-size: 16px; }
+.summary-hero > span { font-size: 13px; }
+.summary-hero small { font-size: 12px; }
+.channel-badge { height: 32px; padding: 0 13px; font-size: 11px; }
+.live-dot { font-size: 10px; }
+.price-line { min-height: 66px; }
+.price-label b { font-size: 14px; }
+.price-label small { font-size: 11px; }
+.price-line > strong { font-size: 14px; }
+.profit-strip span { font-size: 10px; }
+.profit-strip b { font-size: 16px; }
+.group-total span { font-size: 12px; }
+.group-total strong { font-size: 30px; }
+.group-total small { font-size: 11px; }
+.summary-foot { font-size: 11px; }
+.primary-button, .ghost-button { font-size: 13px; }
+.user-chip b { font-size: 12px; }
+.user-chip small { font-size: 10px; }
+.admin-header-title > div > span { font-size: 10px; }
+.admin-header-title h1 { font-size: 24px; }
+.workspace-label span { font-size: 11px; }
+.workspace-label small { font-size: 10px; }
+.admin-nav button { min-height: 48px; font-size: 13px; }
+.sidebar-footer button { font-size: 12px; }
+.admin-channel-cards span { font-size: 10px; }
+.admin-channel-cards strong { font-size: 25px; }
+.admin-channel-cards small { font-size: 11px; }
+.stat-card small { font-size: 11px; }
+.stat-card strong { font-size: 28px; }
+.stat-card em { font-size: 10px; }
+.panel-heading span { font-size: 10px; }
+.panel-heading h3 { font-size: 18px; }
+.panel-heading button { font-size: 12px; }
+.pricing-control-list b { font-size: 13px; }
+.pricing-control-list small { font-size: 11px; }
+.health-row > div:first-child { font-size: 12px; }
+.page-action p { font-size: 12px; }
+.data-main b { font-size: 14px; }
+.data-main small { font-size: 11px; }
+.data-table-head { font-size: 10px; }
+.data-table-row { font-size: 13px; }
+.star-rate-card h4 { font-size: 13px; }
+.settings-card-title h3 { font-size: 17px; }
+.settings-card-title p { font-size: 12px; line-height: 1.5; }
+.number-field em { font-size: 11px; }
+.calculated-note { min-height: 46px; font-size: 13px; }
+.info-banner { font-size: 13px; line-height: 1.55; }
+.user-row select { font-size: 13px; }
+.modal-card > header h2 { font-size: 20px; }
+.modal-body { font-size: 15px; }
+.toast { font-size: 14px; }
+.empty-state strong { font-size: 15px; }
+.empty-state p { font-size: 13px; }
+.group-discount-settings { border-color: #d7e7df; background: linear-gradient(180deg, #ffffff 0%, #f8fcfa 100%); }
+.group-discount-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.group-discount-preview { min-height: 48px; padding: 0 14px; display: flex; align-items: center; gap: 9px; border-radius: 12px; color: var(--green-800); background: var(--green-100); border: 1px solid #d5e7de; font-size: 14px; font-weight: 800; }
+.group-discount-preview svg { width: 18px; height: 18px; }
+
 /* Modal and toast */
 .modal-layer { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; }
 .modal-backdrop { position: absolute; inset: 0; background: rgba(9, 27, 21, .58); backdrop-filter: blur(5px); }
@@ -476,3 +554,5 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   #quotation-print-area { position: fixed; inset: 0; width: 210mm !important; height: 297mm !important; min-height: 297mm !important; margin: 0 !important; padding: 13mm 14mm 9mm !important; border: 0 !important; box-shadow: none !important; overflow: hidden !important; }
   .no-print { display: none !important; }
 }
+
+@media (max-width: 620px) { .group-discount-fields { grid-template-columns: 1fr; } }

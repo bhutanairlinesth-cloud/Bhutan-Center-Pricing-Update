@@ -33,7 +33,7 @@ const copy = {
     role: 'สิทธิ์', admin: 'ผู้ดูแลระบบ', sales: 'ฝ่ายขาย', userNote: 'การสร้างบัญชี Login ใหม่ต้องทำใน Supabase Authentication ก่อน จากนั้น Profile จะปรากฏในหน้านี้',
     online: 'Supabase Online', local: 'Local Mode', loading: 'กำลังเตรียมระบบ...', noData: 'ยังไม่มีข้อมูล', confirmDelete: 'ยืนยันการลบรายการนี้หรือไม่?',
     saved: 'บันทึกข้อมูลเรียบร้อยแล้ว', deleted: 'ลบข้อมูลเรียบร้อยแล้ว', error: 'เกิดข้อผิดพลาด', refreshDone: 'รีเฟรชข้อมูลแล้ว',
-    groupDiscount: 'ส่วนลดกลุ่ม 10%', quoteLanguage: 'ภาษาเอกสาร',
+    groupDiscount: 'ส่วนลดกลุ่ม', groupDiscountSettings: 'ส่วนลดเมื่อเดินทางเป็นกลุ่ม', groupDiscountMinPax: 'เริ่มใช้ส่วนลดตั้งแต่', groupDiscountPercent: 'เปอร์เซ็นต์ส่วนลด', groupDiscountHint: 'ลดจากราคาตั๋วเครื่องบินต่อท่าน เมื่อจำนวนผู้เดินทางถึงเกณฑ์ที่กำหนด', quoteLanguage: 'ภาษาเอกสาร',
   },
   en: {
     appName: 'Bhutan Center Pricing', tagline: 'Bhutan tour pricing and management workspace',
@@ -66,7 +66,7 @@ const copy = {
     role: 'Role', admin: 'Administrator', sales: 'Sales', userNote: 'Create a new login in Supabase Authentication first. Its profile will then appear here.',
     online: 'Supabase Online', local: 'Local Mode', loading: 'Preparing workspace...', noData: 'No data yet', confirmDelete: 'Delete this item?',
     saved: 'Changes saved', deleted: 'Item deleted', error: 'Something went wrong', refreshDone: 'Data refreshed',
-    groupDiscount: '10% group discount', quoteLanguage: 'Document language',
+    groupDiscount: 'Group discount', groupDiscountSettings: 'Group travel discount', groupDiscountMinPax: 'Apply from', groupDiscountPercent: 'Discount percentage', groupDiscountHint: 'Discount the air ticket per person when the passenger count reaches the configured threshold.', quoteLanguage: 'Document language',
   },
 } as const;
 

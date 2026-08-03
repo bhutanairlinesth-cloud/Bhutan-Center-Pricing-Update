@@ -1,32 +1,20 @@
-# วิธีติดตั้งเวอร์ชันนี้
+# วิธีติดตั้ง Bhutan Center Pricing V5
 
-## 1) GitHub
-แตก ZIP แล้วอัปโหลดไฟล์ทั้งหมดด้านในขึ้น Repository เดิม จากนั้น Commit ไปที่ `main`.
+## 1) Supabase
+เปิด `supabase/COMPLETE_SETUP.sql` คัดลอกทั้งหมด แล้ววางที่ Supabase > SQL Editor > New query > Run
 
-## 2) Supabase — ต้องทำครั้งเดียว
-เปิด Supabase > SQL Editor > New query แล้วเปิดไฟล์:
+หลัง Run ให้ตรวจ Table Editor > profiles ต้องเห็น `info@omgexp.com` และ role เป็น `admin`
 
-`supabase/production_setup.sql`
+## 2) Vercel Environment Variables
+เพิ่มค่า:
 
-คัดลอกทั้งหมดไปวางและกด Run
+- `VITE_SUPABASE_URL` = Project URL
+- `VITE_SUPABASE_PUBLISHABLE_KEY` = Publishable key (`sb_publishable_...`)
 
-ไฟล์นี้จะ:
-- สร้าง/แก้ Profile ของผู้ใช้ที่มีอยู่แล้ว
-- ตั้ง `info@omgexp.com` เป็น `admin`
-- สร้าง Trigger ให้ผู้ใช้ใหม่มี Profile อัตโนมัติ
-- ตั้ง Row Level Security สำหรับ Admin และ Sales
+ไม่ต้องใส่ Secret key และไม่ต้องใช้ service_role
 
-## 3) Vercel Environment Variables
-ตั้งค่าให้ครบ:
+## 3) GitHub
+แตก ZIP แล้วลากไฟล์ด้านในทั้งหมดขึ้น Repository (อย่าอัปโหลด ZIP ทั้งก้อน)
 
-- `VITE_SUPABASE_URL` = `https://zyblgonnhymwlwqtojeu.supabase.co`
-- `VITE_SUPABASE_PUBLISHABLE_KEY` = Publishable key จาก Supabase
-
-โค้ดรองรับ `VITE_SUPABASE_ANON_KEY` เป็นชื่อสำรอง แต่แนะนำใช้ `VITE_SUPABASE_PUBLISHABLE_KEY`.
-
-หลังเพิ่มค่าแล้วให้ Redeploy เวอร์ชันล่าสุด.
-
-## 4) Login
-ใช้บัญชีที่สร้างไว้ใน Supabase Authentication.
-
-สำคัญ: ไม่ควรใส่ Secret key หรือ service_role key ใน Vercel ฝั่ง Frontend.
+## 4) Vercel
+Redeploy Deployment ล่าสุด โดย Framework Preset = Vite, Build Command = `npm run build`, Output Directory = `dist`

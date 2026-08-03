@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowRight, BadgePercent, BriefcaseBusiness, Building2, CalendarDays, Check,
+  ArrowRight, BadgePercent, BriefcaseBusiness, Building2, CalendarDays, Check, ClipboardList,
   ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LogOut, Plane,
   Settings2, ShieldCheck, Sparkles, Users, WalletCards,
 } from 'lucide-react';
@@ -15,13 +15,14 @@ interface FrontOfficeProps {
   settings: GlobalSettings;
   packages: TourPackage[];
   currentUser: User;
+  onOpenTracking: () => void;
   onOpenAdmin: () => void;
   onLogout: () => void;
 }
 
 const emptyCustomer: CustomerDetails = { name: '', phone: '', email: '', note: '' };
 
-export function FrontOffice({ settings, packages, currentUser, onOpenAdmin, onLogout }: FrontOfficeProps) {
+export function FrontOffice({ settings, packages, currentUser, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
   const { t, language } = useI18n();
   const firstPackage = packages[0];
   const firstCategory: HotelCategory = '3 Stars';
@@ -70,6 +71,7 @@ export function FrontOffice({ settings, packages, currentUser, onOpenAdmin, onLo
       <Brand/>
       <div className="front-header-actions">
         <LanguageSwitch compact/>
+        <button className="ghost-button desktop-only" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>
         <span className="user-chip"><i>{currentUser.name?.[0]?.toUpperCase() || 'U'}</i><span><b>{currentUser.name}</b><small>{currentUser.role}</small></span></span>
         {currentUser.role === 'admin' && <button className="ghost-button desktop-only" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}
         <button className="icon-button" onClick={onLogout} title={t('logout')}><LogOut/></button>
@@ -79,7 +81,7 @@ export function FrontOffice({ settings, packages, currentUser, onOpenAdmin, onLo
     <main className="front-main">
       <section className="page-intro">
         <div><span className="eyebrow"><Sparkles/> LIVE PRICING</span><h1>{t('calculatorTitle')}</h1><p>{t('calculatorSubtitle')}</p></div>
-        {currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}
+        <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
       </section>
 
       <div className="calculator-layout">

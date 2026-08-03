@@ -191,3 +191,6 @@ insert into public.tour_packages (id,name,nights,rates,hotel_rates) values
 on conflict (id) do nothing;
 
 select id, name, email, role from public.profiles order by created_at;
+
+-- v11 customer tracking and invoices are installed separately.
+-- Run supabase/MIGRATE_CUSTOMER_TRACKING_AND_INVOICES.sql after this setup.

@@ -1,4 +1,4 @@
-import { GlobalSettings, Hotel, TourPackage, User } from '../types';
+import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, TourPackage, User } from '../types';
 
 const DEFAULT_USERS: User[] = [
   { id: 'usr_1', name: 'OMG Experience Admin', email: 'info@omgexp.com', role: 'admin', createdAt: new Date().toISOString() },
@@ -68,6 +68,8 @@ const KEYS = {
   hotels: 'bhutan_v10_hotels',
   packages: 'bhutan_v10_packages',
   settings: 'bhutan_v10_settings',
+  trackings: 'bhutan_v11_trackings',
+  invoices: 'bhutan_v11_invoices',
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -109,4 +111,25 @@ export const mockDb = {
 
   getSettings: () => ({ ...DEFAULT_SETTINGS, ...read<GlobalSettings>(KEYS.settings, DEFAULT_SETTINGS) }),
   saveSettings(settings: GlobalSettings) { localStorage.setItem(KEYS.settings, JSON.stringify(settings)); },
+
+  getTrackings: () => read<CustomerTracking[]>(KEYS.trackings, []),
+  saveTracking(item: CustomerTracking) {
+    const list = this.getTrackings();
+    const index = list.findIndex((x) => x.id === item.id);
+    if (index >= 0) list[index] = item; else list.unshift(item);
+    localStorage.setItem(KEYS.trackings, JSON.stringify(list));
+  },
+  deleteTracking(id: string) {
+    localStorage.setItem(KEYS.trackings, JSON.stringify(this.getTrackings().filter((x) => x.id !== id)));
+    localStorage.setItem(KEYS.invoices, JSON.stringify(this.getInvoices().filter((x) => x.trackingId !== id)));
+  },
+
+  getInvoices: () => read<PaymentInvoice[]>(KEYS.invoices, []),
+  saveInvoice(item: PaymentInvoice) {
+    const list = this.getInvoices();
+    const index = list.findIndex((x) => x.id === item.id);
+    if (index >= 0) list[index] = item; else list.unshift(item);
+    localStorage.setItem(KEYS.invoices, JSON.stringify(list));
+  },
+  deleteInvoice(id: string) { localStorage.setItem(KEYS.invoices, JSON.stringify(this.getInvoices().filter((x) => x.id !== id))); },
 };

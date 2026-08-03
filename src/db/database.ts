@@ -1,4 +1,4 @@
-import { GlobalSettings, Hotel, TourPackage, User } from '../types';
+import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, TourPackage, User } from '../types';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { mockDb } from './mockDb';
 
@@ -6,6 +6,11 @@ const SETTINGS_ID = '00000000-0000-0000-0000-000000000001';
 
 function fail(error: any, fallback: string): never {
   throw new Error(error?.message || fallback);
+}
+
+function isMissingTable(error: any): boolean {
+  const message = String(error?.message || '').toLowerCase();
+  return error?.code === '42P01' || error?.code === 'PGRST205' || message.includes('could not find the table') || message.includes('relation') && message.includes('does not exist');
 }
 
 function mapSettings(row: any): GlobalSettings {
@@ -93,6 +98,110 @@ const packageRow = (pkg: TourPackage) => ({
   updated_at: new Date().toISOString(),
 });
 
+
+
+const mapTracking = (row: any): CustomerTracking => ({
+  id: row.id,
+  opportunityName: row.opportunity_name || '',
+  customerName: row.customer_name || '',
+  phone: row.phone || '',
+  email: row.email || '',
+  leadSource: row.lead_source || 'Other',
+  landSupplier: row.land_supplier || '',
+  airline: row.airline || '',
+  travelStartDate: row.travel_start_date || '',
+  travelEndDate: row.travel_end_date || '',
+  packageId: row.package_id || '',
+  packageName: row.package_name || '',
+  hotelCategory: row.hotel_category || '3 Stars',
+  passengerCount: Number(row.passenger_count || 1),
+  channel: row.channel || 'retail',
+  sellingPricePerPerson: Number(row.selling_price_per_person || 0),
+  totalAmount: Number(row.total_amount || 0),
+  ticketAmount: Number(row.ticket_amount || 0),
+  airportTaxAmount: Number(row.airport_tax_amount || 0),
+  landPayment: Number(row.land_payment || 0),
+  profitAmount: Number(row.profit_amount || 0),
+  depositAmount: Number(row.deposit_amount || 0),
+  depositDueDate: row.deposit_due_date || '',
+  depositStatus: row.deposit_status || 'pending',
+  balanceAmount: Number(row.balance_amount || 0),
+  balanceDueDate: row.balance_due_date || '',
+  balanceStatus: row.balance_status || 'pending',
+  status: row.status || 'new',
+  salesOwnerId: row.sales_owner_id || '',
+  salesOwnerName: row.sales_owner_name || '',
+  note: row.note || '',
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const trackingRow = (item: CustomerTracking) => ({
+  id: item.id,
+  opportunity_name: item.opportunityName,
+  customer_name: item.customerName,
+  phone: item.phone,
+  email: item.email,
+  lead_source: item.leadSource,
+  land_supplier: item.landSupplier,
+  airline: item.airline,
+  travel_start_date: item.travelStartDate || null,
+  travel_end_date: item.travelEndDate || null,
+  package_id: item.packageId || null,
+  package_name: item.packageName,
+  hotel_category: item.hotelCategory,
+  passenger_count: item.passengerCount,
+  channel: item.channel,
+  selling_price_per_person: item.sellingPricePerPerson,
+  total_amount: item.totalAmount,
+  ticket_amount: item.ticketAmount,
+  airport_tax_amount: item.airportTaxAmount,
+  land_payment: item.landPayment,
+  profit_amount: item.profitAmount,
+  deposit_amount: item.depositAmount,
+  deposit_due_date: item.depositDueDate || null,
+  deposit_status: item.depositStatus,
+  balance_amount: item.balanceAmount,
+  balance_due_date: item.balanceDueDate || null,
+  balance_status: item.balanceStatus,
+  status: item.status,
+  sales_owner_id: item.salesOwnerId || null,
+  sales_owner_name: item.salesOwnerName,
+  note: item.note,
+  created_at: item.createdAt,
+  updated_at: new Date().toISOString(),
+});
+
+const mapInvoice = (row: any): PaymentInvoice => ({
+  id: row.id,
+  trackingId: row.tracking_id,
+  invoiceNo: row.invoice_no,
+  installment: row.installment,
+  issueDate: row.issue_date || '',
+  dueDate: row.due_date || '',
+  amount: Number(row.amount || 0),
+  status: row.status || 'pending',
+  paidAt: row.paid_at || '',
+  note: row.note || '',
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const invoiceRow = (item: PaymentInvoice) => ({
+  id: item.id,
+  tracking_id: item.trackingId,
+  invoice_no: item.invoiceNo,
+  installment: item.installment,
+  issue_date: item.issueDate || null,
+  due_date: item.dueDate || null,
+  amount: item.amount,
+  status: item.status,
+  paid_at: item.paidAt || null,
+  note: item.note,
+  created_at: item.createdAt,
+  updated_at: new Date().toISOString(),
+});
+
 const mapUser = (row: any): User => ({
   id: row.id,
   name: row.name || row.email?.split('@')[0] || 'User',
@@ -174,4 +283,39 @@ export const database = {
     const { error } = await supabase.from('profiles').delete().eq('id', id);
     if (error) fail(error, 'ลบผู้ใช้งานไม่สำเร็จ');
   },
+
+  async getTrackings(): Promise<CustomerTracking[]> {
+    if (!isSupabaseConfigured) return mockDb.getTrackings();
+    const { data, error } = await supabase.from('customer_tracking').select('*').order('created_at', { ascending: false });
+    if (error) { if (isMissingTable(error)) return []; fail(error, 'โหลดข้อมูลติดตามลูกค้าไม่สำเร็จ'); }
+    return (data || []).map(mapTracking);
+  },
+  async saveTracking(item: CustomerTracking): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.saveTracking(item);
+    const { error } = await supabase.from('customer_tracking').upsert(trackingRow(item));
+    if (error) fail(error, 'บันทึกข้อมูลติดตามลูกค้าไม่สำเร็จ');
+  },
+  async deleteTracking(id: string): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.deleteTracking(id);
+    const { error } = await supabase.from('customer_tracking').delete().eq('id', id);
+    if (error) fail(error, 'ลบข้อมูลติดตามลูกค้าไม่สำเร็จ');
+  },
+
+  async getInvoices(): Promise<PaymentInvoice[]> {
+    if (!isSupabaseConfigured) return mockDb.getInvoices();
+    const { data, error } = await supabase.from('payment_invoices').select('*').order('created_at', { ascending: false });
+    if (error) { if (isMissingTable(error)) return []; fail(error, 'โหลดเอกสารเรียกเก็บเงินไม่สำเร็จ'); }
+    return (data || []).map(mapInvoice);
+  },
+  async saveInvoice(item: PaymentInvoice): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.saveInvoice(item);
+    const { error } = await supabase.from('payment_invoices').upsert(invoiceRow(item));
+    if (error) fail(error, 'บันทึก Invoice ไม่สำเร็จ');
+  },
+  async deleteInvoice(id: string): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.deleteInvoice(id);
+    const { error } = await supabase.from('payment_invoices').delete().eq('id', id);
+    if (error) fail(error, 'ลบ Invoice ไม่สำเร็จ');
+  },
+
 };

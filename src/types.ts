@@ -99,3 +99,59 @@ export interface CustomerDetails {
   email: string;
   note: string;
 }
+
+export type LeadSource = 'LINE OA' | 'LINE' | 'Facebook' | 'Call in' | 'Referral' | 'Walk in' | 'Other';
+export type TrackingStatus = 'new' | 'following' | 'quote_sent' | 'won' | 'lost' | 'completed';
+export type PaymentStageStatus = 'pending' | 'invoiced' | 'paid' | 'overdue' | 'cancelled';
+export type InvoiceInstallment = 'deposit' | 'balance';
+
+export interface CustomerTracking {
+  id: string;
+  opportunityName: string;
+  customerName: string;
+  phone: string;
+  email: string;
+  leadSource: LeadSource;
+  landSupplier: string;
+  airline: string;
+  travelStartDate: string;
+  travelEndDate: string;
+  packageId: string;
+  packageName: string;
+  hotelCategory: HotelCategory;
+  passengerCount: number;
+  channel: PricingChannel;
+  sellingPricePerPerson: number;
+  totalAmount: number;
+  ticketAmount: number;
+  airportTaxAmount: number;
+  landPayment: number;
+  profitAmount: number;
+  depositAmount: number;
+  depositDueDate: string;
+  depositStatus: PaymentStageStatus;
+  balanceAmount: number;
+  balanceDueDate: string;
+  balanceStatus: PaymentStageStatus;
+  status: TrackingStatus;
+  salesOwnerId: string;
+  salesOwnerName: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentInvoice {
+  id: string;
+  trackingId: string;
+  invoiceNo: string;
+  installment: InvoiceInstallment;
+  issueDate: string;
+  dueDate: string;
+  amount: number;
+  status: PaymentStageStatus;
+  paidAt: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}

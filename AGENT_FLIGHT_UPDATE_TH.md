@@ -1,9 +1,8 @@
--- Add explicit Agent flight fare and set current company rates
-alter table public.app_settings
-add column if not exists agent_ticket_price_thb numeric not null default 25220;
+# อัปเดตราคาตั๋ว 2 ช่องทาง
 
-update public.app_settings
-set ticket_price_thb = 26000,
-    agent_ticket_price_thb = 25220,
-    agent_ticket_discount_percent = 3,
-    updated_at = now();
+- ราคาลูกค้าทั่วไป: 26,000 บาท/คน
+- ราคา Agent: 25,220 บาท/คน
+- ส่วนลด Agent: 3%
+- Airport Tax ยังคงใช้ค่ากลางเดียวกัน เว้นแต่จะปรับเพิ่มภายหลัง
+
+ก่อนใช้งาน ให้รัน `supabase/MIGRATE_AGENT_FLIGHT_PRICE.sql` ใน Supabase SQL Editor หนึ่งครั้ง

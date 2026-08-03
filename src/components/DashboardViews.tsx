@@ -2500,228 +2500,194 @@ export function SalesQuotationView({ settings, hotels, packages, currentUser }: 
           {/* Scrollable Document Container */}
           <div className="flex-1 overflow-y-auto p-8 bg-slate-100 flex justify-center">
             {/* The Actual Printable Document A4 Frame */}
-            <div 
-              id="printable-quotation" 
-              className="bg-white text-gray-900 p-12 w-[210mm] min-h-[297mm] shadow-lg border border-gray-200 relative font-sans text-xs leading-relaxed"
+            <div
+              id="printable-quotation"
+              className="quotation-sheet bg-white text-slate-900 w-[210mm] h-[297mm] shadow-2xl relative overflow-hidden font-sans"
             >
-              {/* Print layout inject style helper */}
               <style dangerouslySetInnerHTML={{__html: `
+                @page { size: A4 portrait; margin: 0; }
                 @media print {
-                  body * {
-                    visibility: hidden;
-                  }
-                  #printable-quotation, #printable-quotation * {
-                    visibility: visible;
-                  }
+                  html, body { width: 210mm; height: 297mm; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+                  body * { visibility: hidden !important; }
+                  #printable-quotation, #printable-quotation * { visibility: visible !important; }
                   #printable-quotation {
-                    position: absolute;
-                    left: 0;
-                    top: 0;
-                    width: 210mm;
-                    height: 297mm;
-                    box-shadow: none !important;
-                    border: none !important;
-                    padding: 10mm !important;
+                    position: fixed !important;
+                    inset: 0 !important;
+                    width: 210mm !important;
+                    height: 297mm !important;
                     margin: 0 !important;
-                    background: white !important;
-                    color: black !important;
+                    box-shadow: none !important;
+                    border: 0 !important;
+                    print-color-adjust: exact !important;
+                    -webkit-print-color-adjust: exact !important;
+                    page-break-after: avoid !important;
+                    overflow: hidden !important;
                   }
                 }
               `}} />
 
-              {/* Header Section */}
-              <div className="flex justify-between items-start border-b-2 border-brand-emerald pb-6 mb-6">
-                <div className="flex gap-4">
-                  <BhutanCenterLogo size="md" className="self-start" />
-                  <div>
-                    <h1 className="text-base font-bold text-brand-emerald font-display">ภูฏานเซ็นเตอร์ (Bhutan Center)</h1>
-                    <p className="text-[10px] font-bold text-brand-gold-dark font-display -mt-0.5">Bhutan Center affiliated with OMG Experience</p>
-                    <div className="mt-2 text-[10px] text-gray-500 space-y-0.5">
-                      <p>10/12-13 ถนนคอนแวนต์ แขวงสีลม เขตบางรัก กรุงเทพมหานคร 10500</p>
-                      <p>Tel : 02-630-4500 | Email: info@omgexp.com</p>
-                      <p>เลขประจำตัวผู้เสียภาษีอากร 0105556088127 สำนักงานใหญ่</p>
+              {/* Premium brand rail */}
+              <div className="absolute inset-y-0 left-0 w-[7mm] bg-brand-emerald" />
+              <div className="absolute left-[7mm] top-0 bottom-0 w-[1.4mm] bg-brand-gold" />
+              <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full border-[28px] border-emerald-50" />
+              <div className="absolute right-10 top-10 h-20 w-20 rounded-full bg-amber-50/70" />
+
+              <div className="relative z-10 h-full pl-[17mm] pr-[12mm] pt-[11mm] pb-[9mm] flex flex-col">
+                {/* Header */}
+                <header className="flex items-start justify-between gap-6 pb-4 border-b border-slate-200">
+                  <div className="flex items-center gap-3.5">
+                    <BhutanCenterLogo size="md" />
+                    <div>
+                      <p className="text-[17px] leading-none font-bold font-display text-brand-emerald">BHUTAN CENTER</p>
+                      <p className="mt-1 text-[8px] tracking-[0.22em] uppercase font-bold text-brand-gold-dark">Affiliated with OMG Experience</p>
+                      <p className="mt-2 text-[8.5px] leading-[1.45] text-slate-500">
+                        10/12-13 Convent Road, Silom, Bangrak, Bangkok 10500<br/>
+                        02-630-4500 · info@omgexp.com · Tax ID 0105556088127
+                      </p>
                     </div>
                   </div>
-                </div>
 
-                <div className="text-right">
-                  <h2 className="text-2xl font-bold font-display text-brand-emerald tracking-wide">ใบเสนอราคา</h2>
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest -mt-0.5">Quotation</h3>
-                  
-                  <div className="mt-4 grid grid-cols-2 gap-x-2 text-[10px] text-right">
-                    <span className="text-gray-400">เลขที่ใบเสนอราคา / No:</span>
-                    <span className="font-mono font-semibold text-gray-900">{quotationRef}</span>
-                    <span className="text-gray-400">วันที่ออกเอกสาร / Date:</span>
-                    <span className="font-semibold text-gray-900">{quotationDate}</span>
-                    <span className="text-gray-400">ผู้จัดเตรียม / Agent:</span>
-                    <span className="font-semibold text-gray-900">{currentUser?.name || 'Bhutan Center Rep'}</span>
+                  <div className="text-right min-w-[60mm]">
+                    <div className="inline-flex items-center rounded-full bg-brand-emerald px-3 py-1 text-[8px] font-bold tracking-[0.18em] text-white uppercase">
+                      {result.isAgent ? 'Agent Partner Rate' : 'Retail Customer Rate'}
+                    </div>
+                    <h1 className="mt-2 text-[27px] leading-none font-bold font-display text-slate-900">ใบเสนอราคา</h1>
+                    <p className="mt-1 text-[9px] tracking-[0.3em] font-semibold text-slate-400 uppercase">Official Quotation</p>
+                    <div className="mt-3 grid grid-cols-[auto_auto] justify-end gap-x-3 gap-y-0.5 text-[8.5px]">
+                      <span className="text-slate-400">Quotation No.</span><span className="font-mono font-bold">{quotationRef}</span>
+                      <span className="text-slate-400">Issue Date</span><span className="font-semibold">{quotationDate}</span>
+                      <span className="text-slate-400">Prepared by</span><span className="font-semibold">{currentUser?.name || 'Bhutan Center'}</span>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </header>
 
-              {/* Client / Customer Info Section */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-gray-100 grid grid-cols-2 gap-4 mb-6">
-                <div className="space-y-1">
-                  <h4 className="text-[10px] uppercase font-bold text-brand-emerald-light tracking-wide mb-1">ข้อมูลผู้รับบริการ / Client Info</h4>
-                  <p className="text-sm font-semibold text-gray-900">{customerName}</p>
-                  <p className="text-gray-600">เบอร์โทรศัพท์: <span className="font-mono text-gray-900">{customerPhone}</span></p>
-                  {customerEmail && <p className="text-gray-600">อีเมล: <span className="font-mono text-gray-900">{customerEmail}</span></p>}
-                </div>
-                <div className="space-y-1 text-right border-l border-gray-200/60 pl-4">
-                  <h4 className="text-[10px] uppercase font-bold text-brand-emerald-light tracking-wide mb-1">รายละเอียดทริป / Travel Details</h4>
-                  <p className="text-gray-700">แพ็กเกจทัวร์: <span className="font-semibold text-gray-900">{packages.find(p => p.id === selectedPkgId)?.name}</span></p>
-                  <p className="text-gray-700">จำนวนคืนทริป: <span className="font-semibold text-gray-900">{packages.find(p => p.id === selectedPkgId)?.nights} คืน ({packages.find(p => p.id === selectedPkgId) ? packages.find(p => p.id === selectedPkgId)!.nights + 1 : 0} วัน)</span></p>
-                  <p className="text-gray-700">จำนวนผู้เดินทาง: <span className="font-bold text-gray-900">{passengerCount} ท่าน (Pax)</span></p>
-                  {travelDate && (
-                    <p className="text-gray-700">
-                      วันเดินทาง: <span className="font-bold text-brand-emerald">{getTravelDateRangeString()}</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Tour Package Itemized Details Table */}
-              <table className="w-full text-left border-collapse border border-gray-200 mb-6 rounded-lg overflow-hidden">
-                <thead>
-                  <tr className="bg-brand-emerald text-white text-[10px] uppercase font-bold tracking-wider font-display">
-                    <th className="py-3 px-4 border border-brand-emerald w-10 text-center">ลำดับ<br/>(No.)</th>
-                    <th className="py-3 px-4 border border-brand-emerald">รายการบริการการเดินทาง<br/>(Travel Service Description)</th>
-                    <th className="py-3 px-4 border border-brand-emerald w-28 text-center">จำนวนผู้เดินทาง<br/>(Qty)</th>
-                    <th className="py-3 px-4 border border-brand-emerald w-32 text-right">ราคาต่อท่าน<br/>(Price / Pax)</th>
-                    <th className="py-3 px-4 border border-brand-emerald w-36 text-right">ยอดรวม (THB)<br/>(Total)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="hover:bg-slate-50/50">
-                    <td className="py-4 px-4 border border-gray-200 text-center font-mono">1</td>
-                    <td className="py-4 px-4 border border-gray-200">
-                      <p className="font-bold text-brand-emerald text-sm mb-2">{packages.find(p => p.id === selectedPkgId)?.name} ({packages.find(p => p.id === selectedPkgId)?.nights} คืน / {packages.find(p => p.id === selectedPkgId) ? packages.find(p => p.id === selectedPkgId)!.nights + 1 : 0} วัน)</p>
-                      <p className="text-[10px] font-bold text-gray-700 mb-1">ราคารวม (Inclusions):</p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-0.5 text-gray-500 text-[10px] leading-normal font-sans">
-                        <p>1. ตั๋วเครื่องบิน ไป-กลับ Bhutan Airlines (ชั้นประหยัด) {result.hasTicketDiscount && <span className="text-emerald-700 font-bold bg-emerald-50 px-1 py-0.2 rounded text-[9px]">(ส่วนลดกลุ่ม 10%)</span>}</p>
-                        <p>2. ที่พักโรงแรมมาตรฐานระดับ <span className="font-semibold text-brand-emerald">{result.hotelCategory === '3 Stars' ? '3 ดาว' : '4 ดาว'}</span></p>
-                        <p>3. มื้ออาหารทุกมื้อ (เช้า/เย็นที่โรงแรม, กลางวันร้านท้องถิ่น)</p>
-                        <p>4. ไกด์ท้องถิ่นสื่อสารภาษาอังกฤษ ร่วมเดินทางตลอดทริป</p>
-                        <p>5. ค่าภาษีพัฒนาประเทศยั่งยืนของรัฐบาลภูฏาน (SDF)</p>
-                        <p>6. ค่าธรรมเนียมเข้าชมสถานที่และอุทยานตามโปรแกรม</p>
-                        <p>7. ค่าธรรมเนียมการยื่นขอวีซ่า (Visa) ประเทศภูฏาน</p>
-                        <p>8. รถรับส่งและนำเที่ยวส่วนตัวตลอดรายการท่องเที่ยว</p>
-                        <p>9. โปรแกรมการเดินทางและสถานที่ท่องเที่ยวที่ระบุ</p>
-                        <p>10. บริการรับ-ส่ง สะดวกสบาย ณ สนามบินพาโร</p>
-                        <p>11. ประกันภัยการเดินทางต่างประเทศแบบระบุวันเดินทาง</p>
+                {/* Client and trip summary */}
+                <section className="mt-4 grid grid-cols-[0.9fr_1.25fr] gap-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                    <p className="text-[8px] font-bold tracking-[0.16em] text-brand-emerald uppercase">Prepared for / เสนอแก่</p>
+                    <p className="mt-1 text-[14px] font-bold text-slate-900 truncate">{customerName}</p>
+                    <div className="mt-1.5 space-y-0.5 text-[8.5px] text-slate-500">
+                      <p>{customerPhone || '-'}</p>
+                      {customerEmail && <p className="truncate">{customerEmail}</p>}
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-brand-emerald px-4 py-3 text-white">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-[7px] uppercase tracking-wider text-emerald-200">Journey</p>
+                        <p className="mt-1 text-[9px] font-semibold leading-tight">{packages.find(p => p.id === selectedPkgId)?.name}</p>
                       </div>
-                    </td>
-                    <td className="py-4 px-4 border border-gray-200 text-center font-mono font-semibold">{passengerCount} ท่าน</td>
-                    <td className="py-4 px-4 border border-gray-200 text-right font-mono font-semibold text-gray-900">
-                      {formatCurrency(result.sellingPriceTHB)}
-                    </td>
-                    <td className="py-4 px-4 border border-gray-200 text-right font-mono font-bold text-brand-emerald">
-                      {formatCurrency(result.sellingPriceTHB * passengerCount)}
-                    </td>
-                  </tr>
- 
+                      <div className="border-l border-white/15 pl-3">
+                        <p className="text-[7px] uppercase tracking-wider text-emerald-200">Travel date</p>
+                        <p className="mt-1 text-[9px] font-semibold leading-tight">{travelDate ? getTravelDateRangeString() : 'To be confirmed'}</p>
+                      </div>
+                      <div className="border-l border-white/15 pl-3">
+                        <p className="text-[7px] uppercase tracking-wider text-emerald-200">Guests / Duration</p>
+                        <p className="mt-1 text-[9px] font-semibold">{passengerCount} ท่าน · {packages.find(p => p.id === selectedPkgId)?.nights} คืน</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Main product card */}
+                <section className="mt-4 rounded-2xl border border-slate-200 overflow-hidden">
+                  <div className="grid grid-cols-[1fr_31mm_35mm] bg-slate-900 px-4 py-2.5 text-[8px] font-bold tracking-wider text-white uppercase">
+                    <span>Travel package & included services</span>
+                    <span className="text-right">Price / Person</span>
+                    <span className="text-right">Total</span>
+                  </div>
+                  <div className="grid grid-cols-[1fr_31mm_35mm] gap-0 px-4 py-3.5">
+                    <div className="pr-4">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-50 text-[9px] font-bold text-brand-emerald">01</span>
+                        <div>
+                          <p className="text-[12px] font-bold text-brand-emerald leading-tight">{packages.find(p => p.id === selectedPkgId)?.name}</p>
+                          <p className="mt-0.5 text-[8px] text-slate-400">Bhutan private journey · {result.hotelCategory === '3 Stars' ? '3-star hotel' : '4-star hotel'} · {passengerCount} guests</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-x-5 gap-y-1 text-[8.2px] leading-[1.35] text-slate-600">
+                        {[
+                          'Bhutan Airlines round-trip economy airfare',
+                          `${result.hotelCategory === '3 Stars' ? '3-star' : '4-star'} accommodation with daily meals`,
+                          'Bhutan visa and Sustainable Development Fee',
+                          'Private transport and English-speaking local guide',
+                          'Entrance fees and sightseeing as per program',
+                          'International travel insurance for stated dates'
+                        ].map((item, index) => (
+                          <p key={index} className="flex gap-1.5"><span className="mt-[1px] text-brand-gold">●</span><span>{item}</span></p>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="border-l border-slate-100 pl-3 text-right flex flex-col justify-center">
+                      <p className="font-mono text-[12px] font-bold text-slate-900">{formatCurrency(result.sellingPriceTHB)}</p>
+                      <p className="text-[7px] text-slate-400">THB / PAX</p>
+                    </div>
+                    <div className="border-l border-slate-100 pl-3 text-right flex flex-col justify-center">
+                      <p className="font-mono text-[13px] font-bold text-brand-emerald">{formatCurrency(result.sellingPriceTHB * passengerCount)}</p>
+                      <p className="text-[7px] text-slate-400">{passengerCount} PAX</p>
+                    </div>
+                  </div>
+
                   {result.isBusinessUpgrade && (
-                    <tr className="hover:bg-slate-50/50">
-                      <td className="py-4 px-4 border border-gray-200 text-center font-mono">2</td>
-                      <td className="py-4 px-4 border border-gray-200">
-                        <p className="font-bold text-brand-emerald text-sm">บริการอัพเกรดชั้นโดยสารชั้นธุรกิจ (Bhutan Airlines Business Class Upgrade)</p>
-                        <ul className="mt-1.5 space-y-1 text-gray-500 text-[10px] pl-4 list-disc">
-                          <li>อัพเกรดระดับที่นั่งชั้นธุรกิจ (Sky Class) เที่ยวบินไป-กลับ กรุงเทพฯ-พาโร-กรุงเทพฯ</li>
-                          <li>การบริการอาหารชั้นเยี่ยม เครื่องดื่มพรีเมียม สิทธิ์ขึ้นเครื่องก่อน และน้ำหนักสัมภาระเพิ่มเป็นพิเศษ</li>
-                        </ul>
-                      </td>
-                      <td className="py-4 px-4 border border-gray-200 text-center font-mono font-semibold">{result.businessUpgradeCount} ท่าน</td>
-                      <td className="py-4 px-4 border border-gray-200 text-right font-mono font-semibold text-gray-900">
-                        {formatCurrency(15000)}
-                      </td>
-                      <td className="py-4 px-4 border border-gray-200 text-right font-mono font-bold text-brand-emerald">
-                        {formatCurrency(15000 * (result.businessUpgradeCount || 0))}
-                      </td>
-                    </tr>
+                    <div className="grid grid-cols-[1fr_31mm_35mm] border-t border-slate-100 bg-amber-50/55 px-4 py-2.5">
+                      <div className="pr-4">
+                        <p className="text-[9px] font-bold text-amber-900">Business Class Upgrade</p>
+                        <p className="text-[7.5px] text-amber-700">Bhutan Airlines return journey · {result.businessUpgradeCount} passenger(s)</p>
+                      </div>
+                      <p className="border-l border-amber-100 pl-3 text-right font-mono text-[10px] font-semibold">{formatCurrency(15000)}</p>
+                      <p className="border-l border-amber-100 pl-3 text-right font-mono text-[10px] font-bold text-amber-900">{formatCurrency(15000 * (result.businessUpgradeCount || 0))}</p>
+                    </div>
                   )}
-                  
-                  {/* Empty spacers */}
-                  <tr className="h-28 text-slate-300">
-                    <td className="border border-gray-200"></td>
-                    <td className="border border-gray-200"></td>
-                    <td className="border border-gray-200"></td>
-                    <td className="border border-gray-200"></td>
-                    <td className="border border-gray-200"></td>
-                  </tr>
-                </tbody>
-              </table>
- 
-              {/* Calculation and Total section */}
-              <div className="grid grid-cols-12 gap-4 mb-8">
-                {/* Thai Baht text representation */}
-                <div className="col-span-7 bg-slate-50 p-4 rounded-xl border border-gray-100 flex items-center justify-center text-center">
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">จำนวนเงินตัวอักษร / Thai Baht Written</p>
-                    <p className="text-xs font-bold text-brand-emerald mt-1 bg-white border border-gray-200/60 px-4 py-2 rounded-lg inline-block">
+                </section>
+
+                {/* Total highlight */}
+                <section className="mt-4 grid grid-cols-[1fr_74mm] gap-4 items-stretch">
+                  <div className="rounded-xl border border-slate-200 px-4 py-3 flex flex-col justify-center">
+                    <p className="text-[7.5px] font-bold uppercase tracking-wider text-slate-400">Amount in words / จำนวนเงินตัวอักษร</p>
+                    <p className="mt-1 text-[10px] font-bold text-brand-emerald leading-snug">
                       ({formatThaiBaht((result.sellingPriceTHB * passengerCount) + (15000 * (result.businessUpgradeCount || 0)))})
                     </p>
                   </div>
-                </div>
- 
-                {/* Summary Totals */}
-                <div className="col-span-5 space-y-1.5 text-right font-medium">
-                  <div className="flex justify-between text-gray-500 py-1">
-                    <span>ราคาแพ็กเกจเฉลี่ยต่อท่าน / Base Rate:</span>
-                    <span className="font-mono text-gray-900 font-semibold">{formatCurrency(result.sellingPriceTHB)}</span>
-                  </div>
-                  {result.isBusinessUpgrade && (
-                    <div className="flex justify-between text-amber-700 py-1">
-                      <span>อัพเกรดชั้นธุรกิจ ({result.businessUpgradeCount} ท่าน):</span>
-                      <span className="font-mono font-semibold">+{formatCurrency(15000 * (result.businessUpgradeCount || 0))}</span>
+                  <div className="rounded-xl bg-brand-emerald p-4 text-white">
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-[7.5px] uppercase tracking-[0.16em] text-emerald-200">Grand Total / ยอดสุทธิ</p>
+                        <p className="mt-1 text-[8px] text-emerald-100">รวมสำหรับ {passengerCount} ท่าน</p>
+                      </div>
+                      <p className="font-mono text-[21px] leading-none font-bold whitespace-nowrap">
+                        {formatCurrency((result.sellingPriceTHB * passengerCount) + (15000 * (result.businessUpgradeCount || 0)))}
+                      </p>
                     </div>
-                  )}
-                  <div className="flex justify-between text-gray-500 py-1">
-                    <span>จำนวนผู้เดินทาง / Total Passengers:</span>
-                    <span className="font-mono text-gray-900 font-semibold">× {passengerCount} ท่าน</span>
                   </div>
-                  <div className="flex justify-between border-t border-brand-emerald pt-3 font-bold text-brand-emerald text-sm bg-emerald-50/40 p-3 rounded-xl mt-2">
-                    <span>ยอดสุทธิทั้งสิ้น / Net Total:</span>
-                    <span className="font-mono text-lg text-brand-emerald" id="pdf-total-display">
-                      {formatCurrency((result.sellingPriceTHB * passengerCount) + (15000 * (result.businessUpgradeCount || 0)))}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                </section>
 
-              {/* Terms and Conditions / Guarantee */}
-              <div className="border-t border-gray-200 pt-6 grid grid-cols-2 gap-8 text-[10px] text-gray-500">
-                <div>
-                  <h5 className="font-bold text-gray-700 uppercase tracking-wide mb-2">เงื่อนไขการจองและการรับประกัน / Terms & Conditions</h5>
-                  <ul className="space-y-1 pl-4 list-decimal">
-                    <li>ราคานี้รวมค่าใช้จ่ายจำเป็นทั้งหมดสำหรับการเดินทางเข้าภูฏานครบวงจรแล้ว</li>
-                    <li>เอกสารใบเสนอราคานี้มีระยะเวลาสอดคล้องกับมาตรฐานความพร้อมของเที่ยวบินและห้องพัก</li>
-                    <li>ผู้เดินทางจำเป็นต้องส่งหนังสือเดินทางพร้อมรูปถ่ายเพื่อยื่นขอวีซ่าล่วงหน้าอย่างน้อย 14 วัน</li>
-                    <li>ค่าบริการทัวร์อาจมีการปรับเปลี่ยนเล็กน้อยตามมาตรฐานประกาศระดับชาติของประเทศภูฏาน</li>
-                  </ul>
-                </div>
-
-                {/* Signatures */}
-                <div className="grid grid-cols-2 gap-4 text-center">
-                  <div className="flex flex-col justify-between h-24 border border-dashed border-gray-200 rounded-xl p-2 bg-slate-50/30">
-                    <span className="text-[9px] uppercase font-bold text-gray-400">ลงชื่อ ผู้ขอรับบริการ / Client</span>
-                    <div className="border-b border-gray-300 w-3/4 mx-auto pb-1 font-semibold text-gray-800 font-display">
-                      {customerName}
+                {/* Terms + signature, kept compact for one page */}
+                <section className="mt-4 grid grid-cols-[1.35fr_0.65fr] gap-5 border-t border-slate-200 pt-3">
+                  <div>
+                    <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-slate-700">Booking terms / เงื่อนไขสำคัญ</p>
+                    <ol className="mt-1.5 grid grid-cols-1 gap-1 text-[7.7px] leading-[1.35] text-slate-500 list-decimal pl-3.5">
+                      <li>ราคาขึ้นอยู่กับที่นั่งเที่ยวบินและห้องพัก ณ วันที่ยืนยันการจอง และอาจเปลี่ยนแปลงก่อนชำระมัดจำ</li>
+                      <li>กรุณาส่งสำเนาหนังสือเดินทางและรูปถ่ายสำหรับยื่นวีซ่าล่วงหน้าอย่างน้อย 14 วันก่อนเดินทาง</li>
+                      <li>การจองสมบูรณ์เมื่อบริษัทได้รับเงินมัดจำและออกเอกสารยืนยันการเดินทางแล้ว</li>
+                    </ol>
+                    <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[7.5px] text-amber-800">
+                      This quotation is prepared for the named recipient and is subject to final availability confirmation.
                     </div>
-                    <span className="text-[9px] text-gray-400">วันที่ / Date: .........................</span>
                   </div>
-                  <div className="flex flex-col justify-between h-24 border border-dashed border-brand-gold/30 rounded-xl p-2 bg-slate-50/30">
-                    <span className="text-[9px] uppercase font-bold text-brand-emerald">ผู้เสนอราคา / Agent Authorization</span>
-                    <div className="border-b border-brand-gold/40 w-3/4 mx-auto pb-1 font-semibold text-brand-emerald font-display">
-                      {currentUser?.name || 'Bhutan Center Rep'}
+                  <div className="rounded-xl border border-dashed border-brand-gold/60 bg-slate-50/60 px-4 py-3 text-center">
+                    <p className="text-[7px] font-bold uppercase tracking-wider text-brand-emerald">Authorized by</p>
+                    <div className="h-8" />
+                    <div className="border-t border-slate-300 pt-1.5">
+                      <p className="text-[9px] font-bold text-slate-800">{currentUser?.name || 'Bhutan Center Representative'}</p>
+                      <p className="text-[7px] text-slate-400">Bhutan Center / OMG Experience</p>
                     </div>
-                    <span className="text-[9px] text-brand-emerald">Bhutan Center Representative</span>
                   </div>
-                </div>
-              </div>
+                </section>
 
-              {/* Golden/Emerald footer badge */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-center text-[9px] text-gray-300 font-mono">
-                Thank you for choosing Bhutan Center. Let us guide your spiritual path to the Kingdom of Happiness.
+                <footer className="mt-auto flex items-center justify-between border-t border-slate-100 pt-2 text-[7px] text-slate-400">
+                  <span>BHUTAN CENTER · YOUR JOURNEY TO THE KINGDOM OF HAPPINESS</span>
+                  <span className="font-mono">{quotationRef}</span>
+                </footer>
               </div>
             </div>
           </div>

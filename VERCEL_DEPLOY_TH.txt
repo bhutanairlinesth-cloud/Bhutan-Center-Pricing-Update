@@ -1,0 +1,10 @@
+เวอร์ชันนี้ลบไฟล์ vercel.json ออกแล้ว เพื่อให้ Vercel ตรวจจับ Vite อัตโนมัติ
+
+ค่าที่ Vercel ควรตรวจพบ:
+Framework Preset: Vite
+Build Command: npm run build
+Output Directory: dist
+Install Command: npm install
+Root Directory: เว้นว่าง
+
+หลังอัปโหลด GitHub ให้รอ Deployment ใหม่จาก Commit ล่าสุด ไม่ต้อง Redeploy Commit เก่าที่ Error

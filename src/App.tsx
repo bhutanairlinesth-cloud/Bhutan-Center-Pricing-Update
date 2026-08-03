@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, TrendingUp, Plane, Map, CreditCard, Percent,
   Users as UsersIcon, LogOut, Menu, X, RefreshCw, Calculator,
-  Database, ChevronRight, Bell, Search
+  Database, ChevronRight, Bell, Search, Hotel as HotelIcon, BadgePercent, Sparkles, ArrowUpRight
 } from 'lucide-react';
 import { User, Hotel, TourPackage, GlobalSettings } from './types';
 import { database } from './db/database';
@@ -207,267 +207,126 @@ export default function App() {
     );
   }
 
-  // SIDEBAR LINK MATRIX
   const adminLinks = [
-    { id: 'dashboard', label: 'ภาพรวมระบบ', icon: LayoutDashboard },
-    { id: 'exchange-rate', label: 'อัตราแลกเปลี่ยน', icon: TrendingUp },
-    { id: 'flight', label: 'ราคาตั๋วเครื่องบิน', icon: Plane },
-    { id: 'packages', label: 'โปรแกรมทัวร์', icon: Map },
-    { id: 'visa', label: 'ค่าวีซ่าและค่าธรรมเนียม', icon: CreditCard },
-    { id: 'margin', label: 'กำไรและส่วนต่าง', icon: Percent },
-    { id: 'users', label: 'ผู้ใช้งานระบบ', icon: UsersIcon },
-    { id: 'schema', label: 'ฐานข้อมูล', icon: Database },
+    { id: 'dashboard', label: 'Overview', sub: 'ภาพรวมระบบ', icon: LayoutDashboard },
+    { id: 'sales-calc', label: 'Pricing Desk', sub: 'คำนวณราคา', icon: Calculator },
+    { id: 'packages', label: 'Tour Products', sub: 'โปรแกรมทัวร์', icon: Map },
+    { id: 'hotels', label: 'Hotels', sub: 'โรงแรมและห้องพัก', icon: HotelIcon },
+    { id: 'flight', label: 'Flight & Tax', sub: 'ตั๋วและภาษี', icon: Plane },
+    { id: 'exchange-rate', label: 'Exchange', sub: 'อัตราแลกเปลี่ยน', icon: TrendingUp },
+    { id: 'visa', label: 'Visa & Fees', sub: 'วีซ่าและค่าธรรมเนียม', icon: CreditCard },
+    { id: 'margin', label: 'Price Channels', sub: 'Agent / Retail', icon: BadgePercent },
+    { id: 'users', label: 'Team Access', sub: 'ผู้ใช้งานระบบ', icon: UsersIcon },
   ];
-
   const salesLinks = [
-    { id: 'sales-calc', label: 'คำนวณราคาและใบเสนอราคา', icon: Calculator },
-    { id: 'schema-view-only', label: 'ฐานข้อมูล', icon: Database },
+    { id: 'sales-calc', label: 'Pricing Desk', sub: 'คำนวณราคา', icon: Calculator },
+    { id: 'dashboard', label: 'Overview', sub: 'ภาพรวมราคา', icon: LayoutDashboard },
   ];
+  const links = currentUser.role === 'admin' ? adminLinks : salesLinks;
+  const activeLink = links.find((x) => x.id === activeTab) || links[0];
 
-  const activeLinks = currentUser.role === 'admin' ? adminLinks : salesLinks;
+  const retailPreview = Math.ceil(((settings.ticketPriceTHB + settings.airportTaxTHB) + settings.marginTHB) / 500) * 500;
+  const agentTicket = settings.ticketPriceTHB * (1 - ((settings.agentTicketDiscountPercent ?? 3) / 100));
+  const agentPreview = Math.ceil(((agentTicket + settings.airportTaxTHB) + (settings.agentMarginTHB ?? 3000)) / 500) * 500;
+
+  const renderContent = () => {
+    if (activeTab === 'dashboard') {
+      return (
+        <div className="v7-stack">
+          <section className="v7-hero">
+            <div>
+              <div className="v7-eyebrow"><Sparkles className="w-4 h-4"/> Central Pricing Command</div>
+              <h2>บริหารราคา Agent และราคาลูกค้าทั่วไป<br/>จากข้อมูลกลางชุดเดียว</h2>
+              <p>ปรับต้นทุนครั้งเดียว ระบบจะนำไปคำนวณราคาขายทั้งสองช่องทางโดยอัตโนมัติ พร้อมรักษาส่วนต่างกำไรตามนโยบายบริษัท</p>
+              <div className="v7-hero-actions">
+                <button className="v7-primary" onClick={() => setActiveTab('sales-calc')}><Calculator className="w-4 h-4"/> เปิด Pricing Desk</button>
+                {currentUser.role === 'admin' && <button className="v7-secondary" onClick={() => setActiveTab('margin')}><BadgePercent className="w-4 h-4"/> ตั้งค่าช่องทางราคา</button>}
+              </div>
+            </div>
+            <div className="v7-channel-preview">
+              <div className="v7-channel-card retail">
+                <span>RETAIL CHANNEL</span><strong>ลูกค้าทั่วไป</strong><b>{retailPreview.toLocaleString()} THB+</b><small>Margin {settings.marginTHB.toLocaleString()} THB / คน</small>
+              </div>
+              <div className="v7-channel-card agent">
+                <span>PARTNER CHANNEL</span><strong>Agent</strong><b>{agentPreview.toLocaleString()} THB+</b><small>Margin {(settings.agentMarginTHB ?? 3000).toLocaleString()} THB / คน</small>
+              </div>
+            </div>
+          </section>
+
+          <section className="v7-kpis">
+            <div><span>USD / THB</span><strong>{settings.exchangeRateUSD.toFixed(2)}</strong><small>อัตราแลกเปลี่ยนปัจจุบัน</small></div>
+            <div><span>TOUR PRODUCTS</span><strong>{packages.length}</strong><small>โปรแกรมพร้อมเสนอขาย</small></div>
+            <div><span>HOTEL RECORDS</span><strong>{hotels.length}</strong><small>รายการโรงแรมในระบบ</small></div>
+            <div><span>TEAM MEMBERS</span><strong>{users.length}</strong><small>บัญชีที่เข้าถึงระบบ</small></div>
+          </section>
+
+          <section className="v7-grid-2">
+            <div className="v7-panel">
+              <div className="v7-panel-head"><div><span className="v7-kicker">PRICE ARCHITECTURE</span><h3>โครงสร้างราคาสองช่องทาง</h3></div><button onClick={() => setActiveTab('margin')}>จัดการ</button></div>
+              <div className="v7-price-flow">
+                <div><i>01</i><strong>Base cost</strong><span>ตั๋ว + ภาษี + ทัวร์ + วีซ่า</span></div>
+                <ChevronRight className="w-4 h-4"/>
+                <div><i>02</i><strong>Channel rule</strong><span>Retail หรือ Agent</span></div>
+                <ChevronRight className="w-4 h-4"/>
+                <div><i>03</i><strong>Final price</strong><span>ปัดขึ้นทุก 500 บาท</span></div>
+              </div>
+            </div>
+            <div className="v7-panel">
+              <div className="v7-panel-head"><div><span className="v7-kicker">QUICK ACTIONS</span><h3>จัดการข้อมูลกลาง</h3></div></div>
+              <div className="v7-quick-grid">
+                {adminLinks.slice(2,8).map((item) => <button key={item.id} onClick={() => setActiveTab(item.id)}><item.icon className="w-5 h-5"/><span><b>{item.label}</b><small>{item.sub}</small></span><ArrowUpRight className="w-4 h-4"/></button>)}
+              </div>
+            </div>
+          </section>
+        </div>
+      );
+    }
+    if (activeTab === 'sales-calc') return <SalesQuotationView settings={settings} hotels={hotels} packages={packages} currentUser={currentUser}/>;
+    if (activeTab === 'hotels' && currentUser.role === 'admin') return <HotelManagementView hotels={hotels} onAdd={handleAddHotel} onUpdate={handleUpdateHotel} onDelete={handleDeleteHotel} showToast={showToast}/>;
+    if (activeTab === 'packages' && currentUser.role === 'admin') return <TourPackageView packages={packages} onAdd={handleAddPackage} onUpdate={handleUpdatePackage} onDelete={handleDeletePackage} showToast={showToast}/>;
+    if (activeTab === 'flight' && currentUser.role === 'admin') return <FlightSettingsView settings={settings} onSave={handleSaveSettings} showToast={showToast}/>;
+    if (activeTab === 'exchange-rate' && currentUser.role === 'admin') return <ExchangeRateView settings={settings} onSave={handleSaveSettings} showToast={showToast}/>;
+    if (activeTab === 'visa' && currentUser.role === 'admin') return <VisaSettingsView settings={settings} onSave={handleSaveSettings} showToast={showToast}/>;
+    if (activeTab === 'margin' && currentUser.role === 'admin') return <MarginSettingsView settings={settings} onSave={handleSaveSettings} showToast={showToast}/>;
+    if (activeTab === 'users' && currentUser.role === 'admin') return <UsersManagementView users={users} onAdd={handleAddUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} showToast={showToast}/>;
+    return <DatabaseSchemaView/>;
+  };
 
   return (
-    <div className="app-shell min-h-screen flex flex-col font-sans text-slate-800">
-      
-      {/* HEADER BAR */}
-      <header className="app-topbar h-[72px] shrink-0 flex items-center justify-between px-4 md:px-7 z-30 sticky top-0">
-        <div className="flex items-center gap-3">
-          {/* Mobile menu trigger */}
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="mobile-menu-btn p-2 md:hidden"
-          >
-            {isSidebarOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
-          </button>
-
-          <div className="flex items-center gap-3">
-            <BhutanCenterLogo size="sm" />
-            <div>
-              <span className="brand-title text-[17px] font-bold tracking-tight block leading-tight">
-                Bhutan Center Pricing
-              </span>
-              <span className="text-[10px] text-slate-400 font-bold tracking-[0.18em] uppercase">Tour Operations Console</span>
-            </div>
-            <span className={`hidden lg:inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold border ${isSupabaseConfigured ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseConfigured ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              {isSupabaseConfigured ? 'Online' : 'Local'}
-            </span>
-          </div>
+    <div className="v7-app">
+      <aside className={`v7-sidebar ${isSidebarOpen ? 'open' : ''}`}>
+        <div className="v7-brand">
+          <BhutanCenterLogo size="sm"/>
+          <div><strong>Bhutan Center</strong><span>Pricing OS</span></div>
+          <button className="v7-close md:hidden" onClick={() => setIsSidebarOpen(false)}><X className="w-5 h-5"/></button>
         </div>
-
-        {/* User Badge Profile Section */}
-        <div className="flex items-center gap-3">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-bold text-gray-900 leading-none">{currentUser.name}</p>
-            <p className="text-[10px] text-gray-400 font-medium font-mono uppercase mt-0.5 tracking-wider">
-              {currentUser.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ฝ่ายขาย'}
-            </p>
-          </div>
-          <div className="h-8 w-px bg-gray-100 hidden sm:block" />
-          
-          <button
-            onClick={handleLogout}
-            id="logout-btn"
-            className="flex items-center gap-1.5 hover:bg-rose-50 text-gray-500 hover:text-rose-600 px-3 py-2 rounded-xl border border-transparent hover:border-rose-100 text-xs font-semibold transition cursor-pointer"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">ออกจากระบบ</span>
-          </button>
+        <div className="v7-status"><span/><div><b>Supabase Live</b><small>Cloud data connected</small></div></div>
+        <nav className="v7-nav">
+          <label>WORKSPACE</label>
+          {links.map((link) => {
+            const Icon = link.icon;
+            const active = activeTab === link.id;
+            return <button key={link.id} className={active ? 'active' : ''} onClick={() => {setActiveTab(link.id); setIsSidebarOpen(false)}}><Icon className="w-[19px] h-[19px]"/><span><b>{link.label}</b><small>{link.sub}</small></span>{active && <i/>}</button>;
+          })}
+        </nav>
+        <div className="v7-user-card">
+          <div className="v7-avatar">{currentUser.name?.[0]?.toUpperCase() || 'U'}</div>
+          <div><b>{currentUser.name}</b><small>{currentUser.role === 'admin' ? 'Administrator' : 'Sales Partner'}</small></div>
+          <button onClick={handleLogout}><LogOut className="w-4 h-4"/></button>
         </div>
-      </header>
+      </aside>
 
-      {/* CORE WRAPPER CONTAINER */}
-      <div className="flex-1 flex overflow-hidden">
-        
-        {/* SIDE NAVIGATION DRAWER / PANEL */}
-        <aside className={`
-          app-sidebar fixed md:sticky top-[72px] left-0 bottom-0 w-[272px] z-40 p-4 flex flex-col justify-between transition-transform duration-250 shrink-0
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-        `}>
-          <div className="space-y-6">
-            <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 block mb-3">
-                เมนูหลัก
-              </span>
-              <nav className="space-y-1">
-                {activeLinks.map((link) => {
-                  const Icon = link.icon;
-                  const isCurrent = activeTab === link.id || (link.id === 'schema-view-only' && activeTab === 'schema');
-                  return (
-                    <button
-                      key={link.id}
-                      onClick={() => {
-                        if (link.id === 'schema-view-only') {
-                          setActiveTab('schema');
-                        } else {
-                          setActiveTab(link.id);
-                        }
-                        setIsSidebarOpen(false);
-                      }}
-                      id={`sidebar-link-${link.id}`}
-                      className={`
-                        w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition duration-150 cursor-pointer
-                        ${isCurrent 
-                          ? 'nav-item-active' 
-                          : 'nav-item-idle'
-                        }
-                      `}
-                    >
-                      <span className={`nav-icon ${isCurrent ? 'nav-icon-active' : ''}`}><Icon className="w-[18px] h-[18px]" /></span>
-                      {link.label}
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
+      {isSidebarOpen && <button className="v7-backdrop md:hidden" onClick={() => setIsSidebarOpen(false)}/>}
 
-            {/* Admin Extra feature: Access Sales engine directly to test pricing */}
-            {currentUser.role === 'admin' && (
-              <div className="border-t border-gray-100 pt-4">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 block mb-2">
-                  เครื่องมือ
-                </span>
-                <button
-                  onClick={() => {
-                    setActiveTab('sales-calc');
-                    setIsSidebarOpen(false);
-                  }}
-                  id="admin-test-sales-calc-btn"
-                  className={`
-                    w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition duration-150 cursor-pointer
-                    ${activeTab === 'sales-calc' 
-                      ? 'bg-emerald-900 text-white premium-shadow' 
-                      : 'text-brand-emerald border border-dashed border-brand-emerald/30 hover:border-brand-emerald hover:bg-emerald-50/20'
-                    }
-                  `}
-                >
-                  <Calculator className="w-4 h-4 text-brand-gold-light" />
-                  ทดลองคำนวณราคา
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* System Footer Options */}
-          <div className="space-y-3">
-            {currentUser.role === 'admin' && (
-              <button
-                onClick={handleResetSystem}
-                id="reset-db-btn"
-                className="w-full flex items-center justify-center gap-2 border border-dashed border-rose-200 hover:bg-rose-50 hover:border-rose-300 text-rose-600 rounded-xl py-2 px-3 text-xs font-semibold transition cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5 animate-reverse" />
-                รีเซ็ตฐานข้อมูล
-              </button>
-            )}
-
-            <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-              <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider font-mono">
-                BHUTAN PRICING CLOUD
-              </p>
-              <p className="text-[9px] text-gray-400 mt-0.5">
-                Secure cloud workspace
-              </p>
-            </div>
-          </div>
-        </aside>
-
-        {/* MAIN DISPLAY HUB */}
-        <main className="app-main flex-1 overflow-y-auto p-4 md:p-7 lg:p-9">
-          <div className="max-w-[1480px] mx-auto">
-            <div className="workspace-toolbar">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mb-1">
-                  <span>Bhutan Center</span><ChevronRight className="w-3.5 h-3.5" /><span className="text-slate-600">{activeLinks.find(x => x.id === activeTab)?.label || (activeTab === 'sales-calc' ? 'คำนวณราคาและใบเสนอราคา' : 'ฐานข้อมูล')}</span>
-                </div>
-                <h1 className="workspace-title">{activeLinks.find(x => x.id === activeTab)?.label || (activeTab === 'sales-calc' ? 'คำนวณราคาและใบเสนอราคา' : 'ฐานข้อมูล')}</h1>
-              </div>
-              <div className="workspace-actions">
-                <div className="quick-search hidden lg:flex"><Search className="w-4 h-4" /><span>ค้นหาข้อมูล...</span><kbd>⌘ K</kbd></div>
-                <button className="icon-action" aria-label="notifications"><Bell className="w-[18px] h-[18px]" /><span className="notification-dot" /></button>
-              </div>
-            </div>
-            {/* RENDER ACTIVE TAB */}
-            {activeTab === 'dashboard' && currentUser.role === 'admin' && (
-              <AdminDashboardOverview 
-                hotels={hotels} 
-                packages={packages} 
-                settings={settings} 
-                users={users}
-                setActiveTab={setActiveTab}
-              />
-            )}
-
-            {activeTab === 'exchange-rate' && currentUser.role === 'admin' && (
-              <ExchangeRateView 
-                settings={settings} 
-                onSave={handleSaveSettings} 
-                showToast={showToast} 
-              />
-            )}
-
-            {activeTab === 'flight' && currentUser.role === 'admin' && (
-              <FlightSettingsView 
-                settings={settings} 
-                onSave={handleSaveSettings} 
-                showToast={showToast} 
-              />
-            )}
-
-            {activeTab === 'packages' && currentUser.role === 'admin' && (
-              <TourPackageView 
-                packages={packages} 
-                onAdd={handleAddPackage} 
-                onUpdate={handleUpdatePackage} 
-                onDelete={handleDeletePackage} 
-                showToast={showToast} 
-              />
-            )}
-
-            {activeTab === 'visa' && currentUser.role === 'admin' && (
-              <VisaSettingsView 
-                settings={settings} 
-                onSave={handleSaveSettings} 
-                showToast={showToast} 
-              />
-            )}
-
-            {activeTab === 'margin' && currentUser.role === 'admin' && (
-              <MarginSettingsView 
-                settings={settings} 
-                onSave={handleSaveSettings} 
-                showToast={showToast} 
-              />
-            )}
-
-            {activeTab === 'users' && currentUser.role === 'admin' && (
-              <UsersManagementView 
-                users={users} 
-                onAdd={handleAddUser} 
-                onUpdate={handleUpdateUser}
-                onDelete={handleDeleteUser} 
-                showToast={showToast} 
-              />
-            )}
-
-            {activeTab === 'schema' && (
-              <DatabaseSchemaView />
-            )}
-
-            {activeTab === 'sales-calc' && (
-              <SalesQuotationView 
-                settings={settings} 
-                hotels={hotels} 
-                packages={packages} 
-                currentUser={currentUser}
-              />
-            )}
-          </div>
-        </main>
+      <div className="v7-main">
+        <header className="v7-topbar">
+          <button className="v7-menu md:hidden" onClick={() => setIsSidebarOpen(true)}><Menu className="w-5 h-5"/></button>
+          <div><span>BHUTAN CENTER / {activeLink.label.toUpperCase()}</span><h1>{activeLink.sub}</h1></div>
+          <div className="v7-top-actions"><div className="v7-live"><span/> LIVE DATA</div><button><Bell className="w-[18px] h-[18px]"/></button></div>
+        </header>
+        <main className="v7-content">{renderContent()}</main>
       </div>
-
-      {/* Floating System-Wide Alerts */}
-      <ToastContainer toasts={toasts} onClose={(id) => setToasts(t => t.filter(x => x.id !== id))} />
+      <ToastContainer toasts={toasts} onClose={(id) => setToasts(t => t.filter(x => x.id !== id))}/>
     </div>
   );
 }

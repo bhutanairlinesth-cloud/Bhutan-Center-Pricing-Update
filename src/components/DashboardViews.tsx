@@ -1887,9 +1887,9 @@ export function SalesQuotationView({ settings, hotels, packages, currentUser }: 
           <div>
             <h2 className="font-display font-bold text-lg flex items-center gap-2">
               <Calculator className="w-5 h-5 text-brand-gold" />
-              Quotation Generator
+              Bhutan Pricing Desk
             </h2>
-            <p className="text-xs text-emerald-100 mt-1">Bhutan Center real-time dynamic pricing engine.</p>
+            <p className="text-xs text-emerald-100 mt-1">คำนวณราคา Retail และ Agent จากต้นทุนกลางแบบเรียลไทม์</p>
           </div>
           <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-brand-gold text-brand-emerald">
             {currentUser?.role === 'admin' ? 'Admin Mode' : 'Sales Agent'}
@@ -1983,29 +1983,40 @@ export function SalesQuotationView({ settings, hotels, packages, currentUser }: 
             </div>
           </div>
 
-          {/* AGENT PRICING OPTION */}
-          <div className="bg-gradient-to-r from-brand-emerald/5 to-emerald-500/5 border border-brand-emerald/20 rounded-xl p-4 mt-2 hover:border-brand-emerald/40 transition duration-200">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-              <div className="flex items-center gap-2.5">
-                <input
-                  type="checkbox"
-                  id="agent-pricing-toggle"
-                  checked={isAgent}
-                  onChange={(e) => setIsAgent(e.target.checked)}
-                  className="w-4.5 h-4.5 rounded text-brand-emerald focus:ring-brand-emerald/30 border-gray-300 cursor-pointer accent-brand-emerald"
-                />
-                <label htmlFor="agent-pricing-toggle" className="font-display font-bold text-gray-900 text-xs cursor-pointer select-none">
-                  ราคาพิเศษสำหรับ Agent (Agent Partner Pricing)
-                </label>
+          {/* PRICING CHANNEL SELECTOR */}
+          <div className="pricing-channel-shell">
+            <div className="pricing-channel-heading">
+              <div>
+                <span>PRICING CHANNEL</span>
+                <strong>เลือกราคาที่ต้องการเสนอ</strong>
               </div>
-              <div className="flex items-center gap-1.5 self-start sm:self-center">
-                <span className="text-[10px] font-bold text-brand-emerald bg-emerald-100/60 border border-brand-emerald/10 px-2 py-0.5 rounded-full font-mono">
-                  ตั๋วลด -{(settings.agentTicketDiscountPercent ?? 3)}%
+              <small>ระบบใช้ต้นทุนเดียวกัน แต่แยก Margin และส่วนลดตามช่องทาง</small>
+            </div>
+            <div className="pricing-channel-grid">
+              <button
+                type="button"
+                onClick={() => setIsAgent(false)}
+                className={`pricing-channel-option ${!isAgent ? 'selected retail' : ''}`}
+              >
+                <span className="channel-radio"><i /></span>
+                <span className="channel-copy">
+                  <b>ราคาลูกค้าทั่วไป</b>
+                  <small>Retail / Direct Customer</small>
                 </span>
-                <span className="text-[10px] font-bold text-brand-emerald bg-emerald-100/60 border border-brand-emerald/10 px-2 py-0.5 rounded-full font-mono">
-                  Margin {settings.agentMarginTHB?.toLocaleString() ?? '3,000'} THB
+                <span className="channel-policy">Margin {settings.marginTHB.toLocaleString()} ฿</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAgent(true)}
+                className={`pricing-channel-option ${isAgent ? 'selected agent' : ''}`}
+              >
+                <span className="channel-radio"><i /></span>
+                <span className="channel-copy">
+                  <b>ราคาสำหรับ Agent</b>
+                  <small>Partner / Wholesale</small>
                 </span>
-              </div>
+                <span className="channel-policy">ตั๋ว -{settings.agentTicketDiscountPercent ?? 3}% · Margin {(settings.agentMarginTHB ?? 3000).toLocaleString()} ฿</span>
+              </button>
             </div>
           </div>
 
@@ -2018,12 +2029,12 @@ export function SalesQuotationView({ settings, hotels, packages, currentUser }: 
             {isCalculating ? (
               <>
                 <RefreshCw className="w-5 h-5 animate-spin" />
-                Recalculating Rates...
+                กำลังคำนวณราคา...
               </>
             ) : (
               <>
                 <Calculator className="w-5 h-5 text-brand-gold" />
-                Generate Quotation
+                คำนวณราคาขาย
               </>
             )}
           </button>

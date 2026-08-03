@@ -176,6 +176,47 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
 }) {
   const { t, language } = useI18n();
   const issued = new Date();
+  const hotelLevelLabel = language === 'th'
+    ? result.hotelCategory.replace(/\s*Stars?/i, ' ดาว')
+    : result.hotelCategory;
+  const includedItems = language === 'th'
+    ? [
+        'ตั๋วเครื่องบินไป–กลับ ชั้นประหยัด (Economy Class)',
+        `ที่พักโรงแรมระดับ ${hotelLevelLabel}`,
+        'อาหารทุกมื้อ: อาหารเช้าและอาหารเย็นที่โรงแรม และอาหารกลางวันที่ร้านอาหารท้องถิ่น',
+        'ไกด์ท้องถิ่นที่สื่อสารภาษาอังกฤษและร่วมเดินทางตลอดทริป',
+        'ค่าภาษีและค่าธรรมเนียมรายวันของรัฐบาล (SDF)',
+        'ค่าธรรมเนียมเข้าสถานที่ท่องเที่ยวและอนุสรณ์สถานตามโปรแกรม',
+        'ค่าธรรมเนียมวีซ่าประเทศภูฏาน',
+        'รถรับส่งส่วนตัวตามที่ระบุไว้ในโปรแกรม',
+        'โปรแกรมท่องเที่ยวและสถานที่ท่องเที่ยวตามกำหนดการ',
+        'บริการรับ–ส่งที่สนามบินพาโร',
+        'ประกันการเดินทางแบบระบุวัน',
+      ]
+    : [
+        'Round-trip economy class airfare',
+        `${hotelLevelLabel} hotel accommodation`,
+        'All meals: breakfast and dinner at the hotel, and lunch at local restaurants',
+        'English-speaking local guide travelling with the group throughout the trip',
+        'Government Sustainable Development Fee (SDF)',
+        'Admission fees for attractions and monuments listed in the itinerary',
+        'Bhutan visa fee',
+        'Private transfers as specified in the itinerary',
+        'Tour programme and sightseeing as scheduled',
+        'Paro Airport arrival and departure transfers',
+        'Travel insurance covering the stated travel dates',
+      ];
+  const excludedItems = language === 'th'
+    ? [
+        'ค่าเช่าม้าขึ้นวัดทักซัง',
+        'ค่าทิปไกด์ 3 USD และคนขับรถ 2 USD รวม 5 USD ต่อคน/วัน',
+        'ค่าใช้จ่ายส่วนตัวหรือรายการอื่นนอกเหนือจากโปรแกรม',
+      ]
+    : [
+        'Horse rental for the Tiger’s Nest hike',
+        'Tips: USD 3 for the guide and USD 2 for the driver, total USD 5 per person/day',
+        'Personal expenses and any services not specified in the itinerary',
+      ];
   return <Modal open={open} title={t('quotation')} onClose={onClose} wide>
     <div className="quote-toolbar no-print"><button className="ghost-button" onClick={onClose}>{t('editInput')}</button><button className="primary-button" onClick={() => window.print()}><FileText/>{t('printPdf')}</button></div>
     <article className="quotation-sheet" id="quotation-print-area">
@@ -222,9 +263,19 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
           <strong>THB {formatNumber(result.groupTotal, 2)}</strong>
         </div>
       </section>
-      <section className="quote-total-area quote-total-area-simple">
-        <div className="quote-note"><span>{t('note')}</span><p>{customer.note || (language === 'th' ? 'ราคานี้เป็นราคาแพ็กเกจต่อท่าน คูณตามจำนวนผู้เดินทาง และรวมบริการเสริมที่เลือกแล้ว' : 'The selling price is quoted per passenger, multiplied by the traveller quantity, including selected additional services.')}</p></div>
+      <section className="quote-scope-grid">
+        <div className="quote-scope-card quote-included">
+          <h3>{language === 'th' ? 'ราคารวม' : 'Package Includes'}</h3>
+          <ol>{includedItems.map((item, index) => <li key={`included-${index}`}>{item}</li>)}</ol>
+        </div>
+        <div className="quote-scope-card quote-excluded">
+          <h3>{language === 'th' ? 'ราคาไม่รวม' : 'Package Excludes'}</h3>
+          <ul>{excludedItems.map((item, index) => <li key={`excluded-${index}`}>{item}</li>)}</ul>
+        </div>
       </section>
+      {customer.note && <section className="quote-total-area quote-total-area-simple">
+        <div className="quote-note"><span>{t('note')}</span><p>{customer.note}</p></div>
+      </section>}
       <section className="quote-terms"><h3>{t('terms')}</h3><ol><li>{t('term1')}</li><li>{t('term2')}</li><li>{t('term3')}</li></ol></section>
       <footer className="quote-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div><div className="quote-sign"><span>Authorized signature</span></div></footer>
     </article>

@@ -798,3 +798,81 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .quote-table-grand-total { min-height: 50px !important; }
   .quote-table-grand-total strong { font-size: 16px !important; }
 }
+
+/* =========================================================
+   v10.5 — Package inclusions / exclusions on quotation PDF
+   Compact two-column content designed to remain on one A4 page.
+   ========================================================= */
+.quote-scope-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(210px, .85fr);
+  gap: 10px;
+}
+.quote-scope-card {
+  padding: 10px 12px 9px;
+  border-radius: 11px;
+  border: 1px solid #dfe6e2;
+  break-inside: avoid;
+}
+.quote-scope-card h3 {
+  margin: 0 0 7px;
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 850;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.quote-scope-card ol,
+.quote-scope-card ul {
+  margin: 0;
+  padding-left: 17px;
+  color: #52605a;
+  font-size: 8px;
+  line-height: 1.42;
+}
+.quote-scope-card li {
+  margin: 0 0 3px;
+  padding-left: 1px;
+  break-inside: avoid;
+}
+.quote-scope-card li:last-child { margin-bottom: 0; }
+.quote-included {
+  background: #f4f9f6;
+  border-color: #d6e8df;
+}
+.quote-included h3 { color: #0d5c47; }
+.quote-included ol {
+  columns: 2;
+  column-gap: 24px;
+}
+.quote-excluded {
+  background: #fff9f3;
+  border-color: #f0dfca;
+}
+.quote-excluded h3 { color: #9a6125; }
+.quote-excluded ul { padding-left: 15px; }
+.quote-excluded li::marker { color: #c77830; }
+
+@media (max-width: 680px) {
+  .quote-scope-grid { grid-template-columns: 1fr; }
+  .quote-included ol { columns: 1; }
+}
+
+@media print {
+  .quote-scope-grid {
+    margin-top: 8px !important;
+    grid-template-columns: minmax(0, 1.68fr) minmax(195px, .82fr) !important;
+    gap: 8px !important;
+  }
+  .quote-scope-card { padding: 8px 10px 7px !important; border-radius: 9px !important; }
+  .quote-scope-card h3 { margin-bottom: 5px !important; font-size: 8px !important; }
+  .quote-scope-card ol,
+  .quote-scope-card ul { font-size: 7.25px !important; line-height: 1.34 !important; }
+  .quote-scope-card li { margin-bottom: 2px !important; }
+  .quote-included ol { column-gap: 18px !important; }
+  .quote-terms { margin-top: 8px !important; padding: 7px 10px !important; }
+  .quote-terms h3 { margin-bottom: 3px !important; font-size: 7.4px !important; }
+  .quote-terms ol { font-size: 6.9px !important; line-height: 1.4 !important; }
+  .quote-footer { margin-top: 9px !important; padding-top: 8px !important; }
+}

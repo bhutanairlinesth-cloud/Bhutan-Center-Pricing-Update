@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Shield, TrendingUp, Plane, Hotel as HotelIcon, Map, CreditCard, 
-  Percent, Users as UsersIcon, Settings, LogOut, Menu, X, 
-  Sparkles, RefreshCw, Calculator, Database, HelpCircle
+import {
+  LayoutDashboard, TrendingUp, Plane, Map, CreditCard, Percent,
+  Users as UsersIcon, LogOut, Menu, X, RefreshCw, Calculator,
+  Database, ChevronRight, Bell, Search
 } from 'lucide-react';
 import { User, Hotel, TourPackage, GlobalSettings } from './types';
 import { database } from './db/database';
@@ -209,48 +209,48 @@ export default function App() {
 
   // SIDEBAR LINK MATRIX
   const adminLinks = [
-    { id: 'dashboard', label: 'แดชบอร์ด (Dashboard)', icon: Shield },
-    { id: 'exchange-rate', label: 'อัตราแลกเปลี่ยน (Exchange Rate)', icon: TrendingUp },
-    { id: 'flight', label: 'ตั้งค่าราคาตั๋วบิน (Flight Settings)', icon: Plane },
-    { id: 'packages', label: 'โปรแกรมเดินทาง (Travel Packages)', icon: Map },
-    { id: 'visa', label: 'ตั้งค่าค่าวีซ่า (Visa Settings)', icon: CreditCard },
-    { id: 'margin', label: 'ตั้งค่ากำไรส่วนต่าง (Margin Control)', icon: Percent },
-    { id: 'users', label: 'ผู้ใช้งานระบบ (Users List)', icon: UsersIcon },
-    { id: 'schema', label: 'โครงสร้างฐานข้อมูล (Database Schema)', icon: Database },
+    { id: 'dashboard', label: 'ภาพรวมระบบ', icon: LayoutDashboard },
+    { id: 'exchange-rate', label: 'อัตราแลกเปลี่ยน', icon: TrendingUp },
+    { id: 'flight', label: 'ราคาตั๋วเครื่องบิน', icon: Plane },
+    { id: 'packages', label: 'โปรแกรมทัวร์', icon: Map },
+    { id: 'visa', label: 'ค่าวีซ่าและค่าธรรมเนียม', icon: CreditCard },
+    { id: 'margin', label: 'กำไรและส่วนต่าง', icon: Percent },
+    { id: 'users', label: 'ผู้ใช้งานระบบ', icon: UsersIcon },
+    { id: 'schema', label: 'ฐานข้อมูล', icon: Database },
   ];
 
   const salesLinks = [
-    { id: 'sales-calc', label: 'คำนวณราคาทัวร์ (Quotation Engine)', icon: Calculator },
-    { id: 'schema-view-only', label: 'โครงสร้างฐานข้อมูล (Database Schema)', icon: Database },
+    { id: 'sales-calc', label: 'คำนวณราคาและใบเสนอราคา', icon: Calculator },
+    { id: 'schema-view-only', label: 'ฐานข้อมูล', icon: Database },
   ];
 
   const activeLinks = currentUser.role === 'admin' ? adminLinks : salesLinks;
 
   return (
-    <div className="min-h-screen bg-brand-cream flex flex-col font-sans text-gray-800">
+    <div className="app-shell min-h-screen flex flex-col font-sans text-slate-800">
       
       {/* HEADER BAR */}
-      <header className="bg-white border-b border-gray-100 h-16 shrink-0 flex items-center justify-between px-6 z-30 sticky top-0 premium-shadow">
+      <header className="app-topbar h-[72px] shrink-0 flex items-center justify-between px-4 md:px-7 z-30 sticky top-0">
         <div className="flex items-center gap-3">
           {/* Mobile menu trigger */}
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-1.5 md:hidden hover:bg-slate-50 border rounded-lg"
+            className="mobile-menu-btn p-2 md:hidden"
           >
             {isSidebarOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <BhutanCenterLogo size="sm" />
             <div>
-              <span className="font-serif font-bold text-lg text-brand-emerald tracking-tight block leading-tight">
+              <span className="brand-title text-[17px] font-bold tracking-tight block leading-tight">
                 Bhutan Center Pricing
               </span>
-              <span className="text-[10px] text-slate-400 font-semibold tracking-[0.14em] uppercase">Tour Operations Console</span>
+              <span className="text-[10px] text-slate-400 font-bold tracking-[0.18em] uppercase">Tour Operations Console</span>
             </div>
             <span className={`hidden lg:inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold border ${isSupabaseConfigured ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseConfigured ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              {isSupabaseConfigured ? 'SUPABASE LIVE' : 'LOCAL MODE'}
+              {isSupabaseConfigured ? 'Online' : 'Local'}
             </span>
           </div>
         </div>
@@ -260,7 +260,7 @@ export default function App() {
           <div className="text-right hidden sm:block">
             <p className="text-xs font-bold text-gray-900 leading-none">{currentUser.name}</p>
             <p className="text-[10px] text-gray-400 font-medium font-mono uppercase mt-0.5 tracking-wider">
-              {currentUser.role === 'admin' ? '⚜️ System Admin' : '💼 Sales Agent'}
+              {currentUser.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ฝ่ายขาย'}
             </p>
           </div>
           <div className="h-8 w-px bg-gray-100 hidden sm:block" />
@@ -271,7 +271,7 @@ export default function App() {
             className="flex items-center gap-1.5 hover:bg-rose-50 text-gray-500 hover:text-rose-600 px-3 py-2 rounded-xl border border-transparent hover:border-rose-100 text-xs font-semibold transition cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">Terminate</span>
+            <span className="hidden sm:inline">ออกจากระบบ</span>
           </button>
         </div>
       </header>
@@ -281,13 +281,13 @@ export default function App() {
         
         {/* SIDE NAVIGATION DRAWER / PANEL */}
         <aside className={`
-          fixed md:sticky top-16 left-0 bottom-0 w-64 bg-white border-r border-gray-100 z-40 p-4 flex flex-col justify-between transition-transform duration-250 shrink-0
+          app-sidebar fixed md:sticky top-[72px] left-0 bottom-0 w-[272px] z-40 p-4 flex flex-col justify-between transition-transform duration-250 shrink-0
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}>
           <div className="space-y-6">
             <div>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 block mb-3">
-                Navigation Matrix
+                เมนูหลัก
               </span>
               <nav className="space-y-1">
                 {activeLinks.map((link) => {
@@ -308,12 +308,12 @@ export default function App() {
                       className={`
                         w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition duration-150 cursor-pointer
                         ${isCurrent 
-                          ? 'bg-brand-emerald text-white premium-shadow' 
-                          : 'text-gray-500 hover:text-brand-emerald hover:bg-slate-50'
+                          ? 'nav-item-active' 
+                          : 'nav-item-idle'
                         }
                       `}
                     >
-                      <Icon className={`w-4 h-4 ${isCurrent ? 'text-brand-gold-light' : 'text-gray-400'}`} />
+                      <span className={`nav-icon ${isCurrent ? 'nav-icon-active' : ''}`}><Icon className="w-[18px] h-[18px]" /></span>
                       {link.label}
                     </button>
                   );
@@ -325,7 +325,7 @@ export default function App() {
             {currentUser.role === 'admin' && (
               <div className="border-t border-gray-100 pt-4">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 block mb-2">
-                  Validation Tools
+                  เครื่องมือ
                 </span>
                 <button
                   onClick={() => {
@@ -342,7 +342,7 @@ export default function App() {
                   `}
                 >
                   <Calculator className="w-4 h-4 text-brand-gold-light" />
-                  Test Sales Portal
+                  ทดลองคำนวณราคา
                 </button>
               </div>
             )}
@@ -357,24 +357,36 @@ export default function App() {
                 className="w-full flex items-center justify-center gap-2 border border-dashed border-rose-200 hover:bg-rose-50 hover:border-rose-300 text-rose-600 rounded-xl py-2 px-3 text-xs font-semibold transition cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5 animate-reverse" />
-                Reset Database
+                รีเซ็ตฐานข้อมูล
               </button>
             )}
 
             <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
               <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider font-mono">
-                Engine version 2.4.0
+                BHUTAN PRICING CLOUD
               </p>
               <p className="text-[9px] text-gray-400 mt-0.5">
-                © 2026 Bhutan Travel Center
+                Secure cloud workspace
               </p>
             </div>
           </div>
         </aside>
 
         {/* MAIN DISPLAY HUB */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
-          <div className="max-w-6xl mx-auto">
+        <main className="app-main flex-1 overflow-y-auto p-4 md:p-7 lg:p-9">
+          <div className="max-w-[1480px] mx-auto">
+            <div className="workspace-toolbar">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mb-1">
+                  <span>Bhutan Center</span><ChevronRight className="w-3.5 h-3.5" /><span className="text-slate-600">{activeLinks.find(x => x.id === activeTab)?.label || (activeTab === 'sales-calc' ? 'คำนวณราคาและใบเสนอราคา' : 'ฐานข้อมูล')}</span>
+                </div>
+                <h1 className="workspace-title">{activeLinks.find(x => x.id === activeTab)?.label || (activeTab === 'sales-calc' ? 'คำนวณราคาและใบเสนอราคา' : 'ฐานข้อมูล')}</h1>
+              </div>
+              <div className="workspace-actions">
+                <div className="quick-search hidden lg:flex"><Search className="w-4 h-4" /><span>ค้นหาข้อมูล...</span><kbd>⌘ K</kbd></div>
+                <button className="icon-action" aria-label="notifications"><Bell className="w-[18px] h-[18px]" /><span className="notification-dot" /></button>
+              </div>
+            </div>
             {/* RENDER ACTIVE TAB */}
             {activeTab === 'dashboard' && currentUser.role === 'admin' && (
               <AdminDashboardOverview 

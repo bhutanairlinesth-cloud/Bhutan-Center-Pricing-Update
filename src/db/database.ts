@@ -17,6 +17,7 @@ function mapSettings(row: any): GlobalSettings {
     hotel4StarPax1USD: Number(row.hotel_4_star_pax1_usd),
     hotel4StarPax2USD: Number(row.hotel_4_star_pax2_usd),
     hotel4StarPax3PlusUSD: Number(row.hotel_4_star_pax3_plus_usd),
+    agentTicketPriceTHB: Number(row.agent_ticket_price_thb ?? 25220),
     agentTicketDiscountPercent: Number(row.agent_ticket_discount_percent ?? 3),
     agentMarginTHB: Number(row.agent_margin_thb ?? 3000),
   };
@@ -36,7 +37,8 @@ function settingsRow(settings: GlobalSettings) {
     hotel_4_star_pax1_usd: settings.hotel4StarPax1USD,
     hotel_4_star_pax2_usd: settings.hotel4StarPax2USD,
     hotel_4_star_pax3_plus_usd: settings.hotel4StarPax3PlusUSD,
-    agent_ticket_discount_percent: settings.agentTicketDiscountPercent ?? 3,
+    agent_ticket_price_thb: settings.agentTicketPriceTHB ?? 25220,
+    agent_ticket_discount_percent: settings.ticketPriceTHB > 0 ? Number((((settings.ticketPriceTHB - (settings.agentTicketPriceTHB ?? 25220)) / settings.ticketPriceTHB) * 100).toFixed(4)) : 0,
     agent_margin_thb: settings.agentMarginTHB ?? 3000,
     updated_at: new Date().toISOString(),
   };

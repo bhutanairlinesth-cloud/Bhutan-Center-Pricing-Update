@@ -149,7 +149,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   hotel4StarPax1USD: 300,    // 4 Star Hotel 1 Passenger rate
   hotel4StarPax2USD: 240,    // 4 Star Hotel 2 Passengers rate
   hotel4StarPax3PlusUSD: 220, // 4 Star Hotel 3+ Passengers rate
-  agentTicketDiscountPercent: 3, // Default 3% discount
+  agentTicketPriceTHB: 25220,    // Default Agent fare (3% below 26,000)
+  agentTicketDiscountPercent: 3, // Display/derived discount
   agentMarginTHB: 3000       // Default 3,000 THB margin
 };
 
@@ -300,10 +301,11 @@ export const mockDb = {
     }
     const parsed = JSON.parse(data);
     // Dynamic migration for Agent Pricing fields if missing
-    if (parsed.agentTicketDiscountPercent === undefined || parsed.agentMarginTHB === undefined) {
+    if (parsed.agentTicketPriceTHB === undefined || parsed.agentTicketDiscountPercent === undefined || parsed.agentMarginTHB === undefined) {
       const migrated = {
         ...DEFAULT_SETTINGS,
         ...parsed,
+        agentTicketPriceTHB: parsed.agentTicketPriceTHB !== undefined ? parsed.agentTicketPriceTHB : 25220,
         agentTicketDiscountPercent: parsed.agentTicketDiscountPercent !== undefined ? parsed.agentTicketDiscountPercent : 3,
         agentMarginTHB: parsed.agentMarginTHB !== undefined ? parsed.agentMarginTHB : 3000
       };

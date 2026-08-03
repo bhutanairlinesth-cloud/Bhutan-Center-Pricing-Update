@@ -31,6 +31,7 @@ create table if not exists public.app_settings (
   hotel_4_star_pax1_usd numeric not null default 300,
   hotel_4_star_pax2_usd numeric not null default 240,
   hotel_4_star_pax3_plus_usd numeric not null default 220,
+  agent_ticket_price_thb numeric not null default 25220,
   agent_ticket_discount_percent numeric not null default 3,
   agent_margin_thb numeric not null default 3000,
   updated_at timestamptz not null default now()
@@ -116,6 +117,9 @@ as $$
 $$;
 
 alter table public.profiles enable row level security;
+alter table public.app_settings add column if not exists agent_ticket_price_thb numeric not null default 25220;
+update public.app_settings set agent_ticket_price_thb = 25220 where agent_ticket_price_thb is null;
+
 alter table public.app_settings enable row level security;
 alter table public.hotels enable row level security;
 alter table public.tour_packages enable row level security;

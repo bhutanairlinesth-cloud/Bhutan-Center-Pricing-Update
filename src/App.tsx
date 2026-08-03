@@ -226,7 +226,7 @@ export default function App() {
   const activeLink = links.find((x) => x.id === activeTab) || links[0];
 
   const retailPreview = Math.ceil(((settings.ticketPriceTHB + settings.airportTaxTHB) + settings.marginTHB) / 500) * 500;
-  const agentTicket = settings.ticketPriceTHB * (1 - ((settings.agentTicketDiscountPercent ?? 3) / 100));
+  const agentTicket = settings.agentTicketPriceTHB ?? 25220;
   const agentPreview = Math.ceil(((agentTicket + settings.airportTaxTHB) + (settings.agentMarginTHB ?? 3000)) / 500) * 500;
 
   const renderContent = () => {

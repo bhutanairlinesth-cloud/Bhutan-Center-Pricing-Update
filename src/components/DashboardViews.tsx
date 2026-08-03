@@ -165,21 +165,21 @@ interface FlightSettingsViewProps {
 export function FlightSettingsView({ settings, onSave, showToast }: FlightSettingsViewProps) {
   const [ticketPrice, setTicketPrice] = useState<string>(settings.ticketPriceTHB.toString());
   const [airportTax, setAirportTax] = useState<string>(settings.airportTaxTHB.toString());
-  const [agentTicketDiscount, setAgentTicketDiscount] = useState<string>((settings.agentTicketDiscountPercent ?? 3).toString());
+  const [agentTicketPrice, setAgentTicketPrice] = useState<string>((settings.agentTicketPriceTHB ?? 25220).toString());
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setTicketPrice(settings.ticketPriceTHB.toString());
     setAirportTax(settings.airportTaxTHB.toString());
-    setAgentTicketDiscount((settings.agentTicketDiscountPercent ?? 3).toString());
+    setAgentTicketPrice((settings.agentTicketPriceTHB ?? 25220).toString());
   }, [settings]);
 
   const handleSave = () => {
     const ticket = parseFloat(ticketPrice);
     const tax = parseFloat(airportTax);
-    const discount = parseFloat(agentTicketDiscount);
-    if (isNaN(ticket) || ticket < 0 || isNaN(tax) || tax < 0 || isNaN(discount) || discount < 0 || discount > 100) {
-      showToast('Please enter valid positive values for flight parameters. Discount must be between 0 and 100.', 'error');
+    const agentTicket = parseFloat(agentTicketPrice);
+    if (isNaN(ticket) || ticket < 0 || isNaN(agentTicket) || agentTicket < 0 || agentTicket > ticket || isNaN(tax) || tax < 0) {
+      showToast('กรุณากรอกราคาตั๋วให้ถูกต้อง โดยราคา Agent ต้องไม่สูงกว่าราคาปกติ', 'error');
       return;
     }
     setIsSaving(true);
@@ -188,15 +188,16 @@ export function FlightSettingsView({ settings, onSave, showToast }: FlightSettin
         ...settings,
         ticketPriceTHB: ticket,
         airportTaxTHB: tax,
-        agentTicketDiscountPercent: discount
+        agentTicketPriceTHB: agentTicket,
+        agentTicketDiscountPercent: ticket > 0 ? Number((((ticket - agentTicket) / ticket) * 100).toFixed(4)) : 0
       });
       setIsSaving(false);
       showToast('Flight Settings saved successfully');
     }, 400);
   };
 
-  const calculatedAgentPrice = !isNaN(parseFloat(ticketPrice)) && !isNaN(parseFloat(agentTicketDiscount))
-    ? parseFloat(ticketPrice) * (1 - parseFloat(agentTicketDiscount) / 100)
+  const calculatedDiscount = !isNaN(parseFloat(ticketPrice)) && parseFloat(ticketPrice) > 0 && !isNaN(parseFloat(agentTicketPrice))
+    ? ((parseFloat(ticketPrice) - parseFloat(agentTicketPrice)) / parseFloat(ticketPrice)) * 100
     : 0;
 
   return (
@@ -236,27 +237,28 @@ export function FlightSettingsView({ settings, onSave, showToast }: FlightSettin
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Agent Flight Ticket Discount (%)
+            Agent Air Ticket Price (THB per person)
           </label>
           <div className="relative rounded-lg shadow-sm mb-1">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <span className="text-gray-400 font-mono">฿</span>
+            </div>
             <input
               type="number"
-              step="0.1"
-              value={agentTicketDiscount}
-              onChange={(e) => setAgentTicketDiscount(e.target.value)}
-              className="block w-full px-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-emerald/20 focus:border-brand-emerald text-gray-900 font-mono"
-              placeholder="3"
-              id="agent-ticket-discount-input"
+              value={agentTicketPrice}
+              onChange={(e) => setAgentTicketPrice(e.target.value)}
+              className="block w-full pl-8 pr-12 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-emerald/20 focus:border-brand-emerald text-gray-900 font-mono"
+              placeholder="25,220"
+              id="agent-ticket-price-input"
             />
             <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-              <span className="text-gray-400 text-sm">%</span>
+              <span className="text-gray-400 text-sm">THB</span>
             </div>
           </div>
-          {calculatedAgentPrice > 0 && (
-            <p className="text-xs text-brand-emerald mt-1 font-sans">
-              ราคาหลังหักส่วนลดสำหรับ Agent: <span className="font-bold font-mono">฿{calculatedAgentPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span> THB (ลดลงจาก ฿{parseFloat(ticketPrice).toLocaleString()} THB)
-            </p>
-          )}
+          <p className="text-xs text-brand-emerald mt-1 font-sans">
+            ส่วนลดเทียบราคาปกติ: <span className="font-bold font-mono">{calculatedDiscount.toFixed(2)}%</span>
+            {parseFloat(ticketPrice) === 26000 && parseFloat(agentTicketPrice) === 25220 ? ' — 26,000 → 25,220 บาท' : ''}
+          </p>
         </div>
 
         <div>
@@ -1795,7 +1797,7 @@ export function SalesQuotationView({ settings, hotels, packages, currentUser }: 
       // If agent is selected, apply the configured Agent Ticket Discount Percent first
       const hasTicketDiscount = passengerCount >= 10;
       const baseTicketPrice = isAgent
-        ? settings.ticketPriceTHB * (1 - ((settings.agentTicketDiscountPercent ?? 3) / 100))
+        ? (settings.agentTicketPriceTHB ?? 25220)
         : settings.ticketPriceTHB;
       const ticketCostTHB = hasTicketDiscount ? baseTicketPrice * 0.9 : baseTicketPrice;
       const taxCostTHB = settings.airportTaxTHB;
@@ -2015,7 +2017,7 @@ export function SalesQuotationView({ settings, hotels, packages, currentUser }: 
                   <b>ราคาสำหรับ Agent</b>
                   <small>Partner / Wholesale</small>
                 </span>
-                <span className="channel-policy">ตั๋ว -{settings.agentTicketDiscountPercent ?? 3}% · Margin {(settings.agentMarginTHB ?? 3000).toLocaleString()} ฿</span>
+                <span className="channel-policy">ตั๋ว {(settings.agentTicketPriceTHB ?? 25220).toLocaleString()} ฿ · ลด {settings.ticketPriceTHB > 0 ? (((settings.ticketPriceTHB - (settings.agentTicketPriceTHB ?? 25220)) / settings.ticketPriceTHB) * 100).toFixed(2) : '0.00'}% · Margin {(settings.agentMarginTHB ?? 3000).toLocaleString()} ฿</span>
               </button>
             </div>
           </div>

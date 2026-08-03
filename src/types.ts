@@ -67,7 +67,8 @@ export interface GlobalSettings {
   hotel4StarPax1USD: number; // 4 Star Hotel Pax 1 USD
   hotel4StarPax2USD: number; // 4 Star Hotel Pax 2 USD
   hotel4StarPax3PlusUSD: number; // 4 Star Hotel Pax 3+ USD
-  agentTicketDiscountPercent?: number; // Agent flight ticket discount percent (e.g. 3)
+  agentTicketPriceTHB?: number;         // Agent air ticket price (THB), e.g. 25220
+  agentTicketDiscountPercent?: number; // Derived/display discount percent, e.g. 3
   agentMarginTHB?: number;             // Agent profit margin in THB (e.g. 3000)
 }
 

@@ -116,10 +116,12 @@ function HotelEditor({ hotel, onClose, onSave }: { hotel: Hotel | null; onClose:
 }
 
 function PackagesManager({ items, onSave, onDelete }: { items: TourPackage[]; onSave: (pkg: TourPackage) => Promise<void>; onDelete: (id: string) => Promise<void> }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [editing, setEditing] = useState<TourPackage | null>(null);
   async function remove(item: TourPackage) { if (window.confirm(t('confirmDelete'))) await onDelete(item.id); }
-  return <div className="admin-stack"><PageAction title={t('packages')} detail={`${items.length} records`} action={t('addPackage')} onAction={() => setEditing(newPackage())}/><section className="panel-card no-padding">{items.length ? <div className="data-table"><div className="data-table-head"><span>{t('packageName')}</span><span>{t('durationNights')}</span><span>PRICE SOURCE</span><span/></div>{items.map((pkg) => <div className="data-table-row" key={pkg.id}><span className="package-cell"><i><PackageOpen/></i><b>{pkg.name}</b></span><span>{pkg.nights} {t('nights')}</span><span className="rate-preview">Package hotel-level rate × {pkg.nights} nights</span><span className="row-actions"><button onClick={() => setEditing(pkg)}><Pencil/></button><button className="danger" onClick={() => remove(pkg)}><Trash2/></button></span></div>)}</div> : <EmptyState title={t('noData')}/>}</section><PackageEditor pkg={editing} onClose={() => setEditing(null)} onSave={async (pkg) => { await onSave(pkg); setEditing(null); }}/></div>;
+  const recordLabel = language === 'th' ? `${items.length} รายการ` : `${items.length} records`;
+  const sourceTitle = language === 'th' ? 'แหล่งราคาที่ใช้คำนวณ' : 'Price source';
+  return <div className="admin-stack"><PageAction title={t('packages')} detail={recordLabel} action={t('addPackage')} onAction={() => setEditing(newPackage())}/><section className="panel-card no-padding">{items.length ? <div className="data-table"><div className="data-table-head"><span>{t('packageName')}</span><span>{t('durationNights')}</span><span>{sourceTitle}</span><span/></div>{items.map((pkg) => <div className="data-table-row" key={pkg.id}><span className="package-cell"><i><PackageOpen/></i><b>{pkg.name}</b></span><span>{pkg.nights} {t('nights')}</span><span className="rate-preview">{language === 'th' ? `เรตแพ็กเกจตามระดับโรงแรม × ${pkg.nights} คืน` : `Hotel-level package rate × ${pkg.nights} nights`}</span><span className="row-actions"><button aria-label={t('edit')} onClick={() => setEditing(pkg)}><Pencil/></button><button aria-label={t('delete')} className="danger" onClick={() => remove(pkg)}><Trash2/></button></span></div>)}</div> : <EmptyState title={t('noData')}/>}</section><PackageEditor pkg={editing} onClose={() => setEditing(null)} onSave={async (pkg) => { await onSave(pkg); setEditing(null); }}/></div>;
 }
 
 function newPackage(): TourPackage {

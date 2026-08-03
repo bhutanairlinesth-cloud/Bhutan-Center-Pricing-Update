@@ -556,3 +556,124 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 }
 
 @media (max-width: 620px) { .group-discount-fields { grid-template-columns: 1fr; } }
+
+/* =========================================================
+   v10.3 — Readable admin tables & simplified quotation
+   Placed last intentionally so it wins over earlier compact rules.
+   ========================================================= */
+
+/* Back office readability */
+.admin-shell { font-size: 16px; }
+.admin-content { width: min(1480px, calc(100% - 64px)); padding-top: 38px; }
+.page-action { min-height: 82px; }
+.page-action h2 { font-size: 32px; line-height: 1.15; letter-spacing: -.035em; }
+.page-action p { margin-top: 8px; font-size: 13px; line-height: 1.5; }
+.page-action .primary-button { min-height: 48px; padding-inline: 22px; border-radius: 13px; font-size: 14px; }
+.panel-card { border-radius: 20px; }
+.data-table-head, .data-table-row {
+  min-width: 940px;
+  grid-template-columns: minmax(360px, 1.55fr) minmax(150px, .48fr) minmax(330px, .9fr) 112px;
+}
+.data-table-head {
+  min-height: 58px;
+  padding: 0 22px;
+  font-size: 12px;
+  letter-spacing: .07em;
+}
+.data-table-row {
+  min-height: 84px;
+  padding: 0 22px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.package-cell { gap: 14px; }
+.package-cell i { width: 42px; height: 42px; border-radius: 12px; }
+.package-cell i svg { width: 20px; height: 20px; }
+.package-cell b { font-size: 15px; font-weight: 750; line-height: 1.4; }
+.rate-preview { color: #5f6d66; font-size: 14px; line-height: 1.5; }
+.row-actions { gap: 8px; justify-content: flex-end; }
+.row-actions button { width: 40px; height: 40px; border-radius: 11px; }
+.row-actions svg { width: 18px; height: 18px; }
+.data-main b { font-size: 15px; }
+.data-main small { font-size: 13px; }
+.data-row, .user-row { min-height: 82px; }
+.admin-nav button span { font-size: 14px; }
+.admin-nav button { min-height: 52px; }
+.workspace-label span { font-size: 13px; }
+.workspace-label small { font-size: 11px; }
+.sidebar-footer button { font-size: 13px; }
+.admin-header-title span { font-size: 11px; }
+.admin-header-title h1 { font-size: 25px; }
+.admin-user b { font-size: 12px; }
+.stat-card small { font-size: 12px; }
+.stat-card strong { font-size: 30px; }
+.stat-card em { font-size: 11px; }
+.panel-heading span { font-size: 11px; }
+.panel-heading h3 { font-size: 19px; }
+.panel-heading button { font-size: 13px; }
+.pricing-control-list b { font-size: 14px; }
+.pricing-control-list small { font-size: 12px; }
+.health-row > div:first-child { font-size: 13px; }
+.star-rate-card h4 { font-size: 14px; }
+.settings-card-title h3 { font-size: 18px; }
+.settings-card-title p { font-size: 13px; }
+.number-field em { font-size: 12px; }
+.calculated-note, .info-banner { font-size: 14px; }
+.user-row select { font-size: 14px; }
+
+/* One-line package summary quotation */
+.quote-package-summary .quote-table-head,
+.quote-package-summary .quote-table-row {
+  grid-template-columns: minmax(0, 1.45fr) minmax(145px, .65fr) minmax(150px, .55fr);
+}
+.quote-package-summary .quote-table-head { min-height: 40px; font-size: 8.8px; }
+.quote-package-summary .quote-table-row { min-height: 76px; }
+.quote-package-summary .quote-table-row > span { padding: 13px 14px; }
+.quote-package-summary .quote-table-row b { font-size: 11.5px; line-height: 1.45; }
+.quote-package-summary .quote-table-row small { margin-top: 5px; font-size: 8.8px; line-height: 1.45; }
+.quote-package-summary .quote-table-row > strong { padding: 0 14px; font-size: 13px; }
+.quote-trip-quantity { border-left: 1px solid #e8ece9; border-right: 1px solid #e8ece9; }
+.quote-trip-quantity b, .quote-trip-quantity small { display: block; }
+
+/* PDF typography is intentionally larger now that itemization is removed. */
+.quote-header p { font-size: 9px; }
+.quote-title span { font-size: 9px; }
+.quote-title h1 { font-size: 29px; }
+.quote-title b { font-size: 9px; }
+.quote-meta-grid span, .quote-trip-card span { font-size: 8.5px; }
+.quote-meta-grid strong { font-size: 13px; }
+.quote-meta-grid small { font-size: 9px; }
+.quote-trip-card strong { font-size: 11px; }
+.quote-trip-card small { font-size: 8.5px; }
+.quote-note span { font-size: 8.5px; }
+.quote-note p { font-size: 9px; line-height: 1.6; }
+.quote-grand-total span { font-size: 9px; }
+.quote-grand-total strong { font-size: 24px; }
+.quote-grand-total small { font-size: 9px; }
+.quote-terms h3 { font-size: 9px; }
+.quote-terms ol { font-size: 8.2px; line-height: 1.6; }
+.quote-footer strong { font-size: 9.5px; }
+.quote-footer span { font-size: 8px; }
+
+@media (max-width: 900px) {
+  .admin-content { width: calc(100% - 32px); }
+}
+
+@media (max-width: 680px) {
+  .page-action { min-height: auto; align-items: flex-start; }
+  .page-action h2 { font-size: 27px; }
+  .page-action p { font-size: 13px; }
+  .data-table-head, .data-table-row { min-width: 820px; }
+  .quote-package-summary .quote-table-head,
+  .quote-package-summary .quote-table-row { grid-template-columns: 1fr 110px 125px; }
+  .quote-package-summary .quote-table-row b { font-size: 11px; }
+}
+
+@media print {
+  .quote-package-summary .quote-table-head { min-height: 38px !important; font-size: 8.5px !important; }
+  .quote-package-summary .quote-table-row { min-height: 70px !important; }
+  .quote-package-summary .quote-table-row b { font-size: 11px !important; }
+  .quote-package-summary .quote-table-row small { font-size: 8.5px !important; }
+  .quote-package-summary .quote-table-row > strong { font-size: 12.5px !important; }
+}
+

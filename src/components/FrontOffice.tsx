@@ -178,13 +178,16 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
         <div><span>{t('hotelLevel')}</span><strong>{result.hotelCategory}</strong><small>{result.nights} {t('nights')}</small></div>
         <div><span>{t('passengers')}</span><strong>{result.passengerCount} {t('people')}</strong><small>{result.nights} {t('nights')}</small></div>
       </section>
-      <section className="quote-price-table">
-        <div className="quote-table-head"><span>{t('pricingDetails')}</span><span>{t('perPerson')}</span><span>{t('groupTotal')}</span></div>
-        <QuoteRow label={t('flight')} detail={result.hasGroupFlightDiscount ? `${t('groupDiscount')} ${formatNumber(result.groupDiscountPercentApplied, 2)}%` : 'Economy class'} each={result.airTicketPerPerson} total={result.airTicketPerPerson * result.passengerCount} language={language}/>
-        <QuoteRow label={t('airportTax')} detail="Airport & operational taxes" each={result.airportTaxPerPerson} total={result.airportTaxPerPerson * result.passengerCount} language={language}/>
-        <QuoteRow label={t('ground')} detail={`${result.hotelCategory} · ${result.nights} ${t('nights')}`} each={result.groundCostTHBPerPerson} total={result.groundCostTHBPerPerson * result.passengerCount} language={language}/>
-        <QuoteRow label={t('visa')} detail={`${formatUSD(result.visaUSDPerPerson)} / person`} each={result.visaTHBPerPerson} total={result.visaTHBPerPerson * result.passengerCount} language={language}/>
-        {result.businessUpgradeCount > 0 && <QuoteRow label={t('businessUpgrade')} detail={`${result.businessUpgradeCount} ${t('people')}`} each={result.businessUpgradePerPerson} total={result.businessUpgradeTotal} language={language}/>} 
+      <section className="quote-price-table quote-package-summary">
+        <div className="quote-table-head"><span>{language === 'th' ? 'แพ็กเกจทัวร์' : 'Tour package'}</span><span>{language === 'th' ? 'ระยะเวลา / ผู้เดินทาง' : 'Duration / Travellers'}</span><span>{language === 'th' ? 'ราคาแพ็กเกจ' : 'Package price'}</span></div>
+        <div className="quote-table-row quote-package-row">
+          <span>
+            <b>{result.packageName}</b>
+            <small>{result.hotelCategory}{result.hasGroupFlightDiscount ? ` · ${t('groupDiscount')} ${formatNumber(result.groupDiscountPercentApplied, 2)}%` : ''}{result.businessUpgradeCount > 0 ? ` · Business Class ${result.businessUpgradeCount} ${t('people')}` : ''}</small>
+          </span>
+          <span className="quote-trip-quantity"><b>{result.nights} {t('nights')}</b><small>{result.passengerCount} {t('people')}</small></span>
+          <strong>{formatTHB(result.groupTotal, language)}</strong>
+        </div>
       </section>
       <section className="quote-total-area">
         <div className="quote-note"><span>{t('note')}</span><p>{customer.note || (language === 'th' ? 'ราคานี้รวมบริการตามโปรแกรมที่เลือกและคำนวณจากข้อมูลล่าสุดในระบบ' : 'This price includes services in the selected package and is calculated from the latest system data.')}</p></div>
@@ -196,6 +199,3 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
   </Modal>;
 }
 
-function QuoteRow({ label, detail, each, total, language }: { label: string; detail: string; each: number; total: number; language: 'th' | 'en' }) {
-  return <div className="quote-table-row"><span><b>{label}</b><small>{detail}</small></span><strong>{formatTHB(each, language)}</strong><strong>{formatTHB(total, language)}</strong></div>;
-}

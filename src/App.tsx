@@ -295,38 +295,64 @@ export default function App() {
   };
 
   return (
-    <div className="v7-app">
-      <aside className={`v7-sidebar ${isSidebarOpen ? 'open' : ''}`}>
-        <div className="v7-brand">
+    <div className="omg-app-shell">
+      <header className="omg-global-header">
+        <div className="omg-header-brand">
+          <button className="omg-mobile-menu md:hidden" onClick={() => setIsSidebarOpen(true)} aria-label="Open navigation"><Menu className="w-5 h-5"/></button>
           <BhutanCenterLogo size="sm"/>
-          <div><strong>Bhutan Center</strong><span>Pricing OS</span></div>
-          <button className="v7-close md:hidden" onClick={() => setIsSidebarOpen(false)}><X className="w-5 h-5"/></button>
+          <div className="omg-brand-copy">
+            <strong>Bhutan Airlines</strong>
+            <span>GSA, Thailand · Pricing Center</span>
+          </div>
         </div>
-        <div className="v7-status"><span/><div><b>Supabase Live</b><small>Cloud data connected</small></div></div>
-        <nav className="v7-nav">
-          <label>WORKSPACE</label>
-          {links.map((link) => {
-            const Icon = link.icon;
-            const active = activeTab === link.id;
-            return <button key={link.id} className={active ? 'active' : ''} onClick={() => {setActiveTab(link.id); setIsSidebarOpen(false)}}><Icon className="w-[19px] h-[19px]"/><span><b>{link.label}</b><small>{link.sub}</small></span>{active && <i/>}</button>;
-          })}
+        <nav className="omg-header-nav hidden lg:flex">
+          <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>Overview</button>
+          <button className={activeTab === 'sales-calc' ? 'active' : ''} onClick={() => setActiveTab('sales-calc')}>Pricing Desk</button>
+          {currentUser.role === 'admin' && <button className={activeTab === 'packages' ? 'active' : ''} onClick={() => setActiveTab('packages')}>Tour Products</button>}
+          {currentUser.role === 'admin' && <button className={activeTab === 'hotels' ? 'active' : ''} onClick={() => setActiveTab('hotels')}>Hotels</button>}
         </nav>
-        <div className="v7-user-card">
-          <div className="v7-avatar">{currentUser.name?.[0]?.toUpperCase() || 'U'}</div>
-          <div><b>{currentUser.name}</b><small>{currentUser.role === 'admin' ? 'Administrator' : 'Sales Partner'}</small></div>
-          <button onClick={handleLogout}><LogOut className="w-4 h-4"/></button>
+        <div className="omg-header-actions">
+          <LanguageSwitcher compact/>
+          <div className="omg-cloud-state"><span/>Cloud live</div>
+          <button className="omg-profile-pill" onClick={() => setActiveTab(currentUser.role === 'admin' ? 'users' : 'dashboard')}>
+            <span>{currentUser.name?.[0]?.toUpperCase() || 'U'}</span>
+            <div className="hidden sm:flex"><b>{currentUser.name}</b><small>{currentUser.role}</small></div>
+          </button>
         </div>
-      </aside>
+      </header>
 
-      {isSidebarOpen && <button className="v7-backdrop md:hidden" onClick={() => setIsSidebarOpen(false)}/>}
+      <div className="omg-workspace">
+        <aside className={`omg-side-panel ${isSidebarOpen ? 'open' : ''}`}>
+          <div className="omg-side-head">
+            <div><span>Workspace</span><strong>Central Pricing</strong></div>
+            <button className="md:hidden" onClick={() => setIsSidebarOpen(false)}><X className="w-5 h-5"/></button>
+          </div>
+          <nav className="omg-side-nav">
+            {links.map((link) => {
+              const Icon = link.icon;
+              const active = activeTab === link.id;
+              return <button key={link.id} className={active ? 'active' : ''} onClick={() => {setActiveTab(link.id); setIsSidebarOpen(false)}}>
+                <span className="omg-nav-icon"><Icon className="w-[18px] h-[18px]"/></span>
+                <span className="omg-nav-copy"><b>{link.label}</b><small>{link.sub}</small></span>
+                <ChevronRight className="w-4 h-4 omg-nav-arrow"/>
+              </button>;
+            })}
+          </nav>
+          <div className="omg-side-footer">
+            <div><span className="omg-status-dot"/><p><b>Supabase connected</b><small>Secure cloud database</small></p></div>
+            <button onClick={handleLogout}><LogOut className="w-4 h-4"/> Sign out</button>
+          </div>
+        </aside>
 
-      <div className="v7-main">
-        <header className="v7-topbar">
-          <button className="v7-menu md:hidden" onClick={() => setIsSidebarOpen(true)}><Menu className="w-5 h-5"/></button>
-          <div><span>BHUTAN CENTER / {activeLink.label.toUpperCase()}</span><h1>{activeLink.sub}</h1></div>
-          <div className="v7-top-actions"><LanguageSwitcher compact/><div className="v7-live"><span/> LIVE DATA</div><button><Bell className="w-[18px] h-[18px]"/></button></div>
-        </header>
-        <main className="v7-content">{renderContent()}</main>
+        {isSidebarOpen && <button className="omg-mobile-backdrop md:hidden" onClick={() => setIsSidebarOpen(false)}/>}
+
+        <main className="omg-main-area">
+          <section className="omg-page-heading">
+            <div><span>BHUTAN AIRLINES · CENTRAL PRICING</span><h1>{activeLink.sub}</h1></div>
+            <div className="omg-heading-meta"><span>Updated live</span><b>{activeLink.label}</b></div>
+          </section>
+          <div className="omg-page-content">{renderContent()}</div>
+        </main>
       </div>
       <ToastContainer toasts={toasts} onClose={(id) => setToasts(t => t.filter(x => x.id !== id))}/>
     </div>

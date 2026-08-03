@@ -296,31 +296,6 @@ export default function App() {
 
   return (
     <div className="omg-app-shell">
-      <header className="omg-global-header">
-        <div className="omg-header-brand">
-          <button className="omg-mobile-menu md:hidden" onClick={() => setIsSidebarOpen(true)} aria-label="Open navigation"><Menu className="w-5 h-5"/></button>
-          <BhutanCenterLogo size="sm"/>
-          <div className="omg-brand-copy">
-            <strong>Bhutan Airlines</strong>
-            <span>GSA, Thailand · Pricing Center</span>
-          </div>
-        </div>
-        <nav className="omg-header-nav hidden lg:flex">
-          <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>Overview</button>
-          <button className={activeTab === 'sales-calc' ? 'active' : ''} onClick={() => setActiveTab('sales-calc')}>Pricing Desk</button>
-          {currentUser.role === 'admin' && <button className={activeTab === 'packages' ? 'active' : ''} onClick={() => setActiveTab('packages')}>Tour Products</button>}
-          {currentUser.role === 'admin' && <button className={activeTab === 'hotels' ? 'active' : ''} onClick={() => setActiveTab('hotels')}>Hotels</button>}
-        </nav>
-        <div className="omg-header-actions">
-          <LanguageSwitcher compact/>
-          <div className="omg-cloud-state"><span/>Cloud live</div>
-          <button className="omg-profile-pill" onClick={() => setActiveTab(currentUser.role === 'admin' ? 'users' : 'dashboard')}>
-            <span>{currentUser.name?.[0]?.toUpperCase() || 'U'}</span>
-            <div className="hidden sm:flex"><b>{currentUser.name}</b><small>{currentUser.role}</small></div>
-          </button>
-        </div>
-      </header>
-
       <div className="omg-workspace">
         <aside className={`omg-side-panel ${isSidebarOpen ? 'open' : ''}`}>
           <div className="omg-side-head">
@@ -348,8 +323,17 @@ export default function App() {
 
         <main className="omg-main-area">
           <section className="omg-page-heading">
-            <div><span>BHUTAN AIRLINES · CENTRAL PRICING</span><h1>{activeLink.sub}</h1></div>
-            <div className="omg-heading-meta"><span>Updated live</span><b>{activeLink.label}</b></div>
+            <div className="omg-heading-main">
+              <button className="omg-mobile-menu md:hidden" onClick={() => setIsSidebarOpen(true)} aria-label="Open navigation"><Menu className="w-5 h-5"/></button>
+              <div><span>BHUTAN AIRLINES · CENTRAL PRICING</span><h1>{activeLink.sub}</h1></div>
+            </div>
+            <div className="omg-page-tools">
+              <LanguageSwitcher compact/>
+              <div className="omg-cloud-state"><span/>Cloud live</div>
+              <button className="omg-profile-compact" onClick={() => setActiveTab(currentUser.role === 'admin' ? 'users' : 'dashboard')} title={currentUser.name}>
+                <span>{currentUser.name?.[0]?.toUpperCase() || 'U'}</span>
+              </button>
+            </div>
           </section>
           <div className="omg-page-content">{renderContent()}</div>
         </main>

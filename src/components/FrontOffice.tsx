@@ -155,6 +155,22 @@ function PriceLine({ icon, label, value, note }: { icon: React.ReactNode; label:
   return <div className="price-line"><span className="price-icon">{icon}</span><span className="price-label"><b>{label}</b>{note && <small>{note}</small>}</span><strong>{value}</strong></div>;
 }
 
+function formatTravelPeriod(value: string, nights: number, language: 'th' | 'en'): string {
+  if (!value) return '-';
+  const start = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(start.getTime())) return '-';
+  const end = new Date(start);
+  end.setDate(end.getDate() + Math.max(0, nights));
+
+  const formatter = new Intl.DateTimeFormat(language === 'th' ? 'th-TH' : 'en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const period = `${formatter.format(start)} - ${formatter.format(end)}`;
+  return language === 'en' ? period.toUpperCase() : period;
+}
+
 function QuotationPreview({ open, onClose, result, customer, currentUser, quotationNo }: {
   open: boolean; onClose: () => void; result: NonNullable<ReturnType<typeof calculatePrice>>; customer: CustomerDetails; currentUser: User; quotationNo: string;
 }) {
@@ -178,20 +194,36 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
         <div><span>{t('hotelLevel')}</span><strong>{result.hotelCategory}</strong><small>{result.nights} {t('nights')}</small></div>
         <div><span>{t('passengers')}</span><strong>{result.passengerCount} {t('people')}</strong><small>{result.nights} {t('nights')}</small></div>
       </section>
-      <section className="quote-price-table quote-package-summary">
-        <div className="quote-table-head"><span>{language === 'th' ? 'แพ็กเกจทัวร์' : 'Tour package'}</span><span>{language === 'th' ? 'ระยะเวลา / ผู้เดินทาง' : 'Duration / Travellers'}</span><span>{language === 'th' ? 'ราคาแพ็กเกจ' : 'Package price'}</span></div>
-        <div className="quote-table-row quote-package-row">
-          <span>
-            <b>{result.packageName}</b>
-            <small>{result.hotelCategory}{result.hasGroupFlightDiscount ? ` · ${t('groupDiscount')} ${formatNumber(result.groupDiscountPercentApplied, 2)}%` : ''}{result.businessUpgradeCount > 0 ? ` · Business Class ${result.businessUpgradeCount} ${t('people')}` : ''}</small>
+      <section className="quote-price-table quote-passenger-table">
+        <div className="quote-table-head quote-six-columns">
+          <span>{language === 'th' ? 'รายการผู้โดยสาร / บริการ' : 'Passenger / Service'}</span>
+          <span>PTC</span>
+          <span>{language === 'th' ? 'จำนวน' : 'QTY'}</span>
+          <span>{language === 'th' ? 'ราคาขาย / ท่าน' : 'Selling / Pax'}</span>
+          <span>{language === 'th' ? 'เพิ่มเติม' : 'Additional'}</span>
+          <span>{language === 'th' ? 'รวม (บาท)' : 'Total (THB)'}</span>
+        </div>
+        <div className="quote-table-row quote-six-columns quote-passenger-row">
+          <span className="quote-service-cell">
+            <b className="quote-travel-period">{formatTravelPeriod(result.travelDate, result.nights, language)}</b>
+            <strong>{language === 'th'
+              ? `แพ็กเกจ ${result.nights + 1} วัน ${result.nights} คืน โรงแรม ${result.hotelCategory}`
+              : `Package ${result.nights + 1}D${result.nights}N ${result.hotelCategory} Hotel`}</strong>
+            <small>{result.packageName}{result.hasGroupFlightDiscount ? ` · ${t('groupDiscount')} ${formatNumber(result.groupDiscountPercentApplied, 2)}%` : ''}</small>
           </span>
-          <span className="quote-trip-quantity"><b>{result.nights} {t('nights')}</b><small>{result.passengerCount} {t('people')}</small></span>
-          <strong>{formatTHB(result.groupTotal, language)}</strong>
+          <span className="quote-center-cell"><b>ADT</b></span>
+          <span className="quote-center-cell"><b>{result.passengerCount}</b></span>
+          <span className="quote-number-cell"><b>{formatNumber(result.sellingPricePerPerson, 2)}</b></span>
+          <span className="quote-number-cell"><b>{result.businessUpgradeTotal > 0 ? formatNumber(result.businessUpgradeTotal, 2) : '—'}</b></span>
+          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.groupTotal, 2)}</b></span>
+        </div>
+        <div className="quote-table-grand-total">
+          <span>{language === 'th' ? 'ยอดรวมสุทธิ' : 'Grand Total'}</span>
+          <strong>THB {formatNumber(result.groupTotal, 2)}</strong>
         </div>
       </section>
-      <section className="quote-total-area">
-        <div className="quote-note"><span>{t('note')}</span><p>{customer.note || (language === 'th' ? 'ราคานี้รวมบริการตามโปรแกรมที่เลือกและคำนวณจากข้อมูลล่าสุดในระบบ' : 'This price includes services in the selected package and is calculated from the latest system data.')}</p></div>
-        <div className="quote-grand-total"><span>{t('totalDue')}</span><strong>{formatTHB(result.groupTotal, language)}</strong><small>{formatTHB(result.sellingPricePerPerson, language)} / {t('people')}</small></div>
+      <section className="quote-total-area quote-total-area-simple">
+        <div className="quote-note"><span>{t('note')}</span><p>{customer.note || (language === 'th' ? 'ราคานี้เป็นราคาแพ็กเกจต่อท่าน คูณตามจำนวนผู้เดินทาง และรวมบริการเสริมที่เลือกแล้ว' : 'The selling price is quoted per passenger, multiplied by the traveller quantity, including selected additional services.')}</p></div>
       </section>
       <section className="quote-terms"><h3>{t('terms')}</h3><ol><li>{t('term1')}</li><li>{t('term2')}</li><li>{t('term3')}</li></ol></section>
       <footer className="quote-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div><div className="quote-sign"><span>Authorized signature</span></div></footer>

@@ -677,3 +677,124 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .quote-package-summary .quote-table-row > strong { font-size: 12.5px !important; }
 }
 
+
+
+/* =========================================================
+   v10.4 — Passenger/service quotation table
+   Excel-style commercial breakdown: PTC, QTY, Selling/Pax,
+   Additional, line total and grand total.
+   ========================================================= */
+.quote-passenger-table { overflow: hidden; }
+.quote-six-columns {
+  grid-template-columns: minmax(260px, 1.8fr) 48px 52px 100px 90px 112px !important;
+}
+.quote-passenger-table .quote-table-head {
+  min-height: 42px;
+  font-size: 8px;
+  letter-spacing: .035em;
+  text-transform: none;
+}
+.quote-passenger-table .quote-table-head span {
+  height: 100%;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid rgba(255,255,255,.16);
+}
+.quote-passenger-table .quote-table-head span:first-child { justify-content: flex-start; }
+.quote-passenger-table .quote-table-head span:not(:first-child) { justify-content: flex-end; text-align: right; }
+.quote-passenger-table .quote-table-head span:nth-child(2),
+.quote-passenger-table .quote-table-head span:nth-child(3) { justify-content: center; text-align: center; }
+.quote-passenger-table .quote-table-head span:last-child { border-right: 0; }
+.quote-passenger-row {
+  min-height: 92px !important;
+  align-items: stretch;
+  background: #fff;
+}
+.quote-passenger-row > span {
+  min-width: 0;
+  padding: 12px 10px !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-right: 1px solid #e2e7e4;
+}
+.quote-passenger-row > span:last-child { border-right: 0; }
+.quote-service-cell { align-items: flex-start; }
+.quote-service-cell .quote-travel-period {
+  margin-bottom: 7px;
+  color: #102f27;
+  font-size: 10.5px !important;
+  line-height: 1.2;
+  letter-spacing: .015em;
+}
+.quote-service-cell > strong {
+  font-size: 10px;
+  line-height: 1.4;
+}
+.quote-service-cell small {
+  margin-top: 5px !important;
+  font-size: 8px !important;
+  line-height: 1.4;
+}
+.quote-center-cell { align-items: center; text-align: center; }
+.quote-center-cell b { font-size: 10px !important; }
+.quote-number-cell { align-items: flex-end; text-align: right; }
+.quote-number-cell b {
+  font-family: Inter, Arial, sans-serif;
+  font-size: 10.5px !important;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.quote-line-total { background: #f6faf8; }
+.quote-line-total b { color: #0b493a; font-size: 11.5px !important; }
+.quote-table-grand-total {
+  min-height: 54px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--green-950), var(--green-700));
+  border-top: 1px solid #dfe5e1;
+}
+.quote-table-grand-total span {
+  color: rgba(255,255,255,.72);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.quote-table-grand-total strong {
+  min-width: 155px;
+  text-align: right;
+  font-family: Inter, Arial, sans-serif;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.quote-total-area-simple { grid-template-columns: 1fr; }
+.quote-total-area-simple .quote-note { min-height: 58px; }
+
+@media (max-width: 680px) {
+  .quote-passenger-table { overflow-x: auto; }
+  .quote-six-columns { min-width: 760px; }
+  .quote-table-grand-total { min-width: 760px; }
+}
+
+@media print {
+  .quote-passenger-table { overflow: hidden !important; }
+  .quote-six-columns {
+    grid-template-columns: minmax(250px, 1.8fr) 45px 48px 96px 86px 108px !important;
+  }
+  .quote-passenger-table .quote-table-head { min-height: 39px !important; font-size: 7.7px !important; }
+  .quote-passenger-row { min-height: 84px !important; }
+  .quote-service-cell .quote-travel-period { font-size: 10px !important; }
+  .quote-service-cell > strong { font-size: 9.5px !important; }
+  .quote-service-cell small { font-size: 7.7px !important; }
+  .quote-number-cell b { font-size: 10px !important; }
+  .quote-line-total b { font-size: 11px !important; }
+  .quote-table-grand-total { min-height: 50px !important; }
+  .quote-table-grand-total strong { font-size: 16px !important; }
+}

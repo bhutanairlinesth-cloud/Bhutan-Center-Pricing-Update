@@ -10,7 +10,8 @@ import {
   Sparkles, RefreshCw, Calculator, Database, HelpCircle
 } from 'lucide-react';
 import { User, Hotel, TourPackage, GlobalSettings } from './types';
-import { mockDb } from './db/mockDb';
+import { database } from './db/database';
+import { fetchProfile, isSupabaseConfigured, supabaseAuth } from './lib/supabase';
 import { AuthScreen } from './components/AuthScreen';
 import { 
   ExchangeRateView, FlightSettingsView, HotelManagementView, 
@@ -37,90 +38,138 @@ export default function App() {
   // Toasts
   const { toasts, showToast, setToasts } = useToast();
 
-  // Initialize Database state from localStorage
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Restore a Supabase session first. Shared pricing data is loaded only after authentication.
   useEffect(() => {
-    loadDatabase();
+    const bootstrap = async () => {
+      if (!isSupabaseConfigured) {
+        await loadDatabase();
+        return;
+      }
+      try {
+        const session = await supabaseAuth.getSession();
+        const authUser = session?.user;
+        if (!authUser) {
+          setIsLoadingData(false);
+          return;
+        }
+        const profile = await fetchProfile(authUser.id);
+        setCurrentUser({
+          id: profile.id,
+          name: profile.name || authUser.email?.split('@')[0] || 'User',
+          email: profile.email || authUser.email || '',
+          role: profile.role,
+          createdAt: profile.created_at,
+        });
+        await loadDatabase();
+      } catch (error) {
+        console.error(error);
+        setIsLoadingData(false);
+      }
+    };
+    bootstrap();
   }, []);
 
-  const loadDatabase = () => {
-    setSettings(mockDb.getSettings());
-    setHotels(mockDb.getHotels());
-    setPackages(mockDb.getPackages());
-    setUsers(mockDb.getUsers());
+  const loadDatabase = async () => {
+    setIsLoadingData(true);
+    try {
+      const [nextSettings, nextHotels, nextPackages, nextUsers] = await Promise.all([
+        database.getSettings(), database.getHotels(), database.getPackages(), database.getUsers()
+      ]);
+      setSettings(nextSettings);
+      setHotels(nextHotels);
+      setPackages(nextPackages);
+      setUsers(nextUsers);
+    } catch (error: any) {
+      console.error(error);
+      showToast(`โหลดข้อมูลไม่สำเร็จ: ${error?.message ?? 'Unknown error'}`);
+    } finally {
+      setIsLoadingData(false);
+    }
   };
 
   // --- DATABASE WRITE / SYNCHRONIZATION HELPERS ---
-  const handleSaveSettings = (updated: GlobalSettings) => {
-    mockDb.saveSettings(updated);
-    setSettings(updated);
-  };
-
-  const handleAddHotel = (hotel: Hotel) => {
-    mockDb.saveHotel(hotel);
-    setHotels(mockDb.getHotels());
-  };
-
-  const handleUpdateHotel = (hotel: Hotel) => {
-    mockDb.saveHotel(hotel);
-    setHotels(mockDb.getHotels());
-  };
-
-  const handleDeleteHotel = (id: string) => {
-    mockDb.deleteHotel(id);
-    setHotels(mockDb.getHotels());
-  };
-
-  const handleAddPackage = (pkg: TourPackage) => {
-    mockDb.savePackage(pkg);
-    setPackages(mockDb.getPackages());
-  };
-
-  const handleUpdatePackage = (pkg: TourPackage) => {
-    mockDb.savePackage(pkg);
-    setPackages(mockDb.getPackages());
-  };
-
-  const handleDeletePackage = (id: string) => {
-    mockDb.deletePackage(id);
-    setPackages(mockDb.getPackages());
-  };
-
-  const handleAddUser = (user: User) => {
-    mockDb.saveUser(user);
-    setUsers(mockDb.getUsers());
-  };
-
-  const handleUpdateUser = (user: User) => {
-    mockDb.saveUser(user);
-    setUsers(mockDb.getUsers());
-    
-    // If we updated the currently logged-in user, refresh their session state
-    if (currentUser && currentUser.id === user.id) {
-      setCurrentUser(user);
+  const persist = async (action: () => Promise<void>, success: string, refresh: () => Promise<any> | void) => {
+    try {
+      await action();
+      await refresh();
+      showToast(success);
+    } catch (error: any) {
+      console.error(error);
+      showToast(`บันทึกไม่สำเร็จ: ${error?.message ?? 'Unknown error'}`);
     }
   };
 
-  const handleDeleteUser = (id: string) => {
-    mockDb.deleteUser(id);
-    setUsers(mockDb.getUsers());
+  const handleSaveSettings = (updated: GlobalSettings) => persist(
+    () => database.saveSettings(updated),
+    'บันทึกการตั้งค่าเรียบร้อยแล้ว',
+    async () => setSettings(await database.getSettings())
+  );
+
+  const handleAddHotel = (hotel: Hotel) => persist(
+    () => database.saveHotel(hotel), 'เพิ่มโรงแรมเรียบร้อยแล้ว',
+    async () => setHotels(await database.getHotels())
+  );
+
+  const handleUpdateHotel = (hotel: Hotel) => persist(
+    () => database.saveHotel(hotel), 'อัปเดตโรงแรมเรียบร้อยแล้ว',
+    async () => setHotels(await database.getHotels())
+  );
+
+  const handleDeleteHotel = (id: string) => persist(
+    () => database.deleteHotel(id), 'ลบโรงแรมเรียบร้อยแล้ว',
+    async () => setHotels(await database.getHotels())
+  );
+
+  const handleAddPackage = (pkg: TourPackage) => persist(
+    () => database.savePackage(pkg), 'เพิ่มโปรแกรมทัวร์เรียบร้อยแล้ว',
+    async () => setPackages(await database.getPackages())
+  );
+
+  const handleUpdatePackage = (pkg: TourPackage) => persist(
+    () => database.savePackage(pkg), 'อัปเดตโปรแกรมทัวร์เรียบร้อยแล้ว',
+    async () => setPackages(await database.getPackages())
+  );
+
+  const handleDeletePackage = (id: string) => persist(
+    () => database.deletePackage(id), 'ลบโปรแกรมทัวร์เรียบร้อยแล้ว',
+    async () => setPackages(await database.getPackages())
+  );
+
+  const handleAddUser = (user: User) => persist(
+    () => database.saveUser(user), 'เพิ่มข้อมูลผู้ใช้งานเรียบร้อยแล้ว',
+    async () => setUsers(await database.getUsers())
+  );
+
+  const handleUpdateUser = async (user: User) => {
+    await persist(
+      () => database.saveUser(user), 'อัปเดตผู้ใช้งานเรียบร้อยแล้ว',
+      async () => setUsers(await database.getUsers())
+    );
+    if (currentUser?.id === user.id) setCurrentUser(user);
   };
+
+  const handleDeleteUser = (id: string) => persist(
+    () => database.deleteUser(id), 'ลบข้อมูลผู้ใช้งานเรียบร้อยแล้ว',
+    async () => setUsers(await database.getUsers())
+  );
 
   const handleResetSystem = () => {
-    if (confirm('Are you sure you want to reset the entire database to original factory defaults? All customized prices and configurations will be lost.')) {
-      mockDb.resetToDefaults();
-      loadDatabase();
-      showToast('Database reset to Bhutan Center factory defaults successfully.');
-    }
+    showToast(isSupabaseConfigured
+      ? 'เพื่อความปลอดภัย การรีเซ็ตฐานข้อมูล Supabase ต้องทำผ่าน SQL Editor'
+      : 'โหมด Local: กรุณาล้าง Site Data เพื่อรีเซ็ตข้อมูล');
   };
 
   // Handle Logout
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (isSupabaseConfigured) await supabaseAuth.signOut();
     setCurrentUser(null);
-    showToast('Logged out of session. Access terminated.');
+    showToast('ออกจากระบบเรียบร้อยแล้ว');
   };
 
   // Ensure database loads before rendering
-  if (!settings) {
+  if (isLoadingData || (currentUser && !settings)) {
     return (
       <div className="min-h-screen bg-brand-cream flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -137,13 +186,14 @@ export default function App() {
   if (!currentUser) {
     return (
       <>
-        <AuthScreen users={users} onLoginSuccess={(u) => {
+        <AuthScreen users={users} onLoginSuccess={async (u) => {
           // If the user doesn't exist in our user list, add them to mockDb
           if (!users.some(x => x.id === u.id || x.email.toLowerCase() === u.email.toLowerCase())) {
-            mockDb.saveUser(u);
-            setUsers(mockDb.getUsers());
+            await database.saveUser(u);
+            setUsers(await database.getUsers());
           }
           setCurrentUser(u);
+          await loadDatabase();
           // Auto route depending on role
           if (u.role === 'sales') {
             setActiveTab('sales-calc');
@@ -192,8 +242,15 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             <BhutanCenterLogo size="sm" />
-            <span className="font-serif font-bold text-lg text-brand-emerald tracking-tight">
-              Bhutan Center Pricing System
+            <div>
+              <span className="font-serif font-bold text-lg text-brand-emerald tracking-tight block leading-tight">
+                Bhutan Center Pricing
+              </span>
+              <span className="text-[10px] text-slate-400 font-semibold tracking-[0.14em] uppercase">Tour Operations Console</span>
+            </div>
+            <span className={`hidden lg:inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold border ${isSupabaseConfigured ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseConfigured ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              {isSupabaseConfigured ? 'SUPABASE LIVE' : 'LOCAL MODE'}
             </span>
           </div>
         </div>

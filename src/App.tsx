@@ -20,8 +20,10 @@ import {
   AdminDashboardOverview, useToast, ToastContainer 
 } from './components/DashboardViews';
 import { BhutanCenterLogo } from './components/BhutanCenterLogo';
+import { LanguageSwitcher, useLanguage } from './i18n';
 
 export default function App() {
+  const { language } = useLanguage();
   // Authentication & Session States
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -322,7 +324,7 @@ export default function App() {
         <header className="v7-topbar">
           <button className="v7-menu md:hidden" onClick={() => setIsSidebarOpen(true)}><Menu className="w-5 h-5"/></button>
           <div><span>BHUTAN CENTER / {activeLink.label.toUpperCase()}</span><h1>{activeLink.sub}</h1></div>
-          <div className="v7-top-actions"><div className="v7-live"><span/> LIVE DATA</div><button><Bell className="w-[18px] h-[18px]"/></button></div>
+          <div className="v7-top-actions"><LanguageSwitcher compact/><div className="v7-live"><span/> LIVE DATA</div><button><Bell className="w-[18px] h-[18px]"/></button></div>
         </header>
         <main className="v7-content">{renderContent()}</main>
       </div>

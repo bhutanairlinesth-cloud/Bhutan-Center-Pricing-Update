@@ -3,6 +3,7 @@ import { AlertCircle, ArrowRight, Eye, EyeOff, KeyRound, LockKeyhole, Mail, Shie
 import { User } from '../types';
 import { BhutanCenterLogo } from './BhutanCenterLogo';
 import { fetchProfile, isSupabaseConfigured, supabaseAuth } from '../lib/supabase';
+import { LanguageSwitcher } from '../i18n';
 
 interface AuthScreenProps { users: User[]; onLoginSuccess: (user: User) => void | Promise<void>; }
 
@@ -51,7 +52,7 @@ export function AuthScreen({ users, onLoginSuccess }: AuthScreenProps) {
         </section>
 
         <section className="login-panel">
-          <div className="login-panel-inner">
+          <div className="login-panel-inner"><div className="login-language"><LanguageSwitcher /></div>
             <div className="lg:hidden mb-9"><BhutanCenterLogo size="sm" /></div>
             <div className="security-chip"><ShieldCheck className="w-4 h-4" /> Secure workspace</div>
             <h2>ยินดีต้อนรับกลับ</h2>

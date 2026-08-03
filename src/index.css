@@ -368,3 +368,13 @@ body { background: var(--v7-bg); color: var(--v7-ink); }
   .pricing-channel-heading { align-items:flex-start; flex-direction:column; }
   .pricing-channel-heading small { text-align:left; }
 }
+
+/* Bilingual language control */
+.language-switcher{display:inline-flex;align-items:center;padding:3px;border:1px solid rgba(15,118,90,.18);background:rgba(255,255,255,.82);border-radius:999px;box-shadow:0 8px 24px rgba(15,23,42,.06);backdrop-filter:blur(10px);gap:2px;position:relative;z-index:20}
+.language-switcher button{border:0;background:transparent;color:#64748b;font-size:11px;font-weight:800;letter-spacing:.08em;min-width:38px;height:29px;border-radius:999px;cursor:pointer;transition:.2s ease}
+.language-switcher button.active{background:#087653;color:#fff;box-shadow:0 5px 14px rgba(8,118,83,.24)}
+.language-switcher.compact{padding:2px;background:#fff}.language-switcher.compact button{min-width:34px;height:27px;font-size:10px}
+.login-language{display:flex;justify-content:flex-end;margin-bottom:20px}
+body[data-language="en"]{font-feature-settings:"kern" 1}
+body[data-language="en"] .font-sans, body[data-language="en"] .font-display{letter-spacing:-.01em}
+@media print{.language-switcher,.login-language{display:none!important}}

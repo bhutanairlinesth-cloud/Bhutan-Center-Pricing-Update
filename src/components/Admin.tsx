@@ -122,20 +122,74 @@ function PackagesManager({ items, onSave, onDelete }: { items: TourPackage[]; on
   const [editing, setEditing] = useState<TourPackage | null>(null);
   async function remove(item: TourPackage) { if (window.confirm(t('confirmDelete'))) await onDelete(item.id); }
   const recordLabel = language === 'th' ? `${items.length} รายการ` : `${items.length} records`;
-  const sourceTitle = language === 'th' ? 'แหล่งราคาที่ใช้คำนวณ' : 'Price source';
-  return <div className="admin-stack"><PageAction title={t('packages')} detail={recordLabel} action={t('addPackage')} onAction={() => setEditing(newPackage())}/><section className="panel-card no-padding">{items.length ? <div className="data-table"><div className="data-table-head"><span>{t('packageName')}</span><span>{t('durationNights')}</span><span>{sourceTitle}</span><span/></div>{items.map((pkg) => <div className="data-table-row" key={pkg.id}><span className="package-cell"><i><PackageOpen/></i><b>{pkg.name}</b></span><span>{pkg.nights} {t('nights')}</span><span className="rate-preview">{language === 'th' ? `เรตแพ็กเกจตามระดับโรงแรม × ${pkg.nights} คืน` : `Hotel-level package rate × ${pkg.nights} nights`}</span><span className="row-actions"><button aria-label={t('edit')} onClick={() => setEditing(pkg)}><Pencil/></button><button aria-label={t('delete')} className="danger" onClick={() => remove(pkg)}><Trash2/></button></span></div>)}</div> : <EmptyState title={t('noData')}/>}</section><PackageEditor pkg={editing} onClose={() => setEditing(null)} onSave={async (pkg) => { await onSave(pkg); setEditing(null); }}/></div>;
+  const sourceTitle = language === 'th' ? 'พักเดี่ยวเพิ่ม / ท่าน' : 'Single supplement / pax';
+  return <div className="admin-stack">
+    <PageAction title={t('packages')} detail={recordLabel} action={t('addPackage')} onAction={() => setEditing(newPackage())}/>
+    <section className="panel-card no-padding">{items.length ? <div className="data-table">
+      <div className="data-table-head"><span>{t('packageName')}</span><span>{t('durationNights')}</span><span>{sourceTitle}</span><span/></div>
+      {items.map((pkg) => {
+        const single = pkg.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 };
+        return <div className="data-table-row" key={pkg.id}>
+          <span className="package-cell"><i><PackageOpen/></i><b>{pkg.name}</b></span>
+          <span>{pkg.nights} {t('nights')}</span>
+          <span className="rate-preview single-supplement-preview">
+            <b>3★ {formatTHB(single.star3, language)}</b>
+            <b>4★ {formatTHB(single.star4, language)}</b>
+            <b>5★ {formatTHB(single.star5, language)}</b>
+          </span>
+          <span className="row-actions"><button aria-label={t('edit')} onClick={() => setEditing(pkg)}><Pencil/></button><button aria-label={t('delete')} className="danger" onClick={() => remove(pkg)}><Trash2/></button></span>
+        </div>;
+      })}
+    </div> : <EmptyState title={t('noData')}/>}</section>
+    <PackageEditor pkg={editing} onClose={() => setEditing(null)} onSave={async (pkg) => { await onSave(pkg); setEditing(null); }}/>
+  </div>;
 }
 
 function newPackage(): TourPackage {
   const base = { pax1USD: 250, pax2USD: 200, pax3PlusUSD: 180 };
-  return { id: makeId('pkg'), name: '', nights: 3, rates: { ...base }, hotelRates: { star3: { ...base }, star4: { pax1USD: 300, pax2USD: 240, pax3PlusUSD: 220 }, star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 } } };
+  return {
+    id: makeId('pkg'),
+    name: '',
+    nights: 3,
+    rates: { ...base },
+    hotelRates: {
+      star3: { ...base },
+      star4: { pax1USD: 300, pax2USD: 240, pax3PlusUSD: 220 },
+      star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 },
+    },
+    singleSupplementsTHB: { star3: 0, star4: 0, star5: 0 },
+  };
 }
+
 function PackageEditor({ pkg, onClose, onSave }: { pkg: TourPackage | null; onClose: () => void; onSave: (pkg: TourPackage) => Promise<void> }) {
   const { t, language } = useI18n();
   const [form, setForm] = useState<TourPackage | null>(pkg);
-  React.useEffect(() => setForm(pkg), [pkg]);
+  React.useEffect(() => setForm(pkg ? {
+    ...pkg,
+    singleSupplementsTHB: pkg.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 },
+  } : null), [pkg]);
   if (!form) return null;
-  return <Modal open={Boolean(pkg)} title={t('packages')} onClose={onClose}><div className="editor-form"><label className="field"><span>{t('packageName')}</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}/></label><label className="field"><span>{t('durationNights')}</span><input type="number" min="1" value={form.nights} onChange={(e) => setForm({ ...form, nights: Number(e.target.value) })}/></label><div className="info-banner"><HotelIcon/><span>{language === 'th' ? 'ราคาหน้าคำนวณจะใช้เรตราคาตามระดับโรงแรมของแพ็กเกจ คูณด้วยจำนวนคืน' : 'The calculator uses the package rate for the selected hotel level multiplied by the package duration.'}</span></div><div className="modal-actions"><button className="ghost-button" onClick={onClose}>{t('cancel')}</button><button className="primary-button" disabled={!form.name.trim() || form.nights < 1} onClick={() => onSave(form)}><Save/>{t('save')}</button></div></div></Modal>;
+  const setSingle = (key: 'star3' | 'star4' | 'star5', value: number) => setForm({
+    ...form,
+    singleSupplementsTHB: { ...(form.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 }), [key]: Math.max(0, value) },
+  });
+  const single = form.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 };
+  return <Modal open={Boolean(pkg)} title={t('packages')} onClose={onClose}>
+    <div className="editor-form package-editor-form">
+      <label className="field"><span>{t('packageName')}</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}/></label>
+      <label className="field"><span>{t('durationNights')}</span><input type="number" min="1" value={form.nights} onChange={(e) => setForm({ ...form, nights: Number(e.target.value) })}/></label>
+      <section className="single-supplement-editor">
+        <div className="settings-card-title"><span><HotelIcon/></span><div><h3>{language === 'th' ? 'ส่วนต่างพักเดี่ยว' : 'Single-room supplement'}</h3><p>{language === 'th' ? 'กำหนดราคาเพิ่มต่อผู้พักเดี่ยว 1 ท่าน สำหรับแพ็กเกจนี้ทั้งทริป' : 'Set the extra charge per single-room traveller for the entire package.'}</p></div></div>
+        <div className="single-supplement-fields">
+          <NumberField label="3 Stars" value={single.star3} onChange={(v) => setSingle('star3', v)} suffix="THB / pax"/>
+          <NumberField label="4 Stars" value={single.star4} onChange={(v) => setSingle('star4', v)} suffix="THB / pax"/>
+          <NumberField label="5 Stars" value={single.star5} onChange={(v) => setSingle('star5', v)} suffix="THB / pax"/>
+        </div>
+        <div className="info-banner"><HotelIcon/><span>{language === 'th' ? 'หน้าคำนวณสามารถเลือกผู้พักเดี่ยวได้หลายท่าน และแก้ราคาเฉพาะเคสได้ โดยไม่เปลี่ยนราคาตั้งต้นนี้' : 'The calculator supports multiple single rooms and allows a case-specific override without changing this default.'}</span></div>
+      </section>
+      <div className="modal-actions"><button className="ghost-button" onClick={onClose}>{t('cancel')}</button><button className="primary-button" disabled={!form.name.trim() || form.nights < 1} onClick={() => onSave(form)}><Save/>{t('save')}</button></div>
+    </div>
+  </Modal>;
 }
 
 function RateFields({ rates, setRate }: { rates: { pax1USD: number; pax2USD: number; pax3PlusUSD: number }; setRate: (key: 'pax1USD' | 'pax2USD' | 'pax3PlusUSD', value: number) => void }) {

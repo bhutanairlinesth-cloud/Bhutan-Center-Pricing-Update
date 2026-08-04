@@ -56,6 +56,7 @@ create table if not exists public.tour_packages (
   nights integer not null check (nights > 0),
   rates jsonb not null,
   hotel_rates jsonb,
+  single_supplements_thb jsonb not null default '{"star3":0,"star4":0,"star5":0}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
@@ -126,6 +127,7 @@ alter table public.app_settings add column if not exists agent_margin_thb numeri
 alter table public.app_settings add column if not exists group_discount_min_pax integer not null default 10;
 alter table public.app_settings add column if not exists group_discount_percent numeric not null default 10;
 alter table public.app_settings add column if not exists logo_url text not null default '';
+alter table public.tour_packages add column if not exists single_supplements_thb jsonb not null default '{"star3":0,"star4":0,"star5":0}'::jsonb;
 update public.app_settings set agent_ticket_price_thb = 25220 where agent_ticket_price_thb is null;
 
 alter table public.app_settings enable row level security;
@@ -180,16 +182,19 @@ insert into public.hotels (id,name,category,pax1_usd,pax2_usd,pax3_plus_usd) val
 ('htl_5s_2','Amankora Paro Lodge','5 Stars',550,480,440)
 on conflict (id) do nothing;
 
-insert into public.tour_packages (id,name,nights,rates,hotel_rates) values
+insert into public.tour_packages (id,name,nights,rates,hotel_rates,single_supplements_thb) values
 ('pkg_1','4 Days 3 Nights (JOURNEY TO BHUTAN)',3,
  '{"pax1USD":250,"pax2USD":200,"pax3PlusUSD":180}',
- '{"star3":{"pax1USD":250,"pax2USD":200,"pax3PlusUSD":180},"star4":{"pax1USD":300,"pax2USD":240,"pax3PlusUSD":220},"star5":{"pax1USD":500,"pax2USD":420,"pax3PlusUSD":380}}'),
+ '{"star3":{"pax1USD":250,"pax2USD":200,"pax3PlusUSD":180},"star4":{"pax1USD":300,"pax2USD":240,"pax3PlusUSD":220},"star5":{"pax1USD":500,"pax2USD":420,"pax3PlusUSD":380}}',
+   '{"star3":0,"star4":0,"star5":0}'),
 ('pkg_2','5 Days 4 Nights (WONDERS OF BHUTAN)',4,
  '{"pax1USD":260,"pax2USD":210,"pax3PlusUSD":190}',
- '{"star3":{"pax1USD":250,"pax2USD":200,"pax3PlusUSD":180},"star4":{"pax1USD":300,"pax2USD":240,"pax3PlusUSD":220},"star5":{"pax1USD":500,"pax2USD":420,"pax3PlusUSD":380}}'),
+ '{"star3":{"pax1USD":250,"pax2USD":200,"pax3PlusUSD":180},"star4":{"pax1USD":300,"pax2USD":240,"pax3PlusUSD":220},"star5":{"pax1USD":500,"pax2USD":420,"pax3PlusUSD":380}}',
+   '{"star3":0,"star4":0,"star5":0}'),
 ('pkg_3','6 Days 5 Nights (THE ULTIMATE BHUTAN)',5,
  '{"pax1USD":270,"pax2USD":220,"pax3PlusUSD":200}',
- '{"star3":{"pax1USD":250,"pax2USD":200,"pax3PlusUSD":180},"star4":{"pax1USD":300,"pax2USD":240,"pax3PlusUSD":220},"star5":{"pax1USD":500,"pax2USD":420,"pax3PlusUSD":380}}')
+ '{"star3":{"pax1USD":250,"pax2USD":200,"pax3PlusUSD":180},"star4":{"pax1USD":300,"pax2USD":240,"pax3PlusUSD":220},"star5":{"pax1USD":500,"pax2USD":420,"pax3PlusUSD":380}}',
+   '{"star3":0,"star4":0,"star5":0}')
 on conflict (id) do nothing;
 
 select id, name, email, role from public.profiles order by created_at;

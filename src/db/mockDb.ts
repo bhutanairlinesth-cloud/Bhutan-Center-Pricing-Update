@@ -23,6 +23,7 @@ const DEFAULT_PACKAGES: TourPackage[] = [
       star4: { pax1USD: 300, pax2USD: 240, pax3PlusUSD: 220 },
       star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 },
     },
+    singleSupplementsTHB: { star3: 0, star4: 0, star5: 0 },
   },
   {
     id: 'pkg_2', name: '5 Days 4 Nights (WONDERS OF BHUTAN)', nights: 4,
@@ -32,6 +33,7 @@ const DEFAULT_PACKAGES: TourPackage[] = [
       star4: { pax1USD: 300, pax2USD: 240, pax3PlusUSD: 220 },
       star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 },
     },
+    singleSupplementsTHB: { star3: 0, star4: 0, star5: 0 },
   },
   {
     id: 'pkg_3', name: '6 Days 5 Nights (THE ULTIMATE BHUTAN)', nights: 5,
@@ -41,6 +43,7 @@ const DEFAULT_PACKAGES: TourPackage[] = [
       star4: { pax1USD: 300, pax2USD: 240, pax3PlusUSD: 220 },
       star5: { pax1USD: 500, pax2USD: 420, pax3PlusUSD: 380 },
     },
+    singleSupplementsTHB: { star3: 0, star4: 0, star5: 0 },
   },
 ];
 
@@ -102,7 +105,7 @@ export const mockDb = {
   },
   deleteHotel(id: string) { localStorage.setItem(KEYS.hotels, JSON.stringify(this.getHotels().filter((x) => x.id !== id))); },
 
-  getPackages: () => read<TourPackage[]>(KEYS.packages, DEFAULT_PACKAGES),
+  getPackages: (): TourPackage[] => read<TourPackage[]>(KEYS.packages, DEFAULT_PACKAGES).map((pkg): TourPackage => ({ ...pkg, singleSupplementsTHB: pkg.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 } })),
   savePackage(pkg: TourPackage) {
     const list = this.getPackages();
     const index = list.findIndex((x) => x.id === pkg.id);
@@ -114,7 +117,7 @@ export const mockDb = {
   getSettings: () => ({ ...DEFAULT_SETTINGS, ...read<GlobalSettings>(KEYS.settings, DEFAULT_SETTINGS) }),
   saveSettings(settings: GlobalSettings) { localStorage.setItem(KEYS.settings, JSON.stringify(settings)); },
 
-  getTrackings: () => read<CustomerTracking[]>(KEYS.trackings, []),
+  getTrackings: (): CustomerTracking[] => read<CustomerTracking[]>(KEYS.trackings, []).map((item): CustomerTracking => ({ ...item, singleRoomCount: item.singleRoomCount ?? 0, singleSupplementPerPerson: item.singleSupplementPerPerson ?? 0, singleSupplementTotal: item.singleSupplementTotal ?? 0 })),
   saveTracking(item: CustomerTracking) {
     const list = this.getTrackings();
     const index = list.findIndex((x) => x.id === item.id);

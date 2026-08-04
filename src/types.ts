@@ -17,6 +17,12 @@ export interface RateByPax {
   pax3PlusUSD: number;
 }
 
+export interface SingleSupplementsTHB {
+  star3: number;
+  star4: number;
+  star5: number;
+}
+
 export interface Hotel {
   id: string;
   name: string;
@@ -34,6 +40,8 @@ export interface TourPackage {
     star4: RateByPax;
     star5: RateByPax;
   };
+  /** Single-room surcharge per traveller for the whole package, in THB. */
+  singleSupplementsTHB?: SingleSupplementsTHB;
 }
 
 export interface GlobalSettings {
@@ -63,6 +71,10 @@ export interface PricingInput {
   hotelCategory: HotelCategory;
   travelDate: string;
   businessUpgradeCount: number;
+  /** Number of travellers who require a private single room. */
+  singleRoomCount: number;
+  /** Optional manual override. null/undefined uses the package default. */
+  singleSupplementOverrideTHB?: number | null;
 }
 
 export interface PricingResult {
@@ -88,6 +100,9 @@ export interface PricingResult {
   businessUpgradePerPerson: number;
   groupSubtotal: number;
   businessUpgradeTotal: number;
+  singleRoomCount: number;
+  singleSupplementPerPerson: number;
+  singleSupplementTotal: number;
   groupTotal: number;
   groupProfit: number;
   hasGroupFlightDiscount: boolean;
@@ -125,6 +140,9 @@ export interface CustomerTracking {
   passengerCount: number;
   channel: PricingChannel;
   sellingPricePerPerson: number;
+  singleRoomCount: number;
+  singleSupplementPerPerson: number;
+  singleSupplementTotal: number;
   totalAmount: number;
   ticketAmount: number;
   airportTaxAmount: number;

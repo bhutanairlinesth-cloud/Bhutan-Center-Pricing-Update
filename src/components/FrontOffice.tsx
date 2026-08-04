@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowRight, BadgePercent, BriefcaseBusiness, Building2, CalendarDays, Check, ClipboardList,
-  ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LogOut, Plane,
+  ArrowRight, BadgePercent, BedDouble, BriefcaseBusiness, Building2, CalendarDays, Check, ClipboardList,
+  ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LogOut, Plane, RotateCcw,
   Settings2, ShieldCheck, Sparkles, Users, WalletCards,
 } from 'lucide-react';
 import { CustomerDetails, GlobalSettings, HotelCategory, PricingChannel, PricingInput, TourPackage, User } from '../types';
 import { useI18n, LanguageSwitch } from '../i18n';
-import { calculatePrice } from '../utils/pricing';
+import { calculatePrice, getPackageSingleSupplement } from '../utils/pricing';
 import { formatDate, formatNumber, formatTHB, formatUSD, makeQuotationNo } from '../utils/format';
 import { Brand } from './Brand';
 import { Modal } from './Ui';
@@ -33,6 +33,8 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
     hotelCategory: firstCategory,
     travelDate: '',
     businessUpgradeCount: 0,
+    singleRoomCount: 0,
+    singleSupplementOverrideTHB: null,
   });
   const [customer, setCustomer] = useState<CustomerDetails>(emptyCustomer);
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -46,6 +48,8 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
 
   const result = useMemo(() => calculatePrice(input, settings, packages), [input, settings, packages]);
   const selectedPackage = packages.find((pkg) => pkg.id === input.packageId);
+  const packageSingleSupplement = getPackageSingleSupplement(selectedPackage, input.hotelCategory);
+  const effectiveSingleSupplement = input.singleSupplementOverrideTHB ?? packageSingleSupplement;
   const agentDiscount = settings.ticketPriceTHB > 0
     ? ((settings.ticketPriceTHB - (settings.agentTicketPriceTHB ?? 25220)) / settings.ticketPriceTHB) * 100
     : 0;
@@ -98,12 +102,27 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
           <div className="section-block">
             <div className="section-title"><span>02</span><div><h2>{t('tripDetails')}</h2><p>{packages.length} packages · 3 hotel levels</p></div></div>
             <div className="form-grid">
-              <label className="field span-2"><span>{t('package')}</span><div className="select-wrap"><Plane/><select value={input.packageId} onChange={(event) => update('packageId', event.target.value)}>{packages.map((pkg) => <option value={pkg.id} key={pkg.id}>{pkg.name}</option>)}</select><ChevronDown/></div></label>
+              <label className="field span-2"><span>{t('package')}</span><div className="select-wrap"><Plane/><select value={input.packageId} onChange={(event) => setInput((value) => ({ ...value, packageId: event.target.value, singleSupplementOverrideTHB: null }))}>{packages.map((pkg) => <option value={pkg.id} key={pkg.id}>{pkg.name}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{t('passengers')}</span><div className="select-wrap"><Users/><select value={input.passengerCount} onChange={(event) => {
-                const pax = Number(event.target.value); setInput((value) => ({ ...value, passengerCount: pax, businessUpgradeCount: Math.min(value.businessUpgradeCount, pax) }));
+                const pax = Number(event.target.value); setInput((value) => ({ ...value, passengerCount: pax, businessUpgradeCount: Math.min(value.businessUpgradeCount, pax), singleRoomCount: Math.min(value.singleRoomCount, pax) }));
               }}>{Array.from({ length: 15 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{pax >= groupDiscountMinPax && groupDiscountPercent > 0 ? ` · ${groupDiscountLabel}` : ''}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{t('travelDate')}</span><div className="input-with-icon simple"><CalendarDays/><input type="date" value={input.travelDate} onChange={(event) => update('travelDate', event.target.value)}/></div></label>
-              <label className="field span-2"><span>{t('hotelLevel')}</span><div className="select-wrap"><Building2/><select value={input.hotelCategory} onChange={(event) => update('hotelCategory', event.target.value as HotelCategory)}><option value="3 Stars">3 Stars</option><option value="4 Stars">4 Stars</option><option value="5 Stars">5 Stars</option></select><ChevronDown/></div></label>
+              <label className="field span-2"><span>{t('hotelLevel')}</span><div className="select-wrap"><Building2/><select value={input.hotelCategory} onChange={(event) => setInput((value) => ({ ...value, hotelCategory: event.target.value as HotelCategory, singleSupplementOverrideTHB: null }))}><option value="3 Stars">3 Stars</option><option value="4 Stars">4 Stars</option><option value="5 Stars">5 Stars</option></select><ChevronDown/></div></label>
+            </div>
+          </div>
+
+          <div className="single-room-row">
+            <div className="upgrade-icon single"><BedDouble/></div>
+            <div className="upgrade-copy"><b>{t('singleRoom')}</b><span>{t('singleRoomHint')}</span></div>
+            <div className="single-room-controls">
+              <div className="single-room-price">
+                <label>{t('singleSupplement')}</label>
+                <div><input type="number" min="0" step="100" value={effectiveSingleSupplement} onChange={(event) => update('singleSupplementOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div>
+                {input.singleSupplementOverrideTHB !== null && input.singleSupplementOverrideTHB !== undefined
+                  ? <button type="button" onClick={() => update('singleSupplementOverrideTHB', null)}><RotateCcw/>{t('resetDefault')}</button>
+                  : <small>{t('packageDefault')}</small>}
+              </div>
+              <div className="single-room-count"><label>{t('singleRoomCount')}</label><div className="stepper"><button type="button" onClick={() => update('singleRoomCount', Math.max(0, input.singleRoomCount - 1))}>−</button><strong>{input.singleRoomCount}</strong><button type="button" onClick={() => update('singleRoomCount', Math.min(input.passengerCount, input.singleRoomCount + 1))}>+</button></div></div>
             </div>
           </div>
 
@@ -121,10 +140,11 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
             <PriceLine icon={<Plane/>} label={t('flight')} value={formatTHB(result?.airTicketPerPerson || 0, language)} note={result?.hasGroupFlightDiscount ? groupDiscountLabel : undefined}/>
             <PriceLine icon={<WalletCards/>} label={t('airportTax')} value={formatTHB(result?.airportTaxPerPerson || 0, language)}/>
             <PriceLine icon={<HotelIcon/>} label={t('ground')} value={formatTHB(result?.groundCostTHBPerPerson || 0, language)} note={`${formatUSD(result?.groundRateUSDPerPersonPerNight || 0)} / night`}/>
+            {(result?.singleRoomCount || 0) > 0 && <PriceLine icon={<BedDouble/>} label={t('singleRoom')} value={formatTHB(result?.singleSupplementTotal || 0, language)} note={`${result?.singleRoomCount || 0} ${t('people')} × ${formatTHB(result?.singleSupplementPerPerson || 0, language)}`}/>} 
             <PriceLine icon={<ShieldCheck/>} label={t('visa')} value={formatTHB(result?.visaTHBPerPerson || 0, language)} note={formatUSD(result?.visaUSDPerPerson || 0)}/>
           </div>
           <div className="profit-strip"><div><span>{t('cost')}</span><b>{formatTHB(result?.baseCostPerPerson || 0, language)}</b></div><div><span>{t('profit')}</span><b>{formatTHB(result?.profitPerPerson || 0, language)}</b></div></div>
-          <div className="group-total"><span>{t('groupTotal')}</span><strong>{formatTHB(result?.groupTotal || 0, language)}</strong>{(result?.businessUpgradeTotal || 0) > 0 && <small>+ Business {formatTHB(result?.businessUpgradeTotal || 0, language)}</small>}</div>
+          <div className="group-total"><span>{t('groupTotal')}</span><strong>{formatTHB(result?.groupTotal || 0, language)}</strong>{(result?.singleSupplementTotal || 0) > 0 && <small>+ {t('singleRoom')} {formatTHB(result?.singleSupplementTotal || 0, language)}</small>}{(result?.businessUpgradeTotal || 0) > 0 && <small>+ Business {formatTHB(result?.businessUpgradeTotal || 0, language)}</small>}</div>
           <button className="primary-button quote-button" disabled={!result} onClick={() => setCustomerOpen(true)}><FileText/><span>{t('createQuote')}</span><ArrowRight/></button>
           <div className="summary-foot"><CircleDollarSign/><span>1 USD = {formatNumber(settings.exchangeRateUSD, 2)} THB · Rounded up / 500 THB</span></div>
         </aside>
@@ -258,8 +278,16 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
           <span className="quote-center-cell"><b>{result.passengerCount}</b></span>
           <span className="quote-number-cell"><b>{formatNumber(result.sellingPricePerPerson, 2)}</b></span>
           <span className="quote-number-cell"><b>{result.businessUpgradeTotal > 0 ? formatNumber(result.businessUpgradeTotal, 2) : '—'}</b></span>
-          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.groupTotal, 2)}</b></span>
+          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.groupSubtotal + result.businessUpgradeTotal, 2)}</b></span>
         </div>
+        {result.singleRoomCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-single-room-row">
+          <span className="quote-service-cell"><strong>{language === 'th' ? 'ส่วนต่างห้องพักเดี่ยว' : 'Single-room supplement'}</strong><small>{result.hotelCategory} · {result.nights} {t('nights')}</small></span>
+          <span className="quote-center-cell"><b>ADT</b></span>
+          <span className="quote-center-cell"><b>{result.singleRoomCount}</b></span>
+          <span className="quote-number-cell"><b>{formatNumber(result.singleSupplementPerPerson, 2)}</b></span>
+          <span className="quote-number-cell"><b>—</b></span>
+          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.singleSupplementTotal, 2)}</b></span>
+        </div>}
         <div className="quote-table-grand-total">
           <span>{language === 'th' ? 'ยอดรวมสุทธิ' : 'Grand Total'}</span>
           <strong>THB {formatNumber(result.groupTotal, 2)}</strong>

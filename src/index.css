@@ -1289,3 +1289,59 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .journey-payment-breakdown > div { min-height: 34px !important; }
   .journey-invoice-package-row { min-height: 64px !important; }
 }
+
+/* =========================================================
+   v12.1 — Single-room supplement
+   ========================================================= */
+.single-room-row {
+  margin-top: 24px;
+  padding: 15px;
+  display: grid;
+  grid-template-columns: 38px minmax(160px,1fr) minmax(280px,auto);
+  align-items: center;
+  gap: 12px;
+  border-radius: 15px;
+  color: #173a30;
+  background: #f2f8f5;
+  border: 1px solid #d6e8df;
+}
+.upgrade-icon.single { color: var(--green-700); background: #dff0e8; }
+.single-room-controls { display: flex; align-items: flex-end; justify-content: flex-end; gap: 14px; }
+.single-room-price { min-width: 190px; display: grid; gap: 4px; }
+.single-room-price > label,
+.single-room-count > label { color: #60756b; font-size: 9px; font-weight: 800; }
+.single-room-price > div { height: 36px; display: flex; align-items: center; overflow: hidden; border: 1px solid #cadbd2; border-radius: 10px; background: #fff; }
+.single-room-price input { width: 110px; height: 100%; padding: 0 10px; border: 0; outline: 0; background: transparent; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.single-room-price em { padding: 0 10px; color: #789087; font-style: normal; font-size: 8px; font-weight: 800; }
+.single-room-price button { justify-self: start; display: inline-flex; align-items: center; gap: 4px; color: var(--green-700); background: transparent; font-size: 8px; font-weight: 800; }
+.single-room-price button svg { width: 11px; height: 11px; }
+.single-room-price small { color: #789087; font-size: 8px; }
+.single-room-count { display: grid; gap: 4px; }
+.single-supplement-preview { display: flex; flex-wrap: wrap; gap: 5px 9px; }
+.single-supplement-preview b { color: #45675a; font-size: 9px; font-weight: 800; }
+.package-editor-form { display: grid; gap: 14px; }
+.single-supplement-editor { padding: 15px; display: grid; gap: 14px; border: 1px solid #dce9e2; border-radius: 15px; background: #f7fbf9; }
+.single-supplement-fields { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.quote-single-room-row { min-height: 62px !important; background: #f8fbf9; }
+.quote-single-room-row .quote-service-cell strong { color: var(--green-800); }
+.single-room-calculated { background: #edf7f2; border-color: #d7e9df; }
+.journey-invoice-single-row { min-height: 52px; background: #f6faf8; }
+.journey-invoice-package-total { min-height: 42px; padding: 0 12px; display: flex; align-items: center; justify-content: flex-end; gap: 24px; border-top: 1px solid #dce4df; background: #edf5f1; }
+.journey-invoice-package-total span { color: #486459; font-size: 9px; font-weight: 850; text-transform: uppercase; }
+.journey-invoice-package-total strong { min-width: 120px; text-align: right; font-family: Inter,Arial,sans-serif; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 760px) {
+  .single-room-row { grid-template-columns: 38px 1fr; }
+  .single-room-controls { grid-column: 1 / -1; align-items: stretch; justify-content: stretch; flex-direction: column; }
+  .single-room-price { min-width: 0; }
+  .single-room-price > div { width: 100%; }
+  .single-room-price input { flex: 1; width: auto; }
+  .single-room-count { align-items: start; }
+  .single-supplement-fields { grid-template-columns: 1fr; }
+}
+
+@media print {
+  .quote-single-room-row { min-height: 52px !important; }
+  .journey-invoice-single-row { min-height: 45px !important; }
+  .journey-invoice-package-total { min-height: 37px !important; }
+}

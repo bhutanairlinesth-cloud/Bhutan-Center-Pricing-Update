@@ -91,6 +91,7 @@ const mapPackage = (row: any): TourPackage => ({
   nights: Number(row.nights),
   rates: row.rates,
   hotelRates: row.hotel_rates ?? undefined,
+  singleSupplementsTHB: row.single_supplements_thb ?? { star3: 0, star4: 0, star5: 0 },
 });
 
 const packageRow = (pkg: TourPackage) => ({
@@ -99,6 +100,7 @@ const packageRow = (pkg: TourPackage) => ({
   nights: pkg.nights,
   rates: pkg.rates,
   hotel_rates: pkg.hotelRates ?? null,
+  single_supplements_thb: pkg.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 },
   updated_at: new Date().toISOString(),
 });
 
@@ -121,6 +123,9 @@ const mapTracking = (row: any): CustomerTracking => ({
   passengerCount: Number(row.passenger_count || 1),
   channel: row.channel || 'retail',
   sellingPricePerPerson: Number(row.selling_price_per_person || 0),
+  singleRoomCount: Number(row.single_room_count || 0),
+  singleSupplementPerPerson: Number(row.single_supplement_per_person || 0),
+  singleSupplementTotal: Number(row.single_supplement_total || 0),
   totalAmount: Number(row.total_amount || 0),
   ticketAmount: Number(row.ticket_amount || 0),
   airportTaxAmount: Number(row.airport_tax_amount || 0),
@@ -181,6 +186,9 @@ const trackingRow = (item: CustomerTracking) => ({
   passenger_count: item.passengerCount,
   channel: item.channel,
   selling_price_per_person: item.sellingPricePerPerson,
+  single_room_count: Math.max(0, Math.round(item.singleRoomCount || 0)),
+  single_supplement_per_person: Math.max(0, item.singleSupplementPerPerson || 0),
+  single_supplement_total: Math.max(0, item.singleSupplementTotal || 0),
   total_amount: item.totalAmount,
   ticket_amount: item.ticketAmount,
   airport_tax_amount: item.airportTaxAmount,

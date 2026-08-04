@@ -199,7 +199,7 @@ export function CustomerTrackingWorkspace(props: Props) {
     return {
       id: makeId('crm'), opportunityName: '', customerName: '', phone: '', email: '', leadSource: 'LINE OA', landSupplier: '', airline: 'Bhutan Airlines',
       travelStartDate: '', travelEndDate: '', packageId: first?.id || '', packageName: first?.name || '', hotelCategory: '3 Stars', passengerCount: 2,
-      channel: 'retail', sellingPricePerPerson: 0, totalAmount: 0, ticketAmount: 0, airportTaxAmount: props.settings.airportTaxTHB * 2,
+      channel: 'retail', sellingPricePerPerson: 0, singleRoomCount: 0, singleSupplementPerPerson: 0, singleSupplementTotal: 0, totalAmount: 0, ticketAmount: 0, airportTaxAmount: props.settings.airportTaxTHB * 2,
       landPayment: 0, profitAmount: 0, depositAmount: 0, depositDueDate: '', depositStatus: 'pending', balanceAmount: 0, balanceDueDate: '', balanceStatus: 'pending',
       status: 'new', salesOwnerId: props.currentUser.id, salesOwnerName: props.currentUser.name, note: '', quotationSentAt: '', bookingConfirmedAt: '',
       passportReceivedAt: '', photoReceivedAt: '', passengerNames: '', flightPnr: '', flightReservedAt: '', invoice1SentAt: '', firstPaymentReceivedAt: '',
@@ -321,6 +321,23 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   if (!form) return null;
   const currentForm = form;
   const set = <K extends keyof CustomerTracking>(key: K, value: CustomerTracking[K]) => setForm((current) => current ? ({ ...current, [key]: value }) : current);
+  function updateSingleRoomDetails(nextCount: number, nextPerPerson: number) {
+    setForm((current) => {
+      if (!current) return current;
+      const count = Math.min(Math.max(0, Math.round(nextCount)), Math.max(1, Math.round(current.passengerCount || 1)));
+      const perPerson = Math.max(0, nextPerPerson || 0);
+      const nextTotal = count * perPerson;
+      const difference = nextTotal - Math.max(0, current.singleSupplementTotal || 0);
+      return {
+        ...current,
+        singleRoomCount: count,
+        singleSupplementPerPerson: perPerson,
+        singleSupplementTotal: nextTotal,
+        totalAmount: Math.max(0, current.totalAmount + difference),
+        landPayment: Math.max(0, current.landPayment + difference),
+      };
+    });
+  }
   const selectedPackage = packages.find((x) => x.id === currentForm.packageId);
   const currentStage = getJourneyStage(currentForm);
 
@@ -329,17 +346,68 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   }
   function syncPackage(id: string) {
     const pkg = packages.find((x) => x.id === id);
-    setForm((current) => current ? ({ ...current, packageId: id, packageName: pkg?.name || '', travelEndDate: current.travelStartDate ? addDays(current.travelStartDate, pkg?.nights || 0) : current.travelEndDate }) : current);
+    setForm((current) => {
+      if (!current) return current;
+      const oldSingleTotal = Math.max(0, current.singleSupplementTotal || 0);
+      return {
+        ...current,
+        packageId: id,
+        packageName: pkg?.name || '',
+        travelEndDate: current.travelStartDate ? addDays(current.travelStartDate, pkg?.nights || 0) : current.travelEndDate,
+        singleSupplementPerPerson: 0,
+        singleSupplementTotal: 0,
+        totalAmount: Math.max(0, current.totalAmount - oldSingleTotal),
+        landPayment: Math.max(0, current.landPayment - oldSingleTotal),
+      };
+    });
+  }
+  function syncHotelCategory(category: HotelCategory) {
+    setForm((current) => {
+      if (!current) return current;
+      const oldSingleTotal = Math.max(0, current.singleSupplementTotal || 0);
+      return {
+        ...current,
+        hotelCategory: category,
+        singleSupplementPerPerson: 0,
+        singleSupplementTotal: 0,
+        totalAmount: Math.max(0, current.totalAmount - oldSingleTotal),
+        landPayment: Math.max(0, current.landPayment - oldSingleTotal),
+      };
+    });
   }
   function calculateFromPricing() {
     if (!currentForm.packageId) return;
-    const result = calculatePrice({ channel: currentForm.channel, packageId: currentForm.packageId, passengerCount: Math.max(1, currentForm.passengerCount), hotelCategory: currentForm.hotelCategory, travelDate: currentForm.travelStartDate, businessUpgradeCount: 0 }, settings, packages);
+    const result = calculatePrice({
+      channel: currentForm.channel,
+      packageId: currentForm.packageId,
+      passengerCount: Math.max(1, currentForm.passengerCount),
+      hotelCategory: currentForm.hotelCategory,
+      travelDate: currentForm.travelStartDate,
+      businessUpgradeCount: 0,
+      singleRoomCount: Math.min(Math.max(0, currentForm.singleRoomCount || 0), Math.max(1, currentForm.passengerCount)),
+      singleSupplementOverrideTHB: currentForm.singleSupplementPerPerson > 0 ? currentForm.singleSupplementPerPerson : null,
+    }, settings, packages);
     if (!result) return;
     const ticketAmount = result.airTicketPerPerson * result.passengerCount;
     const airportTaxAmount = result.airportTaxPerPerson * result.passengerCount;
-    const landPayment = (result.groundCostTHBPerPerson + result.visaTHBPerPerson) * result.passengerCount;
+    const landPayment = (result.groundCostTHBPerPerson + result.visaTHBPerPerson) * result.passengerCount + result.singleSupplementTotal;
     const depositAmount = ticketAmount + airportTaxAmount;
-    setForm((current) => current ? ({ ...current, packageName: result.packageName, sellingPricePerPerson: result.sellingPricePerPerson, totalAmount: result.groupTotal, ticketAmount, airportTaxAmount, landPayment, profitAmount: Math.max(0, result.groupTotal - ticketAmount - airportTaxAmount - landPayment), depositAmount, balanceAmount: Math.max(0, result.groupTotal - depositAmount), balanceDueDate: current.travelStartDate ? minusOneMonth(current.travelStartDate) : current.balanceDueDate }) : current);
+    setForm((current) => current ? ({
+      ...current,
+      packageName: result.packageName,
+      sellingPricePerPerson: result.sellingPricePerPerson,
+      singleRoomCount: result.singleRoomCount,
+      singleSupplementPerPerson: result.singleSupplementPerPerson,
+      singleSupplementTotal: result.singleSupplementTotal,
+      totalAmount: result.groupTotal,
+      ticketAmount,
+      airportTaxAmount,
+      landPayment,
+      profitAmount: Math.max(0, result.groupTotal - ticketAmount - airportTaxAmount - landPayment),
+      depositAmount,
+      balanceAmount: Math.max(0, result.groupTotal - depositAmount),
+      balanceDueDate: current.travelStartDate ? minusOneMonth(current.travelStartDate) : current.balanceDueDate,
+    }) : current);
   }
   function normalizeBeforeSave(): CustomerTracking {
     const ticket = Math.max(0, currentForm.ticketAmount); const tax = Math.max(0, currentForm.airportTaxAmount); const total = Math.max(0, currentForm.totalAmount);
@@ -347,7 +415,22 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     const owner = users.find((x) => x.id === currentForm.salesOwnerId);
     let status = currentForm.status;
     if (currentForm.closedAt) status = 'completed'; else if (currentForm.bookingConfirmedAt && status !== 'lost') status = 'won'; else if (currentForm.quotationSentAt && ['new', 'following'].includes(status)) status = 'quote_sent';
-    return { ...currentForm, passengerCount: Math.max(1, Math.round(currentForm.passengerCount)), depositAmount: deposit, balanceAmount: balance, profitAmount: profit, status, salesOwnerName: owner?.name || currentForm.salesOwnerName || currentUser.name, updatedAt: new Date().toISOString() };
+    const normalizedPax = Math.max(1, Math.round(currentForm.passengerCount));
+    const normalizedSingleCount = Math.min(normalizedPax, Math.max(0, Math.round(currentForm.singleRoomCount || 0)));
+    const normalizedSinglePerPerson = Math.max(0, currentForm.singleSupplementPerPerson || 0);
+    return {
+      ...currentForm,
+      passengerCount: normalizedPax,
+      singleRoomCount: normalizedSingleCount,
+      singleSupplementPerPerson: normalizedSinglePerPerson,
+      singleSupplementTotal: normalizedSingleCount * normalizedSinglePerPerson,
+      depositAmount: deposit,
+      balanceAmount: balance,
+      profitAmount: profit,
+      status,
+      salesOwnerName: owner?.name || currentForm.salesOwnerName || currentUser.name,
+      updatedAt: new Date().toISOString(),
+    };
   }
   async function saveAndStay() { const normalized = normalizeBeforeSave(); setForm(normalized); await onSave(normalized); }
   async function markToday(key: keyof CustomerTracking) { const next = { ...currentForm, [key]: isoToday() } as CustomerTracking; setForm(next); await onSave({ ...next, updatedAt: new Date().toISOString() }); }
@@ -398,14 +481,31 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         <div className="tracking-form-grid">
           <label className="field span-2"><span>{th ? 'โปรแกรมทัวร์' : 'Tour package'}</span><select value={form.packageId} onChange={(e) => syncPackage(e.target.value)}>{packages.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label className="field"><span>{th ? 'ช่องทางราคา' : 'Pricing channel'}</span><select value={form.channel} onChange={(e) => set('channel', e.target.value as PricingChannel)}><option value="retail">Retail / Customer</option><option value="agent">Agent / Partner</option></select></label>
-          <label className="field"><span>{th ? 'ระดับโรงแรม' : 'Hotel category'}</span><select value={form.hotelCategory} onChange={(e) => set('hotelCategory', e.target.value as HotelCategory)}><option>3 Stars</option><option>4 Stars</option><option>5 Stars</option></select></label>
+          <label className="field"><span>{th ? 'ระดับโรงแรม' : 'Hotel category'}</span><select value={form.hotelCategory} onChange={(e) => syncHotelCategory(e.target.value as HotelCategory)}><option>3 Stars</option><option>4 Stars</option><option>5 Stars</option></select></label>
           <label className="field"><span>{th ? 'วันเริ่มเดินทาง' : 'Travel start'}</span><input type="date" value={form.travelStartDate} onChange={(e) => syncDates(e.target.value)}/></label>
           <label className="field"><span>{th ? 'วันสิ้นสุด' : 'Travel end'}</span><input type="date" value={form.travelEndDate} onChange={(e) => set('travelEndDate', e.target.value)}/></label>
-          <label className="field"><span>{th ? 'จำนวนผู้เดินทาง' : 'No. of pax'}</span><input type="number" min="1" value={form.passengerCount} onChange={(e) => set('passengerCount', Number(e.target.value))}/></label>
+          <label className="field"><span>{th ? 'จำนวนผู้เดินทาง' : 'No. of pax'}</span><input type="number" min="1" value={form.passengerCount} onChange={(e) => {
+            const pax = Math.max(1, Number(e.target.value));
+            setForm((current) => {
+              if (!current) return current;
+              const count = Math.min(current.singleRoomCount || 0, pax);
+              const nextSingleTotal = count * (current.singleSupplementPerPerson || 0);
+              const difference = nextSingleTotal - (current.singleSupplementTotal || 0);
+              return { ...current, passengerCount: pax, singleRoomCount: count, singleSupplementTotal: nextSingleTotal, totalAmount: Math.max(0, current.totalAmount + difference), landPayment: Math.max(0, current.landPayment + difference) };
+            });
+          }}/></label>
+          <label className="field"><span>{th ? 'จำนวนผู้พักเดี่ยว' : 'Single-room travellers'}</span><input type="number" min="0" max={Math.max(1, form.passengerCount)} value={form.singleRoomCount} onChange={(e) => updateSingleRoomDetails(Number(e.target.value), form.singleSupplementPerPerson)}/></label>
           <div className="tracking-calc-action"><button className="secondary-button" type="button" onClick={calculateFromPricing}><CircleDollarSign/>{th ? 'ดึงราคาจากระบบคำนวณ' : 'Calculate from pricing system'}</button></div>
         </div>
         <div className="tracking-form-grid money-grid journey-money-grid">
-          <MoneyField label={th ? 'ราคาขายต่อท่าน' : 'Selling / pax'} value={form.sellingPricePerPerson} onChange={(v) => set('sellingPricePerPerson', v)}/><MoneyField label={th ? 'ยอดแพ็กเกจทั้งหมด' : 'Total package amount'} value={form.totalAmount} onChange={(v) => set('totalAmount', v)}/><MoneyField label={th ? 'ราคาตั๋วรวมทั้งหมด' : 'Total ticket price'} value={form.ticketAmount} onChange={(v) => set('ticketAmount', v)}/><MoneyField label={th ? 'ภาษีสนามบินรวม' : 'Total airport tax'} value={form.airportTaxAmount} onChange={(v) => set('airportTaxAmount', v)}/><MoneyField label="LAND Payment" value={form.landPayment} onChange={(v) => set('landPayment', v)}/><div className={`calculated-money ${profit < 0 ? 'negative' : ''}`}><span>{th ? 'กำไรจากการขาย' : 'Profit from sales'}</span><strong>{formatTHB(profit, language)}</strong><small>{th ? 'ยอดขาย − ตั๋ว − ภาษี − LAND' : 'Sales − ticket − tax − land'}</small></div>
+          <MoneyField label={th ? 'ราคาขายต่อท่าน' : 'Selling / pax'} value={form.sellingPricePerPerson} onChange={(v) => set('sellingPricePerPerson', v)}/>
+          <MoneyField label={th ? 'ส่วนต่างพักเดี่ยว / ท่าน' : 'Single supplement / pax'} value={form.singleSupplementPerPerson} onChange={(v) => updateSingleRoomDetails(form.singleRoomCount, v)}/>
+          <div className="calculated-money single-room-calculated"><span>{th ? 'พักเดี่ยวรวม' : 'Total single supplement'}</span><strong>{formatTHB(form.singleSupplementTotal, language)}</strong><small>{form.singleRoomCount} {th ? 'ท่าน' : 'pax'} × {formatTHB(form.singleSupplementPerPerson, language)}</small></div>
+          <MoneyField label={th ? 'ยอดแพ็กเกจทั้งหมด' : 'Total package amount'} value={form.totalAmount} onChange={(v) => set('totalAmount', v)}/>
+          <MoneyField label={th ? 'ราคาตั๋วรวมทั้งหมด' : 'Total ticket price'} value={form.ticketAmount} onChange={(v) => set('ticketAmount', v)}/>
+          <MoneyField label={th ? 'ภาษีสนามบินรวม' : 'Total airport tax'} value={form.airportTaxAmount} onChange={(v) => set('airportTaxAmount', v)}/>
+          <MoneyField label="LAND Payment" value={form.landPayment} onChange={(v) => set('landPayment', v)}/>
+          <div className={`calculated-money ${profit < 0 ? 'negative' : ''}`}><span>{th ? 'กำไรจากการขาย' : 'Profit from sales'}</span><strong>{formatTHB(profit, language)}</strong><small>{th ? 'ยอดขาย − ตั๋ว − ภาษี − LAND' : 'Sales − ticket − tax − land'}</small></div>
         </div>
       </WorkflowSection>
 
@@ -477,7 +577,13 @@ function InvoicePreview({ value, language, payments, onClose, onSaveInvoice, onS
       <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice'}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
       <section className="invoice-meta"><div><span>{th ? 'เรียกเก็บจาก' : 'Bill to'}</span><strong>{tracking.customerName}</strong><small>{[tracking.phone, tracking.email].filter(Boolean).join(' · ') || '-'}</small></div><div><span>{th ? 'วันที่ออกเอกสาร' : 'Issue date'}</span><strong>{formatDate(invoice.issueDate, language)}</strong><small>{th ? 'ครบกำหนด' : 'Due'}: {invoice.dueDate ? formatDate(invoice.dueDate, language) : '-'}</small></div></section>
       <section className="invoice-trip-summary"><div><span>{th ? 'โปรแกรม' : 'Package'}</span><b>{tracking.packageName || '-'}</b></div><div><span>{th ? 'วันเดินทาง' : 'Travel date'}</span><b>{tracking.travelStartDate ? formatDate(tracking.travelStartDate, language) : '-'}</b></div><div><span>{th ? 'จำนวน' : 'Passengers'}</span><b>{tracking.passengerCount} {th ? 'ท่าน' : 'pax'}</b></div></section>
-      <section className="journey-invoice-package"><h3>{th ? 'มูลค่าแพ็กเกจทั้งหมด' : 'Full package value'}</h3><div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Passenger / Service'}</span><span>PTC</span><span>QTY</span><span>{th ? 'ราคาต่อท่าน' : 'Selling / Pax'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div><div className="journey-invoice-package-row"><span><b>{tracking.packageName}</b><small>{tracking.hotelCategory} · {tracking.travelStartDate && tracking.travelEndDate ? `${formatDate(tracking.travelStartDate, language)} – ${formatDate(tracking.travelEndDate, language)}` : ''}</small></span><span>ADT</span><span>{tracking.passengerCount}</span><span>{formatNumber(tracking.sellingPricePerPerson, 2)}</span><span>{formatNumber(tracking.totalAmount, 2)}</span></div></section>
+      <section className="journey-invoice-package">
+        <h3>{th ? 'มูลค่าแพ็กเกจทั้งหมด' : 'Full package value'}</h3>
+        <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Passenger / Service'}</span><span>PTC</span><span>QTY</span><span>{th ? 'ราคาต่อท่าน' : 'Selling / Pax'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
+        <div className="journey-invoice-package-row"><span><b>{tracking.packageName}</b><small>{tracking.hotelCategory} · {tracking.travelStartDate && tracking.travelEndDate ? `${formatDate(tracking.travelStartDate, language)} – ${formatDate(tracking.travelEndDate, language)}` : ''}</small></span><span>ADT</span><span>{tracking.passengerCount}</span><span>{formatNumber(tracking.sellingPricePerPerson, 2)}</span><span>{formatNumber(tracking.sellingPricePerPerson * tracking.passengerCount, 2)}</span></div>
+        {tracking.singleRoomCount > 0 && <div className="journey-invoice-package-row journey-invoice-single-row"><span><b>{th ? 'ส่วนต่างห้องพักเดี่ยว' : 'Single-room supplement'}</b><small>{tracking.hotelCategory}</small></span><span>ADT</span><span>{tracking.singleRoomCount}</span><span>{formatNumber(tracking.singleSupplementPerPerson, 2)}</span><span>{formatNumber(tracking.singleSupplementTotal, 2)}</span></div>}
+        <div className="journey-invoice-package-total"><span>{th ? 'รวมมูลค่าแพ็กเกจ' : 'Total package value'}</span><strong>{formatNumber(tracking.totalAmount, 2)}</strong></div>
+      </section>
       {isDeposit ? <section className="journey-payment-breakdown"><h3>{th ? 'การชำระงวดที่ 1 — ค่าตั๋วเครื่องบินทั้งหมด' : 'Payment 1 — full airfare deposit'}</h3><div><span>{th ? 'ค่าตั๋วเครื่องบินไป–กลับ ชั้น Economy' : 'Round-trip Economy Class airfare'}</span><b>{formatNumber(tracking.ticketAmount, 2)}</b></div><div><span>{th ? 'ภาษีสนามบินทั้งหมด' : 'Total airport taxes'}</span><b>{formatNumber(tracking.airportTaxAmount, 2)}</b></div><div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 1' : 'Payment 1 amount due'}</span><strong>{formatNumber(tracking.depositAmount, 2)}</strong></div></section> : <section className="journey-payment-breakdown"><h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจส่วนที่เหลือ' : 'Payment 2 — remaining package balance'}</h3><div><span>{th ? 'ค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(tracking.totalAmount, 2)}</b></div>{ticketPayments.length ? ticketPayments.map((payment, index) => <div key={payment.id} className="deduction"><span>{th ? `หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว ครั้งที่ ${index + 1}` : `Less ticket payment ${index + 1}`} {payment.reference ? `(${payment.reference})` : ''}</span><b>-{formatNumber(payment.amount, 2)}</b></div>) : <div className="deduction"><span>{th ? 'หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว' : 'Less ticket payment received'}</span><b>-{formatNumber(paidTicket, 2)}</b></div>}<div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 2' : 'Payment 2 amount due'}</span><strong>{formatNumber(balanceDue, 2)}</strong></div></section>}
       <section className="invoice-total"><div><span>{th ? `ยอดชำระงวดที่ ${isDeposit ? '1' : '2'}` : `Payment ${isDeposit ? '1' : '2'} due`}</span><strong>THB {formatNumber(isDeposit ? tracking.depositAmount : balanceDue, 2)}</strong><small>{invoice.dueDate ? `${th ? 'ภายในวันที่' : 'Due by'} ${formatDate(invoice.dueDate, language)}` : '-'}</small></div></section>
       <section className="invoice-note"><h3>{th ? 'หมายเหตุการชำระเงิน' : 'Payment note'}</h3><p>{isDeposit ? (th ? 'เมื่อบริษัทตรวจสอบยอดชำระงวดที่ 1 เรียบร้อยแล้ว เจ้าหน้าที่จะส่งตั๋วเครื่องบินให้ลูกค้า' : 'Flight tickets will be sent after Payment 1 is verified.') : (th ? 'หลังชำระค่าแพ็กเกจครบ บริษัทจะจัดทำและส่ง Itinerary พร้อมเอกสารเตรียมเดินทาง' : 'The itinerary and pre-departure documents will be sent after full payment.')}</p></section>

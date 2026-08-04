@@ -36,6 +36,7 @@ create table if not exists public.app_settings (
   agent_margin_thb numeric not null default 3000,
   group_discount_min_pax integer not null default 10 check (group_discount_min_pax >= 1),
   group_discount_percent numeric not null default 10 check (group_discount_percent >= 0 and group_discount_percent <= 100),
+  logo_url text not null default '',
   updated_at timestamptz not null default now()
 );
 
@@ -124,6 +125,7 @@ alter table public.app_settings add column if not exists agent_ticket_discount_p
 alter table public.app_settings add column if not exists agent_margin_thb numeric not null default 3000;
 alter table public.app_settings add column if not exists group_discount_min_pax integer not null default 10;
 alter table public.app_settings add column if not exists group_discount_percent numeric not null default 10;
+alter table public.app_settings add column if not exists logo_url text not null default '';
 update public.app_settings set agent_ticket_price_thb = 25220 where agent_ticket_price_thb is null;
 
 alter table public.app_settings enable row level security;
@@ -162,10 +164,10 @@ insert into public.app_settings (
   id, exchange_rate_usd, ticket_price_thb, airport_tax_thb, visa_fee_usd, margin_thb,
   hotel_3_star_pax1_usd, hotel_3_star_pax2_usd, hotel_3_star_pax3_plus_usd,
   hotel_4_star_pax1_usd, hotel_4_star_pax2_usd, hotel_4_star_pax3_plus_usd,
-  agent_ticket_price_thb, agent_ticket_discount_percent, agent_margin_thb, group_discount_min_pax, group_discount_percent, updated_at
+  agent_ticket_price_thb, agent_ticket_discount_percent, agent_margin_thb, group_discount_min_pax, group_discount_percent, logo_url, updated_at
 ) values (
   '00000000-0000-0000-0000-000000000001', 35, 26000, 6500, 40, 5000,
-  250, 200, 180, 300, 240, 220, 25220, 3, 3000, 10, 10, now()
+  250, 200, 180, 300, 240, 220, 25220, 3, 3000, 10, 10, '', now()
 )
 on conflict (id) do nothing;
 
@@ -194,3 +196,7 @@ select id, name, email, role from public.profiles order by created_at;
 
 -- v11 customer tracking and invoices are installed separately.
 -- Run supabase/MIGRATE_CUSTOMER_TRACKING_AND_INVOICES.sql after this setup.
+
+
+-- Branding / company logo setup
+-- For existing projects use MIGRATE_BRAND_LOGO.sql.

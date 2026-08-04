@@ -61,6 +61,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   agentMarginTHB: 3000,
   groupDiscountMinPax: 10,
   groupDiscountPercent: 10,
+  logoUrl: '',
 };
 
 const KEYS = {

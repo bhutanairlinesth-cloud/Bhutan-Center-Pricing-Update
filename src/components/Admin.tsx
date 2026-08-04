@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, BadgePercent, Building2, ChevronRight, CircleDollarSign, Database,
   Gauge, Hotel as HotelIcon, LayoutDashboard, LogOut, Menu, PackageOpen, Pencil,
@@ -23,6 +23,8 @@ interface AdminProps {
   onLogout: () => void;
   onRefresh: () => Promise<void>;
   onSaveSettings: (settings: GlobalSettings) => Promise<void>;
+  onUploadLogo: (file: File) => Promise<string>;
+  onResetLogo: () => Promise<void>;
   onSaveHotel: (hotel: Hotel) => Promise<void>;
   onDeleteHotel: (id: string) => Promise<void>;
   onSavePackage: (pkg: TourPackage) => Promise<void>;
@@ -31,7 +33,7 @@ interface AdminProps {
   onDeleteUser: (id: string) => Promise<void>;
 }
 
-export function Admin({ settings, hotels, packages, users, currentUser, mode, onBack, onLogout, onRefresh, onSaveSettings, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onSaveUser, onDeleteUser }: AdminProps) {
+export function Admin({ settings, hotels, packages, users, currentUser, mode, onBack, onLogout, onRefresh, onSaveSettings, onUploadLogo, onResetLogo, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onSaveUser, onDeleteUser }: AdminProps) {
   const { t, language } = useI18n();
   const [page, setPage] = useState<AdminPage>('overview');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -46,7 +48,7 @@ export function Admin({ settings, hotels, packages, users, currentUser, mode, on
 
   return <div className="admin-shell">
     <aside className={`admin-sidebar ${menuOpen ? 'open' : ''}`}>
-      <div className="admin-brand-row"><Brand light/><button className="sidebar-close" onClick={() => setMenuOpen(false)}><X/></button></div>
+      <div className="admin-brand-row"><Brand light logoUrl={settings.logoUrl}/><button className="sidebar-close" onClick={() => setMenuOpen(false)}><X/></button></div>
       <div className="workspace-label"><span>{t('backOffice')}</span><small>{mode === 'supabase' ? t('online') : t('local')}</small></div>
       <nav className="admin-nav">{nav.map((item) => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => { setPage(item.id); setMenuOpen(false); }}><item.icon/><span>{item.label}</span><ChevronRight/></button>)}</nav>
       <div className="sidebar-footer"><button onClick={onBack}><ArrowLeft/>{t('backToCalculator')}</button><button onClick={onLogout}><LogOut/>{t('logout')}</button></div>
@@ -61,7 +63,7 @@ export function Admin({ settings, hotels, packages, users, currentUser, mode, on
         {page === 'overview' && <AdminOverview settings={settings} hotels={hotels} packages={packages} users={users} language={language} onOpen={setPage}/>} 
         {page === 'packages' && <PackagesManager items={packages} onSave={onSavePackage} onDelete={onDeletePackage}/>} 
         {page === 'hotels' && <HotelsManager items={hotels} onSave={onSaveHotel} onDelete={onDeleteHotel}/>} 
-        {page === 'settings' && <SettingsManager initial={settings} onSave={onSaveSettings}/>} 
+        {page === 'settings' && <SettingsManager initial={settings} onSave={onSaveSettings} onUploadLogo={onUploadLogo} onResetLogo={onResetLogo}/>} 
         {page === 'users' && <UsersManager items={users} currentUser={currentUser} onSave={onSaveUser} onDelete={onDeleteUser}/>} 
       </div>
     </main>
@@ -141,13 +143,38 @@ function RateFields({ rates, setRate }: { rates: { pax1USD: number; pax2USD: num
   return <div className="rate-fields"><label className="field"><span>{t('rate1')} · USD</span><input type="number" min="0" value={rates.pax1USD} onChange={(e) => setRate('pax1USD', Number(e.target.value))}/></label><label className="field"><span>{t('rate2')} · USD</span><input type="number" min="0" value={rates.pax2USD} onChange={(e) => setRate('pax2USD', Number(e.target.value))}/></label><label className="field"><span>{t('rate3')} · USD</span><input type="number" min="0" value={rates.pax3PlusUSD} onChange={(e) => setRate('pax3PlusUSD', Number(e.target.value))}/></label></div>;
 }
 
-function SettingsManager({ initial, onSave }: { initial: GlobalSettings; onSave: (settings: GlobalSettings) => Promise<void> }) {
-  const { t } = useI18n();
+function SettingsManager({ initial, onSave, onUploadLogo, onResetLogo }: { initial: GlobalSettings; onSave: (settings: GlobalSettings) => Promise<void>; onUploadLogo: (file: File) => Promise<string>; onResetLogo: () => Promise<void> }) {
+  const { t, language } = useI18n();
   const [form, setForm] = useState(initial);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
   React.useEffect(() => setForm(initial), [initial]);
   const change = (key: keyof GlobalSettings, value: number) => setForm((current) => ({ ...current, [key]: value }));
   const discount = form.ticketPriceTHB > 0 ? ((form.ticketPriceTHB - (form.agentTicketPriceTHB ?? 0)) / form.ticketPriceTHB) * 100 : 0;
-  return <div className="admin-stack"><PageAction title={t('pricingSettings')} detail="Retail · Agent · USD · Visa"/><div className="settings-grid">
+  async function chooseLogo(file?: File) {
+    if (!file) return;
+    setLogoBusy(true);
+    try {
+      const url = await onUploadLogo(file);
+      setForm((current) => ({ ...current, logoUrl: url }));
+    } finally {
+      setLogoBusy(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  }
+  async function resetBrand() {
+    setLogoBusy(true);
+    try {
+      await onResetLogo();
+      setForm((current) => ({ ...current, logoUrl: '' }));
+    } finally { setLogoBusy(false); }
+  }
+  return <div className="admin-stack"><PageAction title={t('pricingSettings')} detail="Retail · Agent · USD · Visa · Branding"/>
+  <section className="branding-settings-card">
+    <div className="branding-preview"><span className="branding-preview-label">{language === 'th' ? 'ตัวอย่างโลโก้ในเว็บไซต์และเอกสาร' : 'Website and document logo preview'}</span><div className="branding-preview-canvas"><Brand logoUrl={form.logoUrl}/></div></div>
+    <div className="branding-actions"><div className="settings-card-title"><span><Settings2/></span><div><h3>{language === 'th' ? 'โลโก้บริษัท' : 'Company logo'}</h3><p>{language === 'th' ? 'อัปโหลดครั้งเดียว โลโก้จะเปลี่ยนบนเว็บไซต์ ใบเสนอราคา และ Invoice' : 'Upload once to update the website, quotations and invoices.'}</p></div></div><p className="branding-file-hint">PNG, JPG หรือ WEBP · ไม่เกิน 2 MB · แนะนำพื้นหลังโปร่งใส</p><input ref={logoInputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => chooseLogo(event.target.files?.[0])}/><div className="branding-button-row"><button className="primary-button" disabled={logoBusy} onClick={() => logoInputRef.current?.click()}><Plus/>{logoBusy ? (language === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...') : (language === 'th' ? 'อัปเดตโลโก้' : 'Update logo')}</button><button className="ghost-button" disabled={logoBusy || !form.logoUrl} onClick={resetBrand}><RefreshCw/>{language === 'th' ? 'ใช้โลโก้เริ่มต้น' : 'Use default logo'}</button></div></div>
+  </section>
+  <div className="settings-grid">
     <section className="settings-card"><div className="settings-card-title"><span><Plane/></span><div><h3>{t('flightPricing')}</h3><p>THB / person</p></div></div><NumberField label={t('retailFlight')} value={form.ticketPriceTHB} onChange={(v) => change('ticketPriceTHB', v)}/><NumberField label={t('agentFlight')} value={form.agentTicketPriceTHB ?? 25220} onChange={(v) => change('agentTicketPriceTHB', v)}/><div className="calculated-note"><BadgePercent/> {t('agentDiscount')}: <b>{formatNumber(discount, 2)}%</b></div><NumberField label={t('airportTaxLabel')} value={form.airportTaxTHB} onChange={(v) => change('airportTaxTHB', v)}/></section>
     <section className="settings-card"><div className="settings-card-title"><span><CircleDollarSign/></span><div><h3>{t('exchangeVisa')}</h3><p>Global conversion</p></div></div><NumberField label={t('usdRate')} value={form.exchangeRateUSD} onChange={(v) => change('exchangeRateUSD', v)} step="0.01" suffix="THB"/><NumberField label={t('visaFee')} value={form.visaFeeUSD} onChange={(v) => change('visaFeeUSD', v)} suffix="USD"/></section>
     <section className="settings-card"><div className="settings-card-title"><span><BadgePercent/></span><div><h3>{t('margins')}</h3><p>THB / person</p></div></div><NumberField label={t('retailMargin')} value={form.marginTHB} onChange={(v) => change('marginTHB', v)}/><NumberField label={t('agentMargin')} value={form.agentMarginTHB ?? 3000} onChange={(v) => change('agentMarginTHB', v)}/></section>

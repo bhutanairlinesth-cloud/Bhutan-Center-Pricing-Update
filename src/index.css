@@ -1071,3 +1071,77 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .invoice-note { margin-top: 14px !important; }
   .invoice-footer { margin-top: 27px !important; }
 }
+
+/* v11.1 — Dynamic company logo */
+.brand.has-uploaded-logo { min-width: 0; color: inherit; }
+.brand.has-uploaded-logo img {
+  display: block;
+  width: auto;
+  height: 48px;
+  max-width: 230px;
+  object-fit: contain;
+  object-position: left center;
+}
+.brand.has-uploaded-logo.compact img { height: 36px; max-width: 150px; }
+.brand.light.has-uploaded-logo {
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 6px 20px rgba(0,0,0,.08);
+}
+.quote-header .brand.has-uploaded-logo img,
+.invoice-header .brand.has-uploaded-logo img { height: 54px; max-width: 220px; }
+
+.branding-settings-card {
+  display: grid;
+  grid-template-columns: minmax(300px, .9fr) minmax(360px, 1.1fr);
+  gap: 22px;
+  padding: 22px;
+  border: 1px solid #dce5e0;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #fff 0%, #f7faf8 100%);
+  box-shadow: 0 10px 34px rgba(20,47,38,.055);
+}
+.branding-preview { display: flex; flex-direction: column; gap: 10px; }
+.branding-preview-label { color: #68756f; font-size: 12px; font-weight: 800; }
+.branding-preview-canvas {
+  min-height: 126px;
+  padding: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #bfcfc7;
+  border-radius: 16px;
+  background: #fff;
+}
+.branding-preview-canvas .brand.has-uploaded-logo img { height: 68px; max-width: 300px; }
+.branding-actions { display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+.branding-file-hint { margin: 0; color: #78857e; font-size: 12px; line-height: 1.6; }
+.branding-button-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+@media (max-width: 900px) {
+  .branding-settings-card { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .brand.has-uploaded-logo img { height: 40px; max-width: 175px; }
+  .front-header .brand.has-uploaded-logo img,
+  .tracking-header .brand.has-uploaded-logo img { height: 36px; max-width: 145px; }
+  .branding-settings-card { padding: 16px; }
+  .branding-preview-canvas .brand.has-uploaded-logo img { height: 54px; max-width: 230px; }
+  .branding-button-row > button { width: 100%; }
+}
+@media print {
+  .quote-header .brand.has-uploaded-logo img,
+  .invoice-header .brand.has-uploaded-logo img { height: 15mm !important; max-width: 62mm !important; }
+}

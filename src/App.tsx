@@ -9,6 +9,7 @@ import { Admin } from './components/Admin';
 import { CustomerTrackingWorkspace } from './components/CustomerTracking';
 import { ToastItem, ToastStack } from './components/Ui';
 import { useI18n } from './i18n';
+import { LOGO_CACHE_KEY } from './components/Brand';
 
 export default function App() {
   const { t } = useI18n();
@@ -72,6 +73,12 @@ export default function App() {
     bootstrap();
   }, []);
 
+  useEffect(() => {
+    if (!settings) return;
+    if (settings.logoUrl) window.localStorage.setItem(LOGO_CACHE_KEY, settings.logoUrl);
+    else window.localStorage.removeItem(LOGO_CACHE_KEY);
+  }, [settings?.logoUrl]);
+
   async function loginSuccess(user: User) {
     setCurrentUser(user);
     if (!users.some((item) => item.id === user.id)) {
@@ -94,6 +101,35 @@ export default function App() {
 
   const refresh = async () => { await loadData(false); notify(t('refreshDone')); };
   const saveSettings = async (value: GlobalSettings) => run(async () => { await database.saveSettings(value); setSettings(await database.getSettings()); });
+  const uploadLogo = async (file: File): Promise<string> => {
+    try {
+      if (!settings) throw new Error('ไม่พบข้อมูลการตั้งค่า');
+      const url = await database.uploadBrandLogo(file);
+      const next = { ...settings, logoUrl: url };
+      await database.saveSettings(next);
+      setSettings(next);
+      window.localStorage.setItem(LOGO_CACHE_KEY, url);
+      notify('อัปเดตโลโก้เรียบร้อยแล้ว');
+      return url;
+    } catch (error: any) {
+      notify(`${t('error')}: ${error?.message || 'อัปโหลดโลโก้ไม่สำเร็จ'}`, 'error');
+      throw error;
+    }
+  };
+  const resetLogo = async (): Promise<void> => {
+    try {
+      if (!settings) return;
+      await database.deleteBrandLogo();
+      const next = { ...settings, logoUrl: '' };
+      await database.saveSettings(next);
+      setSettings(next);
+      window.localStorage.removeItem(LOGO_CACHE_KEY);
+      notify('เปลี่ยนกลับเป็นโลโก้เริ่มต้นแล้ว');
+    } catch (error: any) {
+      notify(`${t('error')}: ${error?.message || 'รีเซ็ตโลโก้ไม่สำเร็จ'}`, 'error');
+      throw error;
+    }
+  };
   const saveHotel = async (value: Hotel) => run(async () => { await database.saveHotel(value); setHotels(await database.getHotels()); });
   const deleteHotel = async (id: string) => run(async () => { await database.deleteHotel(id); setHotels(await database.getHotels()); }, t('deleted'));
   const savePackage = async (value: TourPackage) => run(async () => { await database.savePackage(value); setPackages(await database.getPackages()); });
@@ -116,7 +152,7 @@ export default function App() {
     {currentUser && settings && workspace === 'admin' && currentUser.role === 'admin' && <Admin
       settings={settings} hotels={hotels} packages={packages} users={users} currentUser={currentUser} mode={database.mode}
       onBack={() => setWorkspace('front')} onLogout={logout} onRefresh={refresh}
-      onSaveSettings={saveSettings} onSaveHotel={saveHotel} onDeleteHotel={deleteHotel}
+      onSaveSettings={saveSettings} onUploadLogo={uploadLogo} onResetLogo={resetLogo} onSaveHotel={saveHotel} onDeleteHotel={deleteHotel}
       onSavePackage={savePackage} onDeletePackage={deletePackage} onSaveUser={saveUser} onDeleteUser={deleteUser}
     />}
     <ToastStack items={toasts} onDismiss={(id) => setToasts((list) => list.filter((item) => item.id !== id))}/>

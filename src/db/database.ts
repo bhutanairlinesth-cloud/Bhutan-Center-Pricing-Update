@@ -3,6 +3,8 @@ import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { mockDb } from './mockDb';
 
 const SETTINGS_ID = '00000000-0000-0000-0000-000000000001';
+const BRAND_BUCKET = 'branding';
+const BRAND_LOGO_PATH = 'company-logo';
 
 function fail(error: any, fallback: string): never {
   throw new Error(error?.message || fallback);
@@ -31,6 +33,7 @@ function mapSettings(row: any): GlobalSettings {
     agentMarginTHB: Number(row.agent_margin_thb ?? 3000),
     groupDiscountMinPax: Number(row.group_discount_min_pax ?? 10),
     groupDiscountPercent: Number(row.group_discount_percent ?? 10),
+    logoUrl: String(row.logo_url ?? ''),
   };
 }
 
@@ -56,6 +59,7 @@ function settingsRow(settings: GlobalSettings) {
     agent_margin_thb: settings.agentMarginTHB ?? 3000,
     group_discount_min_pax: Math.max(1, Math.round(settings.groupDiscountMinPax ?? 10)),
     group_discount_percent: Math.min(100, Math.max(0, settings.groupDiscountPercent ?? 10)),
+    logo_url: settings.logoUrl ?? '',
     updated_at: new Date().toISOString(),
   };
 }
@@ -210,6 +214,16 @@ const mapUser = (row: any): User => ({
   createdAt: row.created_at,
 });
 
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('อ่านไฟล์โลโก้ไม่สำเร็จ'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export const database = {
   mode: isSupabaseConfigured ? 'supabase' as const : 'local' as const,
 
@@ -224,6 +238,27 @@ export const database = {
     if (!isSupabaseConfigured) return void mockDb.saveSettings(settings);
     const { error } = await supabase.from('app_settings').upsert(settingsRow(settings));
     if (error) fail(error, 'บันทึกการตั้งค่าไม่สำเร็จ');
+  },
+
+  async uploadBrandLogo(file: File): Promise<string> {
+    if (!file.type.match(/^image\/(png|jpeg|webp)$/)) throw new Error('รองรับเฉพาะไฟล์ PNG, JPG หรือ WEBP');
+    if (file.size > 2 * 1024 * 1024) throw new Error('ไฟล์โลโก้ต้องมีขนาดไม่เกิน 2 MB');
+    if (!isSupabaseConfigured) return fileToDataUrl(file);
+
+    const { error } = await supabase.storage.from(BRAND_BUCKET).upload(BRAND_LOGO_PATH, file, {
+      upsert: true,
+      contentType: file.type,
+      cacheControl: '60',
+    });
+    if (error) fail(error, 'อัปโหลดโลโก้ไม่สำเร็จ กรุณารัน MIGRATE_BRAND_LOGO.sql ก่อน');
+    const { data } = supabase.storage.from(BRAND_BUCKET).getPublicUrl(BRAND_LOGO_PATH);
+    return `${data.publicUrl}?v=${Date.now()}`;
+  },
+
+  async deleteBrandLogo(): Promise<void> {
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.storage.from(BRAND_BUCKET).remove([BRAND_LOGO_PATH]);
+    if (error && !String(error.message || '').toLowerCase().includes('not found')) fail(error, 'ลบโลโก้ไม่สำเร็จ');
   },
 
   async getHotels(): Promise<Hotel[]> {

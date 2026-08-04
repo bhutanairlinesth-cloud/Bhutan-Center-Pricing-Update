@@ -53,6 +53,7 @@ export interface GlobalSettings {
   agentMarginTHB?: number;
   groupDiscountMinPax?: number;
   groupDiscountPercent?: number;
+  logoUrl?: string;
 }
 
 export interface PricingInput {

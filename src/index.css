@@ -1145,3 +1145,147 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .quote-header .brand.has-uploaded-logo img,
   .invoice-header .brand.has-uploaded-logo img { height: 15mm !important; max-width: 62mm !important; }
 }
+
+/* ================================================================
+   v12 — CUSTOMER JOURNEY WORKSPACE
+   ================================================================ */
+.journey-shell { --journey-ink: #10251e; --journey-muted: #687a72; --journey-line: #dfe8e3; --journey-green: #0d5f49; --journey-soft: #eef6f2; }
+.journey-main { width: min(1480px, calc(100% - 56px)); }
+.journey-page-head { align-items: center; }
+.journey-page-head h1 { max-width: 900px; font-size: clamp(34px, 4.1vw, 58px); }
+.journey-stats .tracking-stat { min-height: 118px; }
+.journey-filter-tabs { margin-top: 24px; padding: 6px; display: flex; gap: 5px; overflow-x: auto; border: 1px solid var(--journey-line); border-radius: 17px; background: rgba(255,255,255,.86); box-shadow: 0 12px 32px rgba(22,54,42,.045); }
+.journey-filter-tabs button { min-height: 44px; padding: 0 18px; flex: 1 0 auto; border-radius: 12px; color: #61736b; font-size: 14px; font-weight: 750; white-space: nowrap; transition: .18s ease; }
+.journey-filter-tabs button:hover { color: #184d3d; background: #f2f7f4; }
+.journey-filter-tabs button.active { color: #fff; background: #125e49; box-shadow: 0 8px 20px rgba(18,94,73,.18); }
+.journey-panel { overflow: visible; background: transparent; border: 0; box-shadow: none; }
+.journey-toolbar { grid-template-columns: minmax(360px, 1fr) 250px; padding: 0; margin-bottom: 14px; background: transparent; border: 0; }
+.journey-toolbar .tracking-search, .journey-toolbar .tracking-filter { min-height: 54px; border-radius: 15px; box-shadow: 0 8px 24px rgba(20,52,40,.04); }
+.journey-list { display: grid; gap: 12px; }
+.journey-card { padding: 18px; display: grid; grid-template-columns: minmax(240px,1.3fr) minmax(220px,1.1fr) minmax(230px,1.15fr) minmax(190px,.85fr) auto; align-items: center; gap: 18px; border: 1px solid var(--journey-line); border-radius: 21px; background: #fff; box-shadow: 0 12px 36px rgba(23,53,42,.045); transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.journey-card:hover { transform: translateY(-1px); border-color: #cddbd4; box-shadow: 0 18px 48px rgba(23,53,42,.075); }
+.journey-card-customer { min-width: 0; display: grid; grid-template-columns: 48px minmax(0,1fr); gap: 13px; align-items: center; }
+.journey-card-customer > span { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 15px; color: #0b6149; background: linear-gradient(145deg,#e7f4ed,#f5faf7); font-size: 18px; font-weight: 850; }
+.journey-card-customer div, .journey-card-stage, .journey-card-action, .journey-card-payment { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.journey-card-customer b, .journey-card-stage small, .journey-card-action b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.journey-card-customer b { color: #15271f; font-size: 15px; }
+.journey-card-customer small, .journey-card-stage small, .journey-card-action small, .journey-card-payment small { color: #728179; font-size: 12px; }
+.journey-card-customer em, .journey-card-stage em, .journey-card-action em { color: #96a19b; font-size: 11px; font-style: normal; }
+.journey-card-action b { font-size: 13px; line-height: 1.4; }
+.journey-card-action em.overdue { color: #c33f37; font-weight: 750; }
+.journey-card-payment b { font-family: Inter, Arial, sans-serif; font-size: 16px; font-variant-numeric: tabular-nums; }
+.journey-card-payment b span { color: #9aa69f; font-size: 12px; font-weight: 650; }
+.journey-stage { width: fit-content; max-width: 100%; padding: 7px 10px; overflow: hidden; text-overflow: ellipsis; border-radius: 999px; font-size: 11px; font-weight: 850; white-space: nowrap; }
+.journey-stage.stage-sales { color: #7d5a16; background: #fff4d8; }
+.journey-stage.stage-booking { color: #175c86; background: #e8f4fb; }
+.journey-stage.stage-visa { color: #6449a0; background: #f0ecfb; }
+.journey-stage.stage-travel { color: #0b7153; background: #e5f6ef; }
+.journey-stage.stage-after { color: #5a6861; background: #edf1ef; }
+.journey-card-actions { display: grid; grid-template-columns: repeat(2,auto); gap: 7px; justify-content: end; }
+.journey-card-actions button { min-width: 39px; min-height: 39px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 11px; color: #4b6259; background: #eff4f1; font-size: 11px; font-weight: 800; }
+.journey-card-actions button:hover { color: #0e6049; background: #e4f0ea; }
+.journey-card-actions button.invoice-one { color: #785815; background: #fff3d8; }
+.journey-card-actions button.invoice-two { color: #574493; background: #f0edfa; }
+.journey-card-actions button.danger:hover { color: #b13f38; background: #fde9e7; }
+.journey-card-actions svg { width: 15px; height: 15px; }
+
+.journey-editor { display: grid; gap: 18px; }
+.journey-editor-summary { padding: 16px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; border-radius: 18px; color: #fff; background: linear-gradient(135deg,#0d4336,#11624c); }
+.journey-editor-summary > div { min-width: 0; padding: 13px 15px; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,.12); border-radius: 13px; background: rgba(255,255,255,.055); }
+.journey-editor-summary span { color: rgba(255,255,255,.63); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.journey-editor-summary strong { margin-top: 7px; overflow: hidden; text-overflow: ellipsis; font-size: 14px; white-space: nowrap; }
+.journey-editor-summary small { margin-top: 5px; color: #d4e8df; font-size: 11px; }
+.journey-workflow-section { border: 1px solid #dfe7e3; border-radius: 20px; background: #fff; box-shadow: 0 8px 28px rgba(23,50,40,.035); }
+.journey-section-title { grid-template-columns: 38px 40px minmax(0,1fr); }
+.journey-section-title > span { width: 38px; height: 38px; }
+.journey-section-title > i { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; color: #126149; background: #e9f4ef; font-style: normal; }
+.journey-section-title > i svg { width: 19px; height: 19px; }
+.journey-section-title h3 { font-size: 16px; }
+.journey-section-title p { font-size: 12px; }
+.journey-money-grid { margin-top: 14px; }
+.journey-check-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; }
+.milestone-field { padding: 10px; display: flex; align-items: center; justify-content: space-between; gap: 9px; border: 1px solid #dfe6e2; border-radius: 14px; background: #fafcfb; }
+.milestone-field.done { border-color: #bedccc; background: #f0f8f4; }
+.milestone-field > div { min-width: 0; display: grid; grid-template-columns: 34px minmax(0,1fr); gap: 9px; align-items: center; }
+.milestone-check { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: #8c9a93; background: #edf1ef; }
+.milestone-field.done .milestone-check { color: #fff; background: #16805e; }
+.milestone-check svg { width: 16px; height: 16px; }
+.milestone-field label { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.milestone-field label b { overflow: hidden; text-overflow: ellipsis; color: #24372f; font-size: 12px; white-space: nowrap; }
+.milestone-field input { width: 145px; height: 29px; padding: 0; border: 0; outline: 0; color: #5d6d65; background: transparent; font-size: 11px; }
+.milestone-field > button { min-height: 34px; padding: 0 10px; flex: 0 0 auto; border-radius: 9px; color: #126149; background: #e8f3ed; font-size: 10px; font-weight: 800; }
+.milestone-field.done > button { color: #65766d; background: #e6ece9; }
+.journey-invoice-card { margin-top: 14px; }
+.journey-invoice-card > .secondary-button { margin-top: 12px; }
+.payment-entry-form { display: grid; grid-template-columns: 1.1fr 1fr .9fr 1.1fr minmax(180px,1.2fr) auto; gap: 10px; align-items: end; }
+.payment-entry-form .field { margin: 0; }
+.payment-entry-form .payment-add-button { min-height: 48px; white-space: nowrap; }
+.payment-ledger { margin-top: 15px; overflow: hidden; border: 1px solid #dfe6e2; border-radius: 14px; }
+.payment-ledger-head, .payment-ledger-row { display: grid; grid-template-columns: 130px 1.1fr 1.2fr 150px 44px; align-items: center; }
+.payment-ledger-head { min-height: 40px; color: #6c7b73; background: #f3f7f5; font-size: 10px; font-weight: 850; text-transform: uppercase; }
+.payment-ledger-head span, .payment-ledger-row > span, .payment-ledger-row > strong { padding: 0 13px; }
+.payment-ledger-row { min-height: 52px; border-top: 1px solid #e7ece9; color: #33463e; font-size: 12px; }
+.payment-ledger-row strong { text-align: right; font-family: Inter,Arial,sans-serif; font-variant-numeric: tabular-nums; }
+.payment-ledger-row strong.negative { color: #c1433b; }
+.payment-ledger-row button { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; color: #a1453f; background: #fbe9e7; }
+.payment-ledger-row button svg { width: 14px; height: 14px; }
+.payment-ledger-empty { padding: 24px; text-align: center; color: #91a099; font-size: 12px; }
+.payment-ledger-total { min-height: 55px; padding: 0 16px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; border-top: 1px solid #dfe6e2; background: #f8faf9; }
+.payment-ledger-total span { color: #738279; font-size: 11px; }
+.payment-ledger-total strong { min-width: 125px; font-family: Inter,Arial,sans-serif; font-size: 14px; font-variant-numeric: tabular-nums; }
+
+.journey-invoice-sheet { min-height: 297mm; }
+.journey-invoice-package { margin-top: 14px; overflow: hidden; border: 1px solid #dce4df; border-radius: 12px; }
+.journey-invoice-package h3, .journey-payment-breakdown h3 { margin: 0; padding: 10px 13px; color: #fff; background: #104b3c; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.journey-invoice-package-head, .journey-invoice-package-row { display: grid; grid-template-columns: minmax(0,1fr) 48px 48px 105px 120px; align-items: stretch; }
+.journey-invoice-package-head { min-height: 34px; color: #66776e; background: #f2f6f4; font-size: 8.5px; font-weight: 850; text-transform: uppercase; }
+.journey-invoice-package-head span, .journey-invoice-package-row > span { padding: 0 9px; display: flex; align-items: center; border-right: 1px solid #e1e7e3; }
+.journey-invoice-package-head span:last-child, .journey-invoice-package-row > span:last-child { border-right: 0; justify-content: flex-end; }
+.journey-invoice-package-row { min-height: 72px; }
+.journey-invoice-package-row > span { font-family: Inter,Arial,sans-serif; font-size: 10px; font-variant-numeric: tabular-nums; }
+.journey-invoice-package-row > span:first-child { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; font-family: inherit; }
+.journey-invoice-package-row b { font-size: 11px; }
+.journey-invoice-package-row small { margin-top: 4px; color: #75837c; font-size: 8.5px; }
+.journey-payment-breakdown { margin-top: 13px; overflow: hidden; border: 1px solid #dce4df; border-radius: 12px; }
+.journey-payment-breakdown > div { min-height: 38px; padding: 0 13px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid #e5eae7; font-size: 10px; }
+.journey-payment-breakdown > div b { font-family: Inter,Arial,sans-serif; font-size: 11px; font-variant-numeric: tabular-nums; }
+.journey-payment-breakdown > div.deduction b { color: #c13f37; }
+.journey-payment-breakdown .journey-payment-due { min-height: 48px; color: #17382d; background: #fff6bf; font-weight: 850; }
+.journey-payment-breakdown .journey-payment-due strong { font-family: Inter,Arial,sans-serif; font-size: 14px; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1220px) {
+  .journey-card { grid-template-columns: 1.2fr 1fr 1.1fr .9fr; }
+  .journey-card-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; border-top: 1px solid #edf1ef; padding-top: 12px; }
+  .payment-entry-form { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+@media (max-width: 860px) {
+  .journey-main { width: min(100% - 28px,1480px); }
+  .journey-toolbar { grid-template-columns: 1fr; }
+  .journey-card { grid-template-columns: 1fr 1fr; }
+  .journey-card-customer { grid-column: 1 / -1; }
+  .journey-card-actions { grid-column: 1 / -1; }
+  .journey-editor-summary, .journey-check-grid { grid-template-columns: 1fr; }
+  .payment-entry-form { grid-template-columns: 1fr 1fr; }
+  .payment-entry-form .payment-note, .payment-entry-form .payment-add-button { grid-column: 1 / -1; }
+  .payment-ledger { overflow-x: auto; }
+  .payment-ledger-head, .payment-ledger-row { min-width: 720px; }
+}
+@media (max-width: 560px) {
+  .journey-card { grid-template-columns: 1fr; }
+  .journey-card-stage, .journey-card-action, .journey-card-payment { padding-top: 10px; border-top: 1px solid #edf1ef; }
+  .journey-card-actions { justify-content: stretch; display: grid; grid-template-columns: 1fr 1fr; }
+  .journey-card-actions button { width: 100%; }
+  .payment-entry-form { grid-template-columns: 1fr; }
+  .payment-entry-form .payment-note, .payment-entry-form .payment-add-button { grid-column: auto; }
+  .milestone-field { align-items: stretch; flex-direction: column; }
+  .milestone-field > button { width: 100%; }
+  .journey-invoice-package-head, .journey-invoice-package-row { grid-template-columns: minmax(0,1fr) 40px 40px 80px 92px; }
+}
+
+@media print {
+  .journey-invoice-sheet { width: 210mm !important; min-height: 297mm !important; padding: 13mm 14mm 10mm !important; }
+  .journey-invoice-package { margin-top: 10px !important; }
+  .journey-payment-breakdown { margin-top: 10px !important; }
+  .journey-payment-breakdown > div { min-height: 34px !important; }
+  .journey-invoice-package-row { min-height: 64px !important; }
+}

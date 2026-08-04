@@ -103,6 +103,8 @@ export interface CustomerDetails {
 
 export type LeadSource = 'LINE OA' | 'LINE' | 'Facebook' | 'Call in' | 'Referral' | 'Walk in' | 'Other';
 export type TrackingStatus = 'new' | 'following' | 'quote_sent' | 'won' | 'lost' | 'completed';
+export type JourneyStage = 'lead' | 'quotation_sent' | 'booking_confirmed' | 'flight_reserved' | 'invoice_1_sent' | 'first_payment_received' | 'ticket_sent' | 'documents_sent_to_land' | 'invoice_2_ready' | 'visa_received' | 'visa_sent' | 'full_payment_received' | 'itinerary_sent' | 'ready_to_travel' | 'traveling' | 'returned' | 'feedback_requested' | 'feedback_received' | 'closed' | 'cancelled';
+export type PaymentTransactionType = 'ticket_deposit' | 'package_balance' | 'refund' | 'other';
 export type PaymentStageStatus = 'pending' | 'invoiced' | 'paid' | 'overdue' | 'cancelled';
 export type InvoiceInstallment = 'deposit' | 'balance';
 
@@ -137,6 +139,42 @@ export interface CustomerTracking {
   status: TrackingStatus;
   salesOwnerId: string;
   salesOwnerName: string;
+  note: string;
+  quotationSentAt: string;
+  bookingConfirmedAt: string;
+  passportReceivedAt: string;
+  photoReceivedAt: string;
+  passengerNames: string;
+  flightPnr: string;
+  flightReservedAt: string;
+  invoice1SentAt: string;
+  firstPaymentReceivedAt: string;
+  ticketSentAt: string;
+  documentsSentToLandAt: string;
+  invoice2PreparedAt: string;
+  visaReceivedAt: string;
+  visaSentAt: string;
+  fullPaymentReceivedAt: string;
+  itinerarySentAt: string;
+  readyToTravelAt: string;
+  tripReturnedAt: string;
+  feedbackRequestedAt: string;
+  feedbackReceivedAt: string;
+  feedbackNote: string;
+  nextAction: string;
+  nextActionDueDate: string;
+  closedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentTransaction {
+  id: string;
+  trackingId: string;
+  type: PaymentTransactionType;
+  amount: number;
+  paidAt: string;
+  reference: string;
   note: string;
   createdAt: string;
   updatedAt: string;

@@ -1,4 +1,4 @@
-import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, TourPackage, User } from '../types';
+import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, TourPackage, User } from '../types';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { mockDb } from './mockDb';
 
@@ -136,6 +136,30 @@ const mapTracking = (row: any): CustomerTracking => ({
   salesOwnerId: row.sales_owner_id || '',
   salesOwnerName: row.sales_owner_name || '',
   note: row.note || '',
+  quotationSentAt: row.quotation_sent_at || '',
+  bookingConfirmedAt: row.booking_confirmed_at || '',
+  passportReceivedAt: row.passport_received_at || '',
+  photoReceivedAt: row.photo_received_at || '',
+  passengerNames: row.passenger_names || '',
+  flightPnr: row.flight_pnr || '',
+  flightReservedAt: row.flight_reserved_at || '',
+  invoice1SentAt: row.invoice_1_sent_at || '',
+  firstPaymentReceivedAt: row.first_payment_received_at || '',
+  ticketSentAt: row.ticket_sent_at || '',
+  documentsSentToLandAt: row.documents_sent_to_land_at || '',
+  invoice2PreparedAt: row.invoice_2_prepared_at || '',
+  visaReceivedAt: row.visa_received_at || '',
+  visaSentAt: row.visa_sent_at || '',
+  fullPaymentReceivedAt: row.full_payment_received_at || '',
+  itinerarySentAt: row.itinerary_sent_at || '',
+  readyToTravelAt: row.ready_to_travel_at || '',
+  tripReturnedAt: row.trip_returned_at || '',
+  feedbackRequestedAt: row.feedback_requested_at || '',
+  feedbackReceivedAt: row.feedback_received_at || '',
+  feedbackNote: row.feedback_note || '',
+  nextAction: row.next_action || '',
+  nextActionDueDate: row.next_action_due_date || '',
+  closedAt: row.closed_at || '',
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -172,6 +196,30 @@ const trackingRow = (item: CustomerTracking) => ({
   sales_owner_id: item.salesOwnerId || null,
   sales_owner_name: item.salesOwnerName,
   note: item.note,
+  quotation_sent_at: item.quotationSentAt || null,
+  booking_confirmed_at: item.bookingConfirmedAt || null,
+  passport_received_at: item.passportReceivedAt || null,
+  photo_received_at: item.photoReceivedAt || null,
+  passenger_names: item.passengerNames,
+  flight_pnr: item.flightPnr,
+  flight_reserved_at: item.flightReservedAt || null,
+  invoice_1_sent_at: item.invoice1SentAt || null,
+  first_payment_received_at: item.firstPaymentReceivedAt || null,
+  ticket_sent_at: item.ticketSentAt || null,
+  documents_sent_to_land_at: item.documentsSentToLandAt || null,
+  invoice_2_prepared_at: item.invoice2PreparedAt || null,
+  visa_received_at: item.visaReceivedAt || null,
+  visa_sent_at: item.visaSentAt || null,
+  full_payment_received_at: item.fullPaymentReceivedAt || null,
+  itinerary_sent_at: item.itinerarySentAt || null,
+  ready_to_travel_at: item.readyToTravelAt || null,
+  trip_returned_at: item.tripReturnedAt || null,
+  feedback_requested_at: item.feedbackRequestedAt || null,
+  feedback_received_at: item.feedbackReceivedAt || null,
+  feedback_note: item.feedbackNote,
+  next_action: item.nextAction,
+  next_action_due_date: item.nextActionDueDate || null,
+  closed_at: item.closedAt || null,
   created_at: item.createdAt,
   updated_at: new Date().toISOString(),
 });
@@ -201,6 +249,30 @@ const invoiceRow = (item: PaymentInvoice) => ({
   amount: item.amount,
   status: item.status,
   paid_at: item.paidAt || null,
+  note: item.note,
+  created_at: item.createdAt,
+  updated_at: new Date().toISOString(),
+});
+
+const mapPaymentTransaction = (row: any): PaymentTransaction => ({
+  id: row.id,
+  trackingId: row.tracking_id,
+  type: row.type || 'other',
+  amount: Number(row.amount || 0),
+  paidAt: row.paid_at || '',
+  reference: row.reference || '',
+  note: row.note || '',
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const paymentTransactionRow = (item: PaymentTransaction) => ({
+  id: item.id,
+  tracking_id: item.trackingId,
+  type: item.type,
+  amount: item.amount,
+  paid_at: item.paidAt || null,
+  reference: item.reference,
   note: item.note,
   created_at: item.createdAt,
   updated_at: new Date().toISOString(),
@@ -351,6 +423,23 @@ export const database = {
     if (!isSupabaseConfigured) return void mockDb.deleteInvoice(id);
     const { error } = await supabase.from('payment_invoices').delete().eq('id', id);
     if (error) fail(error, 'ลบ Invoice ไม่สำเร็จ');
+  },
+
+  async getPaymentTransactions(): Promise<PaymentTransaction[]> {
+    if (!isSupabaseConfigured) return mockDb.getPaymentTransactions();
+    const { data, error } = await supabase.from('payment_transactions').select('*').order('paid_at', { ascending: false });
+    if (error) { if (isMissingTable(error)) return []; fail(error, 'โหลดประวัติรับชำระไม่สำเร็จ'); }
+    return (data || []).map(mapPaymentTransaction);
+  },
+  async savePaymentTransaction(item: PaymentTransaction): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.savePaymentTransaction(item);
+    const { error } = await supabase.from('payment_transactions').upsert(paymentTransactionRow(item));
+    if (error) fail(error, 'บันทึกรายการรับชำระไม่สำเร็จ');
+  },
+  async deletePaymentTransaction(id: string): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.deletePaymentTransaction(id);
+    const { error } = await supabase.from('payment_transactions').delete().eq('id', id);
+    if (error) fail(error, 'ลบรายการรับชำระไม่สำเร็จ');
   },
 
 };

@@ -117,7 +117,21 @@ export const mockDb = {
   getSettings: () => ({ ...DEFAULT_SETTINGS, ...read<GlobalSettings>(KEYS.settings, DEFAULT_SETTINGS) }),
   saveSettings(settings: GlobalSettings) { localStorage.setItem(KEYS.settings, JSON.stringify(settings)); },
 
-  getTrackings: (): CustomerTracking[] => read<CustomerTracking[]>(KEYS.trackings, []).map((item): CustomerTracking => ({ ...item, singleRoomCount: item.singleRoomCount ?? 0, singleSupplementPerPerson: item.singleSupplementPerPerson ?? 0, singleSupplementTotal: item.singleSupplementTotal ?? 0 })),
+  getTrackings: (): CustomerTracking[] => read<CustomerTracking[]>(KEYS.trackings, []).map((item): CustomerTracking => ({
+    ...item,
+    singleRoomCount: item.singleRoomCount ?? 0,
+    singleSupplementPerPerson: item.singleSupplementPerPerson ?? 0,
+    singleSupplementTotal: item.singleSupplementTotal ?? 0,
+    landInvoiceNo: item.landInvoiceNo ?? '',
+    landInvoiceReceivedAt: item.landInvoiceReceivedAt ?? '',
+    landInvoiceAmountUSD: item.landInvoiceAmountUSD ?? 0,
+    landExchangeRate: item.landExchangeRate ?? 0,
+    landTransferFeeTHB: item.landTransferFeeTHB ?? 0,
+    landPayment: item.landPayment ?? 0,
+    landPaidAt: item.landPaidAt ?? '',
+    landTransferReference: item.landTransferReference ?? '',
+    profitAmount: item.profitAmount ?? 0,
+  })),
   saveTracking(item: CustomerTracking) {
     const list = this.getTrackings();
     const index = list.findIndex((x) => x.id === item.id);

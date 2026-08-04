@@ -47,3 +47,13 @@ supabase/COMPLETE_SETUP.sql
 ก่อนใช้งานเมนูแก้ไขส่วนลดกลุ่ม ให้เปิดไฟล์ `supabase/MIGRATE_GROUP_DISCOUNT_SETTINGS.sql` แล้วนำไป Run หนึ่งครั้งที่ Supabase > SQL Editor จากนั้นอัปโหลดโค้ดขึ้น GitHub และรอ Vercel Deploy ใหม่
 
 เมนูแก้ไขอยู่ที่ **หลังบ้าน > ตั้งค่าราคา > ส่วนลดเมื่อเดินทางเป็นกลุ่ม** โดยค่าเริ่มต้นคือเดินทางตั้งแต่ 10 ท่านขึ้นไป ลดราคาตั๋วเครื่องบิน 10% ต่อท่าน
+
+## อัปเดต v12.2 — LAND Invoice USD
+
+หลังรัน Migration เดิมทั้งหมดแล้ว ให้รัน:
+
+```text
+supabase/MIGRATE_LAND_INVOICE_USD_V12_2.sql
+```
+
+รายละเอียดดูที่ `README_V12_2_LAND_PAYMENT_USD_TH.md`

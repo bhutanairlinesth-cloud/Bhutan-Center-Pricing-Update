@@ -1345,3 +1345,99 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .journey-invoice-single-row { min-height: 45px !important; }
   .journey-invoice-package-total { min-height: 37px !important; }
 }
+
+/* v12.2 — Land invoice (USD), transfer-day FX and realized profit */
+.land-invoice-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.land-invoice-summary > div {
+  min-height: 88px;
+  padding: 16px 18px;
+  border: 1px solid #dfe8e3;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfdfc 0%, #f3f8f5 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+}
+.land-invoice-summary span,
+.land-profit-breakdown span {
+  color: #718078;
+  font-size: 13px;
+  font-weight: 600;
+}
+.land-invoice-summary strong {
+  color: #163e33;
+  font-size: 18px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.invoice-requirement-note {
+  display: block;
+  margin-top: 10px;
+  color: #a56c15;
+  font-size: 13px;
+  font-weight: 650;
+}
+.land-cost-pending strong {
+  font-size: 16px !important;
+}
+.land-payment-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid #f0d8a9;
+  border-radius: 14px;
+  background: #fffaf0;
+  color: #7e5718;
+}
+.land-payment-warning svg { width: 20px; height: 20px; flex: 0 0 auto; margin-top: 2px; }
+.land-payment-warning div { display: flex; flex-direction: column; gap: 3px; }
+.land-payment-warning b { font-size: 14px; }
+.land-payment-warning span { font-size: 13px; line-height: 1.55; }
+.land-payment-total {
+  background: linear-gradient(145deg, #edf8f3, #f8fbf9) !important;
+  border-color: #cfe5da !important;
+}
+.land-profit-breakdown {
+  margin-top: 18px;
+  border: 1px solid #dce5e0;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+}
+.land-profit-breakdown > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+  border-bottom: 1px solid #edf1ef;
+}
+.land-profit-breakdown > div:last-child { border-bottom: 0; }
+.land-profit-breakdown b,
+.land-profit-breakdown strong {
+  color: #1d332c;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.land-profit-breakdown .deduction b { color: #a3443d; }
+.land-profit-total {
+  background: linear-gradient(135deg, #0f4c3b 0%, #17664f 100%);
+}
+.land-profit-total span,
+.land-profit-total strong { color: #fff; }
+.land-profit-total strong { font-size: 22px; }
+.land-profit-total.negative { background: linear-gradient(135deg, #7d2926 0%, #a33f39 100%); }
+
+@media (max-width: 800px) {
+  .land-invoice-summary { grid-template-columns: 1fr; }
+  .land-invoice-summary > div { min-height: 72px; }
+  .land-profit-breakdown > div { align-items: flex-start; }
+}

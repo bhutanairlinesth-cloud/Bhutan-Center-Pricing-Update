@@ -118,7 +118,7 @@ export interface CustomerDetails {
 
 export type LeadSource = 'LINE OA' | 'LINE' | 'Facebook' | 'Call in' | 'Referral' | 'Walk in' | 'Other';
 export type TrackingStatus = 'new' | 'following' | 'quote_sent' | 'won' | 'lost' | 'completed';
-export type JourneyStage = 'lead' | 'quotation_sent' | 'booking_confirmed' | 'flight_reserved' | 'invoice_1_sent' | 'first_payment_received' | 'ticket_sent' | 'documents_sent_to_land' | 'invoice_2_ready' | 'visa_received' | 'visa_sent' | 'full_payment_received' | 'itinerary_sent' | 'ready_to_travel' | 'traveling' | 'returned' | 'feedback_requested' | 'feedback_received' | 'closed' | 'cancelled';
+export type JourneyStage = 'lead' | 'quotation_sent' | 'booking_confirmed' | 'flight_reserved' | 'invoice_1_sent' | 'first_payment_received' | 'ticket_sent' | 'documents_sent_to_land' | 'land_invoice_received' | 'invoice_2_ready' | 'visa_received' | 'visa_sent' | 'full_payment_received' | 'land_payment_pending' | 'land_paid' | 'itinerary_sent' | 'ready_to_travel' | 'traveling' | 'returned' | 'feedback_requested' | 'feedback_received' | 'closed' | 'cancelled';
 export type PaymentTransactionType = 'ticket_deposit' | 'package_balance' | 'refund' | 'other';
 export type PaymentStageStatus = 'pending' | 'invoiced' | 'paid' | 'overdue' | 'cancelled';
 export type InvoiceInstallment = 'deposit' | 'balance';
@@ -146,7 +146,14 @@ export interface CustomerTracking {
   totalAmount: number;
   ticketAmount: number;
   airportTaxAmount: number;
+  landInvoiceNo: string;
+  landInvoiceReceivedAt: string;
+  landInvoiceAmountUSD: number;
+  landExchangeRate: number;
+  landTransferFeeTHB: number;
   landPayment: number;
+  landPaidAt: string;
+  landTransferReference: string;
   profitAmount: number;
   depositAmount: number;
   depositDueDate: string;

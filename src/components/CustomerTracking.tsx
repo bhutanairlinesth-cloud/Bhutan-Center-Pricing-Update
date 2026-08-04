@@ -107,10 +107,12 @@ function getJourneyStage(item: CustomerTracking): JourneyStage {
   if (item.travelStartDate && item.travelEndDate && today >= item.travelStartDate && today <= item.travelEndDate) return 'traveling';
   if (item.readyToTravelAt) return 'ready_to_travel';
   if (item.itinerarySentAt) return 'itinerary_sent';
-  if (item.fullPaymentReceivedAt || item.balanceStatus === 'paid') return 'full_payment_received';
+  if (item.landPaidAt) return 'land_paid';
+  if (item.fullPaymentReceivedAt || item.balanceStatus === 'paid') return 'land_payment_pending';
   if (item.visaSentAt) return 'visa_sent';
   if (item.visaReceivedAt) return 'visa_received';
   if (item.invoice2PreparedAt || item.balanceStatus === 'invoiced') return 'invoice_2_ready';
+  if (item.landInvoiceReceivedAt || item.landInvoiceAmountUSD > 0) return 'land_invoice_received';
   if (item.documentsSentToLandAt) return 'documents_sent_to_land';
   if (item.ticketSentAt) return 'ticket_sent';
   if (item.firstPaymentReceivedAt || item.depositStatus === 'paid') return 'first_payment_received';
@@ -123,8 +125,8 @@ function getJourneyStage(item: CustomerTracking): JourneyStage {
 
 const stageGroup: Record<JourneyStage, 'sales' | 'booking' | 'visa' | 'travel' | 'after'> = {
   lead: 'sales', quotation_sent: 'sales', booking_confirmed: 'booking', flight_reserved: 'booking', invoice_1_sent: 'booking',
-  first_payment_received: 'booking', ticket_sent: 'booking', documents_sent_to_land: 'visa', invoice_2_ready: 'visa',
-  visa_received: 'visa', visa_sent: 'visa', full_payment_received: 'visa', itinerary_sent: 'visa', ready_to_travel: 'travel',
+  first_payment_received: 'booking', ticket_sent: 'booking', documents_sent_to_land: 'visa', land_invoice_received: 'visa', invoice_2_ready: 'visa',
+  visa_received: 'visa', visa_sent: 'visa', full_payment_received: 'visa', land_payment_pending: 'visa', land_paid: 'visa', itinerary_sent: 'visa', ready_to_travel: 'travel',
   traveling: 'travel', returned: 'after', feedback_requested: 'after', feedback_received: 'after', closed: 'after', cancelled: 'after',
 };
 
@@ -134,8 +136,9 @@ function stageLabel(stage: JourneyStage, th: boolean) {
     booking_confirmed: ['ยืนยันจอง / รอเอกสาร', 'Booking confirmed / documents'], flight_reserved: ['จองตั๋วแล้ว / มี PNR', 'Flight reserved / PNR'],
     invoice_1_sent: ['ส่ง Invoice 1 แล้ว', 'Invoice 1 sent'], first_payment_received: ['รับชำระค่าตั๋วแล้ว', 'Ticket payment received'],
     ticket_sent: ['ส่งตั๋วให้ลูกค้าแล้ว', 'Ticket sent'], documents_sent_to_land: ['ส่งเอกสารให้ Land แล้ว', 'Documents sent to land'],
-    invoice_2_ready: ['จัดทำ Invoice 2 แล้ว', 'Invoice 2 prepared'], visa_received: ['ได้รับวีซ่าแล้ว', 'Visa received'],
+    land_invoice_received: ['ได้รับ Land Invoice (USD)', 'Land invoice received (USD)'], invoice_2_ready: ['จัดทำ Invoice 2 แล้ว', 'Invoice 2 prepared'], visa_received: ['ได้รับวีซ่าแล้ว', 'Visa received'],
     visa_sent: ['ส่งวีซ่า + Invoice 2 แล้ว', 'Visa + Invoice 2 sent'], full_payment_received: ['ชำระครบแล้ว', 'Full payment received'],
+    land_payment_pending: ['ชำระครบ / รอโอน LAND', 'Full payment / land transfer pending'], land_paid: ['โอน LAND แล้ว', 'Land supplier paid'],
     itinerary_sent: ['ส่ง Itinerary แล้ว', 'Itinerary sent'], ready_to_travel: ['พร้อมเดินทาง', 'Ready to travel'],
     traveling: ['กำลังเดินทาง', 'Traveling'], returned: ['เดินทางกลับแล้ว', 'Returned'],
     feedback_requested: ['รอ Feedback', 'Feedback requested'], feedback_received: ['ได้รับ Feedback แล้ว', 'Feedback received'],
@@ -155,9 +158,10 @@ function nextRecommendedAction(item: CustomerTracking, th: boolean) {
     lead: ['แจ้งราคาแพ็กเกจให้ลูกค้า', 'Send package quotation'], quotation_sent: ['ติดตามการยืนยันวันเดินทางและแพ็กเกจ', 'Follow up booking confirmation'],
     booking_confirmed: ['รับ Passport และรูปถ่ายให้ครบ', 'Collect passport and photo'], flight_reserved: ['ออกและส่ง Invoice 1 ค่าตั๋ว', 'Issue Invoice 1 for airfare'],
     invoice_1_sent: ['ติดตามชำระค่าตั๋วตาม Deadline', 'Follow up ticket payment'], first_payment_received: ['ส่งตั๋วเครื่องบินให้ลูกค้า', 'Send flight tickets'],
-    ticket_sent: ['ส่ง Passport + รูป + ตั๋วให้ Land', 'Submit passport, photo and ticket to land'], documents_sent_to_land: ['จัดทำ Invoice 2 ค่าแพ็กเกจคงเหลือ', 'Prepare Invoice 2 for package balance'],
-    invoice_2_ready: ['ติดตามวีซ่าจาก Land', 'Follow up visa with land'], visa_received: ['ส่งวีซ่าและ Invoice 2 ให้ลูกค้า', 'Send visa and Invoice 2'],
-    visa_sent: ['ติดตามชำระค่าแพ็กเกจส่วนที่เหลือ', 'Follow up final package payment'], full_payment_received: ['จัดทำและส่ง Itinerary', 'Prepare and send itinerary'],
+    ticket_sent: ['ส่ง Passport + รูป + ตั๋วให้ Land', 'Submit passport, photo and ticket to land'], documents_sent_to_land: ['ติดตาม Land Invoice และยอด USD', 'Follow up land invoice and USD amount'],
+    land_invoice_received: ['ออก Invoice 2 ค่าแพ็กเกจคงเหลือ', 'Issue Invoice 2 for package balance'], invoice_2_ready: ['ติดตามวีซ่าจาก Land', 'Follow up visa with land'], visa_received: ['ส่งวีซ่าและ Invoice 2 ให้ลูกค้า', 'Send visa and Invoice 2'],
+    visa_sent: ['ติดตามชำระค่าแพ็กเกจส่วนที่เหลือ', 'Follow up final package payment'], full_payment_received: ['บันทึกอัตราแลกเปลี่ยนและโอนชำระ LAND', 'Record exchange rate and pay land supplier'],
+    land_payment_pending: ['โอนชำระ LAND ตาม Invoice USD', 'Pay land supplier against USD invoice'], land_paid: ['จัดทำและส่ง Itinerary', 'Prepare and send itinerary'],
     itinerary_sent: ['ตรวจเอกสารทั้งหมดและทำสถานะพร้อมเดินทาง', 'Verify documents and mark ready'], ready_to_travel: ['ติดตามจนถึงวันเดินทาง', 'Monitor until departure'],
     traveling: ['ดูแลระหว่างเดินทาง', 'Support during trip'], returned: ['ขอ Feedback จากลูกค้า', 'Request customer feedback'],
     feedback_requested: ['ติดตาม Feedback', 'Follow up feedback'], feedback_received: ['ปิดจบงาน', 'Close the case'], closed: ['ดำเนินการครบแล้ว', 'Workflow complete'], cancelled: ['รายการยกเลิก', 'Cancelled'],
@@ -178,7 +182,7 @@ export function CustomerTrackingWorkspace(props: Props) {
     const q = search.trim().toLowerCase();
     return props.trackings.filter((item) => {
       const stage = getJourneyStage(item);
-      const matchSearch = !q || [item.opportunityName, item.customerName, item.phone, item.email, item.packageName, item.airline, item.flightPnr, item.landSupplier]
+      const matchSearch = !q || [item.opportunityName, item.customerName, item.phone, item.email, item.packageName, item.airline, item.flightPnr, item.landSupplier, item.landInvoiceNo, item.landTransferReference]
         .join(' ').toLowerCase().includes(q);
       const matchGroup = groupFilter === 'all' || stageGroup[stage] === groupFilter;
       const matchPayment = paymentFilter === 'all' || paymentSummary(item, props.payments) === paymentFilter;
@@ -200,7 +204,8 @@ export function CustomerTrackingWorkspace(props: Props) {
       id: makeId('crm'), opportunityName: '', customerName: '', phone: '', email: '', leadSource: 'LINE OA', landSupplier: '', airline: 'Bhutan Airlines',
       travelStartDate: '', travelEndDate: '', packageId: first?.id || '', packageName: first?.name || '', hotelCategory: '3 Stars', passengerCount: 2,
       channel: 'retail', sellingPricePerPerson: 0, singleRoomCount: 0, singleSupplementPerPerson: 0, singleSupplementTotal: 0, totalAmount: 0, ticketAmount: 0, airportTaxAmount: props.settings.airportTaxTHB * 2,
-      landPayment: 0, profitAmount: 0, depositAmount: 0, depositDueDate: '', depositStatus: 'pending', balanceAmount: 0, balanceDueDate: '', balanceStatus: 'pending',
+      landInvoiceNo: '', landInvoiceReceivedAt: '', landInvoiceAmountUSD: 0, landExchangeRate: 0, landTransferFeeTHB: 0, landPayment: 0, landPaidAt: '', landTransferReference: '', profitAmount: 0,
+      depositAmount: 0, depositDueDate: '', depositStatus: 'pending', balanceAmount: 0, balanceDueDate: '', balanceStatus: 'pending',
       status: 'new', salesOwnerId: props.currentUser.id, salesOwnerName: props.currentUser.name, note: '', quotationSentAt: '', bookingConfirmedAt: '',
       passportReceivedAt: '', photoReceivedAt: '', passengerNames: '', flightPnr: '', flightReservedAt: '', invoice1SentAt: '', firstPaymentReceivedAt: '',
       ticketSentAt: '', documentsSentToLandAt: '', invoice2PreparedAt: '', visaReceivedAt: '', visaSentAt: '', fullPaymentReceivedAt: '', itinerarySentAt: '',
@@ -210,6 +215,10 @@ export function CustomerTrackingWorkspace(props: Props) {
   }
 
   async function issueInvoice(tracking: CustomerTracking, installment: InvoiceInstallment) {
+    if (installment === 'balance' && !(tracking.landInvoiceReceivedAt || tracking.landInvoiceAmountUSD > 0)) {
+      window.alert(th ? 'กรุณาบันทึก Land Invoice และยอด USD ก่อนออก Invoice 2' : 'Please record the land invoice and USD amount before issuing Invoice 2.');
+      return;
+    }
     const existing = props.invoices.find((x) => x.trackingId === tracking.id && x.installment === installment);
     const now = new Date().toISOString();
     const paidTicket = ticketPaidAmount(tracking, props.payments);
@@ -334,12 +343,26 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         singleSupplementPerPerson: perPerson,
         singleSupplementTotal: nextTotal,
         totalAmount: Math.max(0, current.totalAmount + difference),
-        landPayment: Math.max(0, current.landPayment + difference),
       };
     });
   }
   const selectedPackage = packages.find((x) => x.id === currentForm.packageId);
   const currentStage = getJourneyStage(currentForm);
+
+  function updateLandFinancials(patch: Partial<Pick<CustomerTracking, 'landInvoiceAmountUSD' | 'landExchangeRate' | 'landTransferFeeTHB'>>) {
+    setForm((current) => {
+      if (!current) return current;
+      const next = { ...current, ...patch };
+      const usd = Math.max(0, next.landInvoiceAmountUSD || 0);
+      const rate = Math.max(0, next.landExchangeRate || 0);
+      const fee = Math.max(0, next.landTransferFeeTHB || 0);
+      const landPayment = usd > 0 && rate > 0 ? Math.round((usd * rate + fee) * 100) / 100 : 0;
+      const profitAmount = next.landPaidAt && landPayment > 0
+        ? next.totalAmount - next.ticketAmount - next.airportTaxAmount - landPayment
+        : 0;
+      return { ...next, landPayment, profitAmount };
+    });
+  }
 
   function syncDates(start: string, packageNights = selectedPackage?.nights || 0) {
     setForm((current) => current ? ({ ...current, travelStartDate: start, travelEndDate: start ? addDays(start, packageNights) : '', balanceDueDate: start ? minusOneMonth(start) : '' }) : current);
@@ -357,7 +380,6 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         singleSupplementPerPerson: 0,
         singleSupplementTotal: 0,
         totalAmount: Math.max(0, current.totalAmount - oldSingleTotal),
-        landPayment: Math.max(0, current.landPayment - oldSingleTotal),
       };
     });
   }
@@ -371,7 +393,6 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         singleSupplementPerPerson: 0,
         singleSupplementTotal: 0,
         totalAmount: Math.max(0, current.totalAmount - oldSingleTotal),
-        landPayment: Math.max(0, current.landPayment - oldSingleTotal),
       };
     });
   }
@@ -390,8 +411,8 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     if (!result) return;
     const ticketAmount = result.airTicketPerPerson * result.passengerCount;
     const airportTaxAmount = result.airportTaxPerPerson * result.passengerCount;
-    const landPayment = (result.groundCostTHBPerPerson + result.visaTHBPerPerson) * result.passengerCount + result.singleSupplementTotal;
     const depositAmount = ticketAmount + airportTaxAmount;
+    const actualLandPayment = Math.max(0, currentForm.landPayment || 0);
     setForm((current) => current ? ({
       ...current,
       packageName: result.packageName,
@@ -402,8 +423,8 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       totalAmount: result.groupTotal,
       ticketAmount,
       airportTaxAmount,
-      landPayment,
-      profitAmount: Math.max(0, result.groupTotal - ticketAmount - airportTaxAmount - landPayment),
+      landPayment: actualLandPayment,
+      profitAmount: actualLandPayment > 0 ? result.groupTotal - ticketAmount - airportTaxAmount - actualLandPayment : 0,
       depositAmount,
       balanceAmount: Math.max(0, result.groupTotal - depositAmount),
       balanceDueDate: current.travelStartDate ? minusOneMonth(current.travelStartDate) : current.balanceDueDate,
@@ -411,7 +432,11 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   }
   function normalizeBeforeSave(): CustomerTracking {
     const ticket = Math.max(0, currentForm.ticketAmount); const tax = Math.max(0, currentForm.airportTaxAmount); const total = Math.max(0, currentForm.totalAmount);
-    const deposit = ticket + tax; const paidTicket = ticketPaidAmount(currentForm, payments); const balance = Math.max(0, total - paidTicket); const profit = total - ticket - tax - Math.max(0, currentForm.landPayment);
+    const computedLandPayment = currentForm.landInvoiceAmountUSD > 0 && currentForm.landExchangeRate > 0
+      ? Math.max(0, currentForm.landInvoiceAmountUSD * currentForm.landExchangeRate + Math.max(0, currentForm.landTransferFeeTHB || 0))
+      : Math.max(0, currentForm.landPayment || 0);
+    const deposit = ticket + tax; const paidTicket = ticketPaidAmount(currentForm, payments); const balance = Math.max(0, total - paidTicket);
+    const profit = currentForm.landPaidAt && computedLandPayment > 0 ? total - ticket - tax - computedLandPayment : 0;
     const owner = users.find((x) => x.id === currentForm.salesOwnerId);
     let status = currentForm.status;
     if (currentForm.closedAt) status = 'completed'; else if (currentForm.bookingConfirmedAt && status !== 'lost') status = 'won'; else if (currentForm.quotationSentAt && ['new', 'following'].includes(status)) status = 'quote_sent';
@@ -424,6 +449,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       singleRoomCount: normalizedSingleCount,
       singleSupplementPerPerson: normalizedSinglePerPerson,
       singleSupplementTotal: normalizedSingleCount * normalizedSinglePerPerson,
+      landInvoiceAmountUSD: Math.max(0, currentForm.landInvoiceAmountUSD || 0),
+      landExchangeRate: Math.max(0, currentForm.landExchangeRate || 0),
+      landTransferFeeTHB: Math.max(0, currentForm.landTransferFeeTHB || 0),
+      landPayment: computedLandPayment,
       depositAmount: deposit,
       balanceAmount: balance,
       profitAmount: profit,
@@ -433,7 +462,17 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     };
   }
   async function saveAndStay() { const normalized = normalizeBeforeSave(); setForm(normalized); await onSave(normalized); }
-  async function markToday(key: keyof CustomerTracking) { const next = { ...currentForm, [key]: isoToday() } as CustomerTracking; setForm(next); await onSave({ ...next, updatedAt: new Date().toISOString() }); }
+  async function markToday(key: keyof CustomerTracking) {
+    let next = { ...currentForm, [key]: isoToday() } as CustomerTracking;
+    if (key === 'landPaidAt') {
+      const landPayment = next.landInvoiceAmountUSD > 0 && next.landExchangeRate > 0
+        ? Math.max(0, next.landInvoiceAmountUSD * next.landExchangeRate + Math.max(0, next.landTransferFeeTHB || 0))
+        : Math.max(0, next.landPayment || 0);
+      next = { ...next, landPayment, profitAmount: landPayment > 0 ? next.totalAmount - next.ticketAmount - next.airportTaxAmount - landPayment : 0 };
+    }
+    setForm(next);
+    await onSave({ ...next, updatedAt: new Date().toISOString() });
+  }
   async function addPayment() {
     if (paymentDraft.amount <= 0 || !paymentDraft.paidAt) return;
     const now = new Date().toISOString();
@@ -457,7 +496,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
 
   const deposit = Math.max(0, form.ticketAmount) + Math.max(0, form.airportTaxAmount);
   const paidTicket = ticketPaidAmount(form, payments); const paidPackage = packagePaidAmount(form, payments); const totalPaid = sumPayments(payments);
-  const balance = Math.max(0, form.totalAmount - paidTicket - paidPackage); const profit = form.totalAmount - form.ticketAmount - form.airportTaxAmount - form.landPayment;
+  const balance = Math.max(0, form.totalAmount - paidTicket - paidPackage);
+  const hasLandConversion = form.landPayment > 0 && form.landInvoiceAmountUSD > 0 && form.landExchangeRate > 0;
+  const calculatedProfit = hasLandConversion ? form.totalAmount - form.ticketAmount - form.airportTaxAmount - form.landPayment : null;
+  const profit = form.landPaidAt && calculatedProfit !== null ? calculatedProfit : null;
 
   return <Modal open={open} title={th ? 'Customer Journey — รายละเอียดและขั้นตอนดำเนินงาน' : 'Customer Journey — workflow details'} onClose={onClose} wide>
     <div className="journey-editor">
@@ -491,7 +533,7 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
               const count = Math.min(current.singleRoomCount || 0, pax);
               const nextSingleTotal = count * (current.singleSupplementPerPerson || 0);
               const difference = nextSingleTotal - (current.singleSupplementTotal || 0);
-              return { ...current, passengerCount: pax, singleRoomCount: count, singleSupplementTotal: nextSingleTotal, totalAmount: Math.max(0, current.totalAmount + difference), landPayment: Math.max(0, current.landPayment + difference) };
+              return { ...current, passengerCount: pax, singleRoomCount: count, singleSupplementTotal: nextSingleTotal, totalAmount: Math.max(0, current.totalAmount + difference) };
             });
           }}/></label>
           <label className="field"><span>{th ? 'จำนวนผู้พักเดี่ยว' : 'Single-room travellers'}</span><input type="number" min="0" max={Math.max(1, form.passengerCount)} value={form.singleRoomCount} onChange={(e) => updateSingleRoomDetails(Number(e.target.value), form.singleSupplementPerPerson)}/></label>
@@ -504,8 +546,8 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
           <MoneyField label={th ? 'ยอดแพ็กเกจทั้งหมด' : 'Total package amount'} value={form.totalAmount} onChange={(v) => set('totalAmount', v)}/>
           <MoneyField label={th ? 'ราคาตั๋วรวมทั้งหมด' : 'Total ticket price'} value={form.ticketAmount} onChange={(v) => set('ticketAmount', v)}/>
           <MoneyField label={th ? 'ภาษีสนามบินรวม' : 'Total airport tax'} value={form.airportTaxAmount} onChange={(v) => set('airportTaxAmount', v)}/>
-          <MoneyField label="LAND Payment" value={form.landPayment} onChange={(v) => set('landPayment', v)}/>
-          <div className={`calculated-money ${profit < 0 ? 'negative' : ''}`}><span>{th ? 'กำไรจากการขาย' : 'Profit from sales'}</span><strong>{formatTHB(profit, language)}</strong><small>{th ? 'ยอดขาย − ตั๋ว − ภาษี − LAND' : 'Sales − ticket − tax − land'}</small></div>
+          <div className="calculated-money land-cost-pending"><span>{th ? 'ต้นทุน LAND จริง' : 'Actual land cost'}</span><strong>{form.landPayment > 0 ? formatTHB(form.landPayment, language) : (th ? 'รอ Land Invoice' : 'Awaiting land invoice')}</strong><small>{th ? 'บันทึกยอด USD และอัตราแลกเปลี่ยนใน Step 4–6' : 'Record the USD invoice and actual exchange rate in Steps 4–6.'}</small></div>
+          <div className={`calculated-money ${profit !== null && profit < 0 ? 'negative' : ''}`}><span>{th ? 'กำไรจริงจากการขาย' : 'Realized sales profit'}</span><strong>{profit === null ? (th ? 'รอชำระ LAND' : 'Pending land payment') : formatTHB(profit, language)}</strong><small>{th ? 'ยอดขาย − ตั๋ว − ภาษี − LAND ที่โอนจริง' : 'Sales − ticket − tax − actual land transfer'}</small></div>
         </div>
       </WorkflowSection>
 
@@ -517,9 +559,24 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         <div className="installment-card first journey-invoice-card"><div className="installment-head"><span>1</span><div><b>{th ? 'Invoice 1 — ค่าตั๋วเครื่องบินทั้งหมด + ภาษีสนามบิน' : 'Invoice 1 — full airfare + airport tax'}</b><small>{th ? 'กำหนด Deadline เอง และส่งตั๋วหลังตรวจสอบยอดชำระ' : 'Set the deadline and send tickets after payment verification.'}</small></div></div><strong>{formatTHB(deposit, language)}</strong><div className="installment-fields"><label className="field"><span>{th ? 'กำหนดชำระ' : 'Due date'}</span><input type="date" value={form.depositDueDate} onChange={(e) => set('depositDueDate', e.target.value)}/></label><label className="field"><span>{th ? 'สถานะงวด 1' : 'Payment 1 status'}</span><select value={form.depositStatus} onChange={(e) => set('depositStatus', e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label><MilestoneField label={th ? 'วันที่ส่ง Invoice 1' : 'Invoice 1 sent'} value={form.invoice1SentAt} onChange={(v) => set('invoice1SentAt', v)} onToday={() => markToday('invoice1SentAt')} th={th}/><MilestoneField label={th ? 'วันที่รับชำระงวด 1' : 'Payment 1 received'} value={form.firstPaymentReceivedAt} onChange={(v) => set('firstPaymentReceivedAt', v)} onToday={() => markToday('firstPaymentReceivedAt')} th={th}/></div><button className="secondary-button" type="button" onClick={() => onIssueInvoice(normalizeBeforeSave(), 'deposit')}><ReceiptText/>{th ? 'เปิด / ออก Invoice 1' : 'Open / issue Invoice 1'}</button></div>
       </WorkflowSection>
 
-      <WorkflowSection number="04" icon={<ShieldCheck/>} title={th ? 'ยื่นวีซ่าและ Invoice งวดที่ 2' : 'Visa submission & Invoice 2'} subtitle={th ? 'ส่งเอกสารให้ Land จัดทำ Invoice 2 และส่งวีซ่าให้ลูกค้า' : 'Submit documents to land, prepare Invoice 2 and send the visa to the customer.'}>
-        <div className="tracking-form-grid"><label className="field"><span>LAND / Supplier</span><input value={form.landSupplier} onChange={(e) => set('landSupplier', e.target.value)} placeholder={th ? 'เช่น Aari Holiday / Amen' : 'e.g. Aari Holiday / Amen'}/></label><MilestoneField label={th ? 'ส่ง Passport + รูป + ตั๋วให้ Land' : 'Documents sent to land'} value={form.documentsSentToLandAt} onChange={(v) => set('documentsSentToLandAt', v)} onToday={() => markToday('documentsSentToLandAt')} th={th}/><MilestoneField label={th ? 'จัดทำ Invoice 2 แล้ว' : 'Invoice 2 prepared'} value={form.invoice2PreparedAt} onChange={(v) => set('invoice2PreparedAt', v)} onToday={() => markToday('invoice2PreparedAt')} th={th}/><MilestoneField label={th ? 'ได้รับวีซ่าจาก Land' : 'Visa received'} value={form.visaReceivedAt} onChange={(v) => set('visaReceivedAt', v)} onToday={() => markToday('visaReceivedAt')} th={th}/><MilestoneField label={th ? 'ส่งวีซ่า + Invoice 2 ให้ลูกค้า' : 'Visa + Invoice 2 sent'} value={form.visaSentAt} onChange={(v) => set('visaSentAt', v)} onToday={() => markToday('visaSentAt')} th={th}/><MilestoneField label={th ? 'รับชำระค่าแพ็กเกจครบ' : 'Full package payment received'} value={form.fullPaymentReceivedAt} onChange={(v) => set('fullPaymentReceivedAt', v)} onToday={() => markToday('fullPaymentReceivedAt')} th={th}/></div>
-        <div className="installment-card second journey-invoice-card"><div className="installment-head"><span>2</span><div><b>{th ? 'Invoice 2 — ค่าแพ็กเกจส่วนที่เหลือ' : 'Invoice 2 — remaining package balance'}</b><small>{th ? 'ยอดแพ็กเกจทั้งหมด หักยอดค่าตั๋วที่ชำระแล้ว' : 'Full package total less ticket payments already received.'}</small></div></div><strong>{formatTHB(Math.max(0, form.totalAmount - paidTicket), language)}</strong><div className="installment-fields"><label className="field"><span>{th ? 'กำหนดชำระ' : 'Due date'}</span><input type="date" value={form.balanceDueDate} onChange={(e) => set('balanceDueDate', e.target.value)}/></label><label className="field"><span>{th ? 'สถานะงวด 2' : 'Payment 2 status'}</span><select value={form.balanceStatus} onChange={(e) => set('balanceStatus', e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label></div><button className="secondary-button" type="button" onClick={() => onIssueInvoice(normalizeBeforeSave(), 'balance')}><FileText/>{th ? 'เปิด / ออก Invoice 2' : 'Open / issue Invoice 2'}</button></div>
+      <WorkflowSection number="04" icon={<ShieldCheck/>} title={th ? 'ส่งเอกสารให้ Land รับ Invoice USD และออก Invoice 2' : 'Submit to land, receive USD invoice & issue Invoice 2'} subtitle={th ? 'เมื่อ Land สรุปราคาเป็น USD ให้บันทึกเลข Invoice และยอด USD ก่อนออก Invoice 2 ให้ลูกค้า' : 'Record the supplier invoice number and USD amount before issuing Invoice 2 to the customer.'}>
+        <div className="tracking-form-grid">
+          <label className="field"><span>LAND / Supplier</span><input value={form.landSupplier} onChange={(e) => set('landSupplier', e.target.value)} placeholder={th ? 'เช่น Aari Holiday / Amen' : 'e.g. Aari Holiday / Amen'}/></label>
+          <MilestoneField label={th ? 'ส่ง Passport + รูป + ตั๋วให้ Land' : 'Documents sent to land'} value={form.documentsSentToLandAt} onChange={(v) => set('documentsSentToLandAt', v)} onToday={() => markToday('documentsSentToLandAt')} th={th}/>
+          <MilestoneField label={th ? 'วันที่ได้รับ Land Invoice' : 'Land invoice received'} value={form.landInvoiceReceivedAt} onChange={(v) => set('landInvoiceReceivedAt', v)} onToday={() => markToday('landInvoiceReceivedAt')} th={th}/>
+          <label className="field"><span>{th ? 'เลขที่ Land Invoice' : 'Land invoice no.'}</span><input value={form.landInvoiceNo} onChange={(e) => set('landInvoiceNo', e.target.value)} placeholder="LAND-INV-001"/></label>
+          <label className="field money-input"><span>{th ? 'ยอดตาม Land Invoice' : 'Land invoice amount'}</span><div><input type="number" min="0" step="0.01" value={form.landInvoiceAmountUSD} onChange={(e) => updateLandFinancials({ landInvoiceAmountUSD: Number(e.target.value) })}/><em>USD</em></div></label>
+          <MilestoneField label={th ? 'จัดทำ Invoice 2 แล้ว' : 'Invoice 2 prepared'} value={form.invoice2PreparedAt} onChange={(v) => set('invoice2PreparedAt', v)} onToday={() => markToday('invoice2PreparedAt')} th={th}/>
+          <MilestoneField label={th ? 'ได้รับวีซ่าจาก Land' : 'Visa received'} value={form.visaReceivedAt} onChange={(v) => set('visaReceivedAt', v)} onToday={() => markToday('visaReceivedAt')} th={th}/>
+          <MilestoneField label={th ? 'ส่งวีซ่า + Invoice 2 ให้ลูกค้า' : 'Visa + Invoice 2 sent'} value={form.visaSentAt} onChange={(v) => set('visaSentAt', v)} onToday={() => markToday('visaSentAt')} th={th}/>
+          <MilestoneField label={th ? 'รับชำระค่าแพ็กเกจครบ' : 'Full package payment received'} value={form.fullPaymentReceivedAt} onChange={(v) => set('fullPaymentReceivedAt', v)} onToday={() => markToday('fullPaymentReceivedAt')} th={th}/>
+        </div>
+        <div className="land-invoice-summary">
+          <div><span>{th ? 'Land Invoice' : 'Land invoice'}</span><strong>{form.landInvoiceNo || '-'}</strong></div>
+          <div><span>{th ? 'ยอดเรียกเก็บจาก Land' : 'Supplier invoice amount'}</span><strong>{form.landInvoiceAmountUSD > 0 ? `USD ${formatNumber(form.landInvoiceAmountUSD, 2)}` : '-'}</strong></div>
+          <div><span>{th ? 'สถานะการแปลงเป็นบาท' : 'THB conversion status'}</span><strong>{form.landPayment > 0 ? formatTHB(form.landPayment, language) : (th ? 'รออัตราแลกเปลี่ยนวันโอน' : 'Awaiting transfer-day FX rate')}</strong></div>
+        </div>
+        <div className="installment-card second journey-invoice-card"><div className="installment-head"><span>2</span><div><b>{th ? 'Invoice 2 — ค่าแพ็กเกจส่วนที่เหลือ' : 'Invoice 2 — remaining package balance'}</b><small>{th ? 'ยอดแพ็กเกจทั้งหมด หักยอดค่าตั๋วที่ลูกค้าชำระแล้ว' : 'Full package total less ticket payments already received.'}</small></div></div><strong>{formatTHB(Math.max(0, form.totalAmount - paidTicket), language)}</strong><div className="installment-fields"><label className="field"><span>{th ? 'กำหนดชำระ' : 'Due date'}</span><input type="date" value={form.balanceDueDate} onChange={(e) => set('balanceDueDate', e.target.value)}/></label><label className="field"><span>{th ? 'สถานะงวด 2' : 'Payment 2 status'}</span><select value={form.balanceStatus} onChange={(e) => set('balanceStatus', e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label></div><button className="secondary-button" type="button" disabled={!form.landInvoiceAmountUSD} onClick={() => onIssueInvoice(normalizeBeforeSave(), 'balance')}><FileText/>{th ? 'เปิด / ออก Invoice 2' : 'Open / issue Invoice 2'}</button>{!form.landInvoiceAmountUSD && <small className="invoice-requirement-note">{th ? 'กรอกยอด Land Invoice (USD) ก่อนออก Invoice 2' : 'Enter the land invoice amount in USD before issuing Invoice 2.'}</small>}</div>
       </WorkflowSection>
 
       <WorkflowSection number="05" icon={<WalletCards/>} title={th ? 'ประวัติรับชำระเงิน' : 'Payment transactions'} subtitle={th ? 'รองรับลูกค้าทยอยชำระค่าตั๋วหลายครั้ง และใช้หักใน Invoice งวดที่ 2' : 'Supports multiple ticket payments and deducts them from Invoice 2.'}>
@@ -527,15 +584,34 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         <div className="payment-ledger"><div className="payment-ledger-head"><span>{th ? 'วันที่' : 'Date'}</span><span>{th ? 'รายการ' : 'Type'}</span><span>{th ? 'อ้างอิง' : 'Reference'}</span><span>{th ? 'จำนวนเงิน' : 'Amount'}</span><span/></div>{payments.length ? payments.map((payment) => <div className="payment-ledger-row" key={payment.id}><span>{payment.paidAt ? formatDate(payment.paidAt, language) : '-'}</span><span>{paymentTypeLabel(payment.type, th)}</span><span>{payment.reference || payment.note || '-'}</span><strong className={payment.type === 'refund' ? 'negative' : ''}>{payment.type === 'refund' ? '-' : ''}{formatTHB(Math.abs(payment.amount), language)}</strong><button className="danger" onClick={() => window.confirm(th ? 'ลบรายการรับชำระนี้?' : 'Delete this payment?') && onDeletePayment(payment.id)}><Trash2/></button></div>) : <div className="payment-ledger-empty">{th ? 'ยังไม่มีประวัติรับชำระ' : 'No payment transactions yet'}</div>}<div className="payment-ledger-total"><span>{th ? 'รับชำระรวม' : 'Total received'}</span><strong>{formatTHB(totalPaid, language)}</strong><span>{th ? 'ยอดคงเหลือ' : 'Balance'}</span><strong>{formatTHB(Math.max(0, form.totalAmount - totalPaid), language)}</strong></div></div>
       </WorkflowSection>
 
-      <WorkflowSection number="06" icon={<FileCheck2/>} title={th ? 'Itinerary และความพร้อมเดินทาง' : 'Itinerary & travel readiness'} subtitle={th ? 'หลังชำระครบ ส่งกำหนดการ ตรวจเอกสาร และทำสถานะพร้อมเดินทาง' : 'After full payment, send itinerary, verify documents and mark ready.'}>
+      <WorkflowSection number="06" icon={<Landmark/>} title={th ? 'โอนชำระ LAND และคำนวณกำไรจริง' : 'Pay land supplier & calculate realized profit'} subtitle={th ? 'หลังรับชำระ Invoice 2 จากลูกค้า ให้ใส่อัตราแลกเปลี่ยน ณ วันโอน ระบบจะแปลง USD เป็นบาทและคำนวณกำไรจริง' : 'After receiving Payment 2, enter the transfer-day FX rate. The system converts USD to THB and calculates realized profit.'}>
+        {!form.fullPaymentReceivedAt && form.balanceStatus !== 'paid' && <div className="land-payment-warning"><Hourglass/><div><b>{th ? 'ยังไม่ควรโอน LAND' : 'Land transfer not ready'}</b><span>{th ? 'ตาม Workflow ให้รับชำระค่าแพ็กเกจจากลูกค้าครบก่อน แล้วจึงโอนตาม Land Invoice' : 'Receive the customer’s full package payment before paying the land supplier.'}</span></div></div>}
+        <div className="tracking-form-grid">
+          <label className="field money-input"><span>{th ? 'ยอด Land Invoice' : 'Land invoice amount'}</span><div><input type="number" min="0" step="0.01" value={form.landInvoiceAmountUSD} onChange={(e) => updateLandFinancials({ landInvoiceAmountUSD: Number(e.target.value) })}/><em>USD</em></div></label>
+          <label className="field money-input"><span>{th ? 'อัตราแลกเปลี่ยน ณ วันโอน' : 'FX rate on transfer date'}</span><div><input type="number" min="0" step="0.0001" value={form.landExchangeRate} onChange={(e) => updateLandFinancials({ landExchangeRate: Number(e.target.value) })}/><em>THB/USD</em></div></label>
+          <MoneyField label={th ? 'ค่าธรรมเนียมโอน (ถ้ามี)' : 'Transfer fee (optional)'} value={form.landTransferFeeTHB} onChange={(v) => updateLandFinancials({ landTransferFeeTHB: v })}/>
+          <div className="calculated-money land-payment-total"><span>{th ? 'ยอด LAND ที่ตัดเป็นเงินบาท' : 'Actual land payment in THB'}</span><strong>{form.landPayment > 0 ? formatTHB(form.landPayment, language) : '-'}</strong><small>{form.landInvoiceAmountUSD > 0 && form.landExchangeRate > 0 ? `USD ${formatNumber(form.landInvoiceAmountUSD, 2)} × ${formatNumber(form.landExchangeRate, 4)}${form.landTransferFeeTHB > 0 ? ` + ${formatNumber(form.landTransferFeeTHB, 2)}` : ''}` : (th ? 'กรอกยอด USD และอัตราแลกเปลี่ยน' : 'Enter USD amount and FX rate')}</small></div>
+          <MilestoneField label={th ? 'วันที่โอนชำระ LAND' : 'Land payment date'} value={form.landPaidAt} onChange={(v) => set('landPaidAt', v)} onToday={() => markToday('landPaidAt')} th={th}/>
+          <label className="field"><span>{th ? 'เลขอ้างอิงการโอน LAND' : 'Land transfer reference'}</span><input value={form.landTransferReference} onChange={(e) => set('landTransferReference', e.target.value)} placeholder={th ? 'เลขที่รายการ / SWIFT / หมายเหตุ' : 'Transaction / SWIFT reference'}/></label>
+        </div>
+        <div className="land-profit-breakdown">
+          <div><span>{th ? 'ยอดขายแพ็กเกจทั้งหมด' : 'Total package sales'}</span><b>{formatTHB(form.totalAmount, language)}</b></div>
+          <div className="deduction"><span>{th ? 'หัก ต้นทุนตั๋ว + ภาษีสนามบิน' : 'Less airfare + airport taxes'}</span><b>-{formatTHB(form.ticketAmount + form.airportTaxAmount, language)}</b></div>
+          <div><span>{th ? 'ยอดค่าแพ็กเกจหลังหักค่าตั๋ว' : 'Package balance after airfare'}</span><b>{formatTHB(form.totalAmount - form.ticketAmount - form.airportTaxAmount, language)}</b></div>
+          <div className="deduction"><span>{th ? 'หัก LAND Payment (เงินบาท)' : 'Less land payment (THB)'}</span><b>{form.landPayment > 0 ? `-${formatTHB(form.landPayment, language)}` : '-'}</b></div>
+          <div className={`land-profit-total ${calculatedProfit !== null && calculatedProfit < 0 ? 'negative' : ''}`}><span>{form.landPaidAt ? (th ? 'กำไรขั้นต้นจริง' : 'Realized gross profit') : (th ? 'กำไรคาดการณ์ตามอัตรานี้' : 'Projected profit at this rate')}</span><strong>{calculatedProfit === null ? (th ? 'กรอกยอด USD และอัตราแลกเปลี่ยน' : 'Enter USD and FX rate') : formatTHB(calculatedProfit, language)}</strong></div>
+        </div>
+      </WorkflowSection>
+
+      <WorkflowSection number="07" icon={<FileCheck2/>} title={th ? 'Itinerary และความพร้อมเดินทาง' : 'Itinerary & travel readiness'} subtitle={th ? 'หลังชำระครบ ส่งกำหนดการ ตรวจเอกสาร และทำสถานะพร้อมเดินทาง' : 'After full payment, send itinerary, verify documents and mark ready.'}>
         <div className="journey-check-grid"><MilestoneField label={th ? 'ส่ง Itinerary แล้ว' : 'Itinerary sent'} value={form.itinerarySentAt} onChange={(v) => set('itinerarySentAt', v)} onToday={() => markToday('itinerarySentAt')} th={th}/><MilestoneField label={th ? 'ตรวจครบและพร้อมเดินทาง' : 'Ready to travel'} value={form.readyToTravelAt} onChange={(v) => set('readyToTravelAt', v)} onToday={() => markToday('readyToTravelAt')} th={th}/></div>
       </WorkflowSection>
 
-      <WorkflowSection number="07" icon={<Flag/>} title={th ? 'หลังเดินทางและ Feedback' : 'Post-trip & feedback'} subtitle={th ? 'ติดตามหลังลูกค้ากลับ ขอความคิดเห็น และปิดจบงาน' : 'Follow up after the trip, request feedback and close the case.'}>
+      <WorkflowSection number="08" icon={<Flag/>} title={th ? 'หลังเดินทางและ Feedback' : 'Post-trip & feedback'} subtitle={th ? 'ติดตามหลังลูกค้ากลับ ขอความคิดเห็น และปิดจบงาน' : 'Follow up after the trip, request feedback and close the case.'}>
         <div className="journey-check-grid"><MilestoneField label={th ? 'ลูกค้าเดินทางกลับแล้ว' : 'Customer returned'} value={form.tripReturnedAt} onChange={(v) => set('tripReturnedAt', v)} onToday={() => markToday('tripReturnedAt')} th={th}/><MilestoneField label={th ? 'ส่งคำขอ Feedback' : 'Feedback requested'} value={form.feedbackRequestedAt} onChange={(v) => set('feedbackRequestedAt', v)} onToday={() => markToday('feedbackRequestedAt')} th={th}/><MilestoneField label={th ? 'ได้รับ Feedback' : 'Feedback received'} value={form.feedbackReceivedAt} onChange={(v) => set('feedbackReceivedAt', v)} onToday={() => markToday('feedbackReceivedAt')} th={th}/><MilestoneField label={th ? 'ปิดจบงาน' : 'Closed'} value={form.closedAt} onChange={(v) => set('closedAt', v)} onToday={() => markToday('closedAt')} th={th}/></div><label className="field"><span>{th ? 'Feedback / ความคิดเห็นลูกค้า' : 'Customer feedback'}</span><textarea rows={4} value={form.feedbackNote} onChange={(e) => set('feedbackNote', e.target.value)}/></label>
       </WorkflowSection>
 
-      <WorkflowSection number="08" icon={<CalendarClock/>} title={th ? 'งานถัดไปและหมายเหตุภายใน' : 'Next action & internal notes'} subtitle={th ? 'กำหนดสิ่งที่ต้องทำต่อและ Deadline เพื่อไม่ให้หลุดการติดตาม' : 'Set the next action and deadline so nothing is missed.'}>
+      <WorkflowSection number="09" icon={<CalendarClock/>} title={th ? 'งานถัดไปและหมายเหตุภายใน' : 'Next action & internal notes'} subtitle={th ? 'กำหนดสิ่งที่ต้องทำต่อและ Deadline เพื่อไม่ให้หลุดการติดตาม' : 'Set the next action and deadline so nothing is missed.'}>
         <div className="tracking-form-grid"><label className="field span-2"><span>{th ? 'งานถัดไป' : 'Next action'}</span><input value={form.nextAction} onChange={(e) => set('nextAction', e.target.value)} placeholder={nextRecommendedAction(form, th)}/></label><label className="field"><span>{th ? 'Deadline งานถัดไป' : 'Next action deadline'}</span><input type="date" value={form.nextActionDueDate} onChange={(e) => set('nextActionDueDate', e.target.value)}/></label><label className="field"><span>{th ? 'สถานะ Workflow ปัจจุบัน' : 'Current workflow stage'}</span><input value={stageLabel(currentStage, th)} readOnly/></label><label className="field span-2"><span>{th ? 'หมายเหตุภายใน' : 'Internal note'}</span><textarea rows={4} value={form.note} onChange={(e) => set('note', e.target.value)}/></label></div>
       </WorkflowSection>
 

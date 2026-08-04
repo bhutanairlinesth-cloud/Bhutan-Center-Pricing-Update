@@ -1525,3 +1525,14 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .automatic-totals-head { align-items:flex-start; flex-direction:column; }
   .automatic-totals-grid { grid-template-columns:1fr; }
 }
+
+/* v12.3.2 — Business Class surcharge belongs to package value, not Invoice 1 */
+.journey-payment-breakdown .invoice-info-row {
+  color: #315d4d;
+  background: #eef7f2;
+}
+.journey-payment-breakdown .invoice-info-row b {
+  color: #126148;
+  font-size: 10px;
+  text-align: right;
+}

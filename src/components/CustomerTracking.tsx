@@ -220,6 +220,26 @@ export function CustomerTrackingWorkspace(props: Props) {
   }
 
   async function issueInvoice(tracking: CustomerTracking, installment: InvoiceInstallment) {
+    if (installment === 'deposit') {
+      const passengerNames = (tracking.passengerNames || '')
+        .split(/\r?\n/)
+        .map((name) => name.trim())
+        .filter(Boolean);
+      if (!tracking.flightPnr?.trim()) {
+        window.alert(th ? 'กรุณากรอก PNR ก่อนออก Invoice งวดที่ 1' : 'Please enter the PNR before issuing Invoice 1.');
+        return;
+      }
+      if (!passengerNames.length) {
+        window.alert(th ? 'กรุณากรอกรายชื่อผู้เดินทางทั้งหมดก่อนออก Invoice งวดที่ 1' : 'Please enter all passenger names before issuing Invoice 1.');
+        return;
+      }
+      if (passengerNames.length !== Math.max(1, tracking.passengerCount)) {
+        const proceed = window.confirm(th
+          ? `พบรายชื่อ ${passengerNames.length} รายชื่อ แต่จำนวนผู้เดินทางในระบบคือ ${tracking.passengerCount} ท่าน\nต้องการออก Invoice ต่อหรือไม่?`
+          : `There are ${passengerNames.length} passenger names, while the booking has ${tracking.passengerCount} passengers.\nContinue issuing the invoice?`);
+        if (!proceed) return;
+      }
+    }
     if (installment === 'balance' && !(tracking.landInvoiceReceivedAt || tracking.landInvoiceAmountUSD > 0)) {
       window.alert(th ? 'กรุณาบันทึก Land Invoice และยอด USD ก่อนออก Invoice 2' : 'Please record the land invoice and USD amount before issuing Invoice 2.');
       return;
@@ -664,6 +684,10 @@ function InvoicePreview({ value, language, payments, onClose, onSaveInvoice, onS
   React.useEffect(() => setStatus(value?.invoice.status || 'invoiced'), [value]);
   if (!value) return null;
   const { tracking, invoice } = value; const isDeposit = invoice.installment === 'deposit';
+  const invoicePassengerNames = (tracking.passengerNames || '')
+    .split(/\r?\n/)
+    .map((name) => name.trim().replace(/^\d+[.)\-:]\s*/, ''))
+    .filter(Boolean);
   const ticketPayments = payments.filter((x) => x.type === 'ticket_deposit');
   const paidTicket = ticketPaidAmount(tracking, payments);
   const balanceDue = Math.max(0, tracking.totalAmount - paidTicket);
@@ -688,6 +712,18 @@ function InvoicePreview({ value, language, payments, onClose, onSaveInvoice, onS
         <div className="journey-invoice-package-total"><span>{th ? 'รวมมูลค่าแพ็กเกจ' : 'Total package value'}</span><strong>{formatNumber(tracking.totalAmount, 2)}</strong></div>
       </section>
       {isDeposit ? <section className="journey-payment-breakdown"><h3>{th ? 'การชำระงวดที่ 1 — ค่าตั๋วเครื่องบินตาม PNR + ภาษีสนามบิน' : 'Payment 1 — PNR airfare + airport tax'}</h3><div><span>{tracking.businessUpgradeCount >= tracking.passengerCount && tracking.passengerCount > 0 ? (th ? 'ค่าตั๋วเครื่องบินไป–กลับ ชั้น Business ตาม PNR' : 'Round-trip Business Class airfare per PNR') : tracking.businessUpgradeCount > 0 ? (th ? 'ค่าตั๋วเครื่องบินไป–กลับ ตาม PNR (มีผู้โดยสารอัปเกรด BC)' : 'Round-trip airfare per PNR (mixed cabin)') : (th ? 'ค่าตั๋วเครื่องบินไป–กลับ ชั้น Economy ตาม PNR' : 'Round-trip Economy Class airfare per PNR')}</span><b>{formatNumber(tracking.ticketAmount, 2)}</b></div><div><span>{th ? 'ภาษีสนามบินทั้งหมด' : 'Total airport taxes'}</span><b>{formatNumber(tracking.airportTaxAmount, 2)}</b></div>{tracking.businessUpgradeTotal > 0 && <div className="invoice-info-row"><span>{th ? 'ส่วนเพิ่มราคาขาย Business Class' : 'Business Class selling surcharge'}</span><b>{th ? `รวมในมูลค่าแพ็กเกจแล้ว ${formatNumber(tracking.businessUpgradeTotal, 2)} บาท` : `Already included in package value: ${formatNumber(tracking.businessUpgradeTotal, 2)} THB`}</b></div>}<div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 1' : 'Payment 1 amount due'}</span><strong>{formatNumber(tracking.depositAmount, 2)}</strong></div></section> : <section className="journey-payment-breakdown"><h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจส่วนที่เหลือ' : 'Payment 2 — remaining package balance'}</h3><div><span>{th ? 'ค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(tracking.totalAmount, 2)}</b></div>{ticketPayments.length ? ticketPayments.map((payment, index) => <div key={payment.id} className="deduction"><span>{th ? `หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว ครั้งที่ ${index + 1}` : `Less ticket payment ${index + 1}`} {payment.reference ? `(${payment.reference})` : ''}</span><b>-{formatNumber(payment.amount, 2)}</b></div>) : <div className="deduction"><span>{th ? 'หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว' : 'Less ticket payment received'}</span><b>-{formatNumber(paidTicket, 2)}</b></div>}<div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 2' : 'Payment 2 amount due'}</span><strong>{formatNumber(balanceDue, 2)}</strong></div></section>}
+      {isDeposit && <section className="invoice-passenger-check">
+        <div className="invoice-passenger-check-title"><div><Plane/><span>{th ? 'ข้อมูลการจองตั๋วสำหรับตรวจสอบชื่อ' : 'Flight booking details for name verification'}</span></div><b>{th ? 'โปรดตรวจสอบก่อนออกตั๋ว' : 'Please verify before ticketing'}</b></div>
+        <div className="invoice-passenger-booking-meta">
+          <div><span>PNR</span><strong>{tracking.flightPnr || '-'}</strong></div>
+          <div><span>{th ? 'สายการบิน' : 'Airline'}</span><strong>{tracking.airline || '-'}</strong></div>
+          <div><span>{th ? 'จำนวนรายชื่อ' : 'Names listed'}</span><strong>{invoicePassengerNames.length} / {tracking.passengerCount}</strong></div>
+        </div>
+        <div className="invoice-passenger-alert"><ShieldCheck/><span>{th ? 'กรุณาตรวจสอบชื่อ–นามสกุล คำนำหน้า และการสะกดทุกตัวอักษรให้ตรงกับหนังสือเดินทาง หากยืนยันแล้ว บริษัทจะดำเนินการออกตั๋วตามรายชื่อด้านล่าง' : 'Please verify every passenger’s full name, title and spelling against the passport. Once confirmed, tickets will be issued using the names below.'}</span></div>
+        <ol className={`invoice-passenger-list ${invoicePassengerNames.length > 6 ? 'two-columns' : ''}`}>
+          {invoicePassengerNames.length ? invoicePassengerNames.map((name, index) => <li key={`${name}-${index}`}>{name}</li>) : <li>{th ? 'ยังไม่มีรายชื่อผู้เดินทาง' : 'No passenger names recorded'}</li>}
+        </ol>
+      </section>}
       <section className="invoice-total"><div><span>{th ? `ยอดชำระงวดที่ ${isDeposit ? '1' : '2'}` : `Payment ${isDeposit ? '1' : '2'} due`}</span><strong>THB {formatNumber(isDeposit ? tracking.depositAmount : balanceDue, 2)}</strong><small>{invoice.dueDate ? `${th ? 'ภายในวันที่' : 'Due by'} ${formatDate(invoice.dueDate, language)}` : '-'}</small></div></section>
       <section className="invoice-note"><h3>{th ? 'หมายเหตุการชำระเงิน' : 'Payment note'}</h3><p>{isDeposit ? (th ? 'เมื่อบริษัทตรวจสอบยอดชำระงวดที่ 1 เรียบร้อยแล้ว เจ้าหน้าที่จะส่งตั๋วเครื่องบินให้ลูกค้า' : 'Flight tickets will be sent after Payment 1 is verified.') : (th ? 'หลังชำระค่าแพ็กเกจครบ บริษัทจะจัดทำและส่ง Itinerary พร้อมเอกสารเตรียมเดินทาง' : 'The itinerary and pre-departure documents will be sent after full payment.')}</p></section>
       <footer className="invoice-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div><div><span>{th ? 'ผู้จัดทำ' : 'Prepared by'}</span><b>{tracking.salesOwnerName || '-'}</b></div></footer>

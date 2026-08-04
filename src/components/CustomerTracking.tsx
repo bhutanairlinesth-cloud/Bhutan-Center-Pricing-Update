@@ -13,6 +13,7 @@ import {
 import { LanguageSwitch, useI18n } from '../i18n';
 import { calculatePrice, normalizeAdditionalCharges } from '../utils/pricing';
 import { formatDate, formatNumber, formatTHB, makeId } from '../utils/format';
+import { printElementAsA4 } from '../utils/printA4';
 import { Brand } from './Brand';
 import { EmptyState, Modal } from './Ui';
 import { AdditionalItemsEditor } from './AdditionalItemsEditor';
@@ -697,7 +698,7 @@ function InvoicePreview({ value, language, payments, onClose, onSaveInvoice, onS
     await onSaveTracking({ ...tracking, depositStatus: isDeposit ? next : tracking.depositStatus, balanceStatus: !isDeposit ? next : tracking.balanceStatus, firstPaymentReceivedAt: isDeposit && next === 'paid' ? (tracking.firstPaymentReceivedAt || isoToday()) : tracking.firstPaymentReceivedAt, fullPaymentReceivedAt: !isDeposit && next === 'paid' ? (tracking.fullPaymentReceivedAt || isoToday()) : tracking.fullPaymentReceivedAt, updatedAt: now });
   }
   return <Modal open title={th ? `Invoice งวดที่ ${isDeposit ? '1' : '2'}` : `Invoice ${isDeposit ? '1' : '2'}`} onClose={onClose} wide>
-    <div className="invoice-toolbar no-print"><button className="ghost-button" onClick={onClose}><ArrowLeft/>{th ? 'กลับ' : 'Back'}</button><label><span>{th ? 'สถานะเอกสาร' : 'Status'}</span><select value={status} onChange={(e) => updateStatus(e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label><button className="primary-button" onClick={() => window.print()}><Download/>{th ? 'พิมพ์ / บันทึก PDF' : 'Print / Save PDF'}</button></div>
+    <div className="invoice-toolbar no-print"><button className="ghost-button" onClick={onClose}><ArrowLeft/>{th ? 'กลับ' : 'Back'}</button><label><span>{th ? 'สถานะเอกสาร' : 'Status'}</span><select value={status} onChange={(e) => updateStatus(e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label><button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF'}</button></div>
     <article className="invoice-sheet journey-invoice-sheet" id="invoice-print-area">
       <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice'}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
       <section className="invoice-meta"><div><span>{th ? 'เรียกเก็บจาก' : 'Bill to'}</span><strong>{tracking.customerName}</strong><small>{[tracking.phone, tracking.email].filter(Boolean).join(' · ') || '-'}</small></div><div><span>{th ? 'วันที่ออกเอกสาร' : 'Issue date'}</span><strong>{formatDate(invoice.issueDate, language)}</strong><small>{th ? 'ครบกำหนด' : 'Due'}: {invoice.dueDate ? formatDate(invoice.dueDate, language) : '-'}</small></div></section>

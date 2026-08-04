@@ -1682,3 +1682,103 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .invoice-passenger-list { margin-top: 6px !important; margin-bottom: 8px !important; }
   .invoice-passenger-list li { min-height: 24px !important; padding-top: 3px !important; padding-bottom: 3px !important; }
 }
+
+/* =========================================================
+   v12.3.4 - Stable A4 printing for Invoice and Quotation
+   The dedicated print window is the primary path. These rules
+   also keep direct Ctrl+P output in A4 dimensions as a fallback.
+   ========================================================= */
+.invoice-sheet,
+.quotation-sheet {
+  box-sizing: border-box;
+}
+
+@media print {
+  @page { size: A4 portrait; margin: 0; }
+
+  html,
+  body {
+    width: 210mm !important;
+    min-width: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .modal-layer {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .modal-backdrop,
+  .modal-card > header,
+  .invoice-toolbar,
+  .quote-toolbar,
+  .no-print {
+    display: none !important;
+  }
+
+  .modal-card,
+  .modal-card.wide,
+  .modal-body {
+    position: static !important;
+    display: block !important;
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  #invoice-print-area,
+  #quotation-print-area {
+    position: static !important;
+    inset: auto !important;
+    width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 11mm 12mm 9mm !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    box-sizing: border-box !important;
+    background: #fff !important;
+  }
+
+  /* Do not let mobile breakpoints collapse the A4 document grids. */
+  .invoice-meta { grid-template-columns: 1.25fr .75fr !important; }
+  .invoice-trip-summary { grid-template-columns: 1.45fr .85fr .55fr !important; }
+  .invoice-trip-summary > div {
+    border-right: 1px solid #e3e8e5 !important;
+    border-bottom: 0 !important;
+  }
+  .invoice-trip-summary > div:last-child { border-right: 0 !important; }
+  .journey-invoice-package-head,
+  .journey-invoice-package-row {
+    grid-template-columns: minmax(0, 1fr) 48px 52px 108px 120px !important;
+  }
+  .invoice-passenger-booking-meta { grid-template-columns: repeat(3, 1fr) !important; }
+  .invoice-passenger-list.two-columns { grid-template-columns: 1fr 1fr !important; }
+  .quote-meta-grid { grid-template-columns: 1.2fr .8fr !important; }
+  .quote-trip-card { grid-template-columns: 1.4fr .9fr 1fr .7fr !important; }
+  .quote-scope-grid { grid-template-columns: minmax(0, 1.68fr) minmax(195px, .82fr) !important; }
+  .quote-included ol { columns: 2 !important; }
+}

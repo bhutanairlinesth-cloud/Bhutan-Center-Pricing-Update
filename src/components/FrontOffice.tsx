@@ -267,7 +267,7 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
         'Personal expenses and any services not specified in the itinerary',
       ];
   return <Modal open={open} title={t('quotation')} onClose={onClose} wide>
-    <div className="quote-toolbar no-print"><button className="ghost-button" onClick={onClose}>{t('editInput')}</button><button className="primary-button" onClick={() => window.print()}><FileText/>{t('printPdf')}</button></div>
+    <div className="quote-toolbar no-print"><button className="ghost-button" onClick={onClose}>{t('editInput')}</button><button className="primary-button" onClick={() => { void printElementAsA4('quotation-print-area', `${quotationNo} - ${customer.name}`); }}><FileText/>{t('printPdf')}</button></div>
     <article className="quotation-sheet" id="quotation-print-area">
       <header className="quote-header">
         <div><Brand/><p>Travel design · Flights · Bhutan experiences</p></div>

@@ -11,10 +11,11 @@ import {
   TourPackage, TrackingStatus, User,
 } from '../types';
 import { LanguageSwitch, useI18n } from '../i18n';
-import { calculatePrice } from '../utils/pricing';
+import { calculatePrice, normalizeAdditionalCharges } from '../utils/pricing';
 import { formatDate, formatNumber, formatTHB, makeId } from '../utils/format';
 import { Brand } from './Brand';
 import { EmptyState, Modal } from './Ui';
+import { AdditionalItemsEditor } from './AdditionalItemsEditor';
 
 interface Props {
   settings: GlobalSettings;
@@ -203,7 +204,11 @@ export function CustomerTrackingWorkspace(props: Props) {
     return {
       id: makeId('crm'), opportunityName: '', customerName: '', phone: '', email: '', leadSource: 'LINE OA', landSupplier: '', airline: 'Bhutan Airlines',
       travelStartDate: '', travelEndDate: '', packageId: first?.id || '', packageName: first?.name || '', hotelCategory: '3 Stars', passengerCount: 2,
-      channel: 'retail', sellingPricePerPerson: 0, singleRoomCount: 0, singleSupplementPerPerson: 0, singleSupplementTotal: 0, totalAmount: 0, ticketAmount: 0, airportTaxAmount: props.settings.airportTaxTHB * 2,
+      channel: 'retail', sellingPricePerPerson: 0, singleRoomCount: 0, singleSupplementPerPerson: 0, singleSupplementTotal: 0, totalAmount: 0,
+      ticketPricePerPerson: props.settings.ticketPriceTHB, ticketAmount: props.settings.ticketPriceTHB * 2,
+      airportTaxPerPerson: props.settings.airportTaxTHB, airportTaxAmount: props.settings.airportTaxTHB * 2,
+      businessUpgradeCount: 0, businessUpgradePerPerson: props.settings.businessUpgradeTHB ?? 15000, businessUpgradeTotal: 0,
+      additionalItems: [], additionalItemsTotal: 0,
       landInvoiceNo: '', landInvoiceReceivedAt: '', landInvoiceAmountUSD: 0, landExchangeRate: 0, landTransferFeeTHB: 0, landPayment: 0, landPaidAt: '', landTransferReference: '', profitAmount: 0,
       depositAmount: 0, depositDueDate: '', depositStatus: 'pending', balanceAmount: 0, balanceDueDate: '', balanceStatus: 'pending',
       status: 'new', salesOwnerId: props.currentUser.id, salesOwnerName: props.currentUser.name, note: '', quotationSentAt: '', bookingConfirmedAt: '',
@@ -330,21 +335,61 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   if (!form) return null;
   const currentForm = form;
   const set = <K extends keyof CustomerTracking>(key: K, value: CustomerTracking[K]) => setForm((current) => current ? ({ ...current, [key]: value }) : current);
+
+  function recalculateFinancials(current: CustomerTracking, patch: Partial<CustomerTracking> = {}): CustomerTracking {
+    const next = { ...current, ...patch };
+    const pax = Math.max(1, Math.round(Number(next.passengerCount || 1)));
+    const singleRoomCount = Math.min(pax, Math.max(0, Math.round(Number(next.singleRoomCount || 0))));
+    const singleSupplementPerPerson = Math.max(0, Number(next.singleSupplementPerPerson || 0));
+    const singleSupplementTotal = singleRoomCount * singleSupplementPerPerson;
+    const additionalItems = normalizeAdditionalCharges(next.additionalItems || [], pax);
+    const additionalItemsTotal = additionalItems.reduce((sum, item) => sum + item.totalTHB, 0);
+    const sellingPricePerPerson = Math.max(0, Number(next.sellingPricePerPerson || 0));
+    const ticketPricePerPerson = Math.max(0, Number(next.ticketPricePerPerson || (next.ticketAmount && next.ticketAmount / pax) || 0));
+    const airportTaxPerPerson = Math.max(0, Number(next.airportTaxPerPerson || (next.airportTaxAmount && next.airportTaxAmount / pax) || 0));
+    const businessUpgradeCount = Math.min(pax, Math.max(0, Math.round(Number(next.businessUpgradeCount || 0))));
+    const businessUpgradePerPerson = Math.max(0, Number(next.businessUpgradePerPerson || 0));
+    const businessUpgradeTotal = businessUpgradeCount * businessUpgradePerPerson;
+    const packageBaseTotal = sellingPricePerPerson * pax;
+    const totalAmount = packageBaseTotal + singleSupplementTotal + businessUpgradeTotal + additionalItemsTotal;
+    const ticketAmount = ticketPricePerPerson * pax;
+    const airportTaxAmount = airportTaxPerPerson * pax;
+    const depositAmount = ticketAmount + airportTaxAmount + businessUpgradeTotal;
+    const paidTicket = ticketPaidAmount({ ...next, depositAmount } as CustomerTracking, payments);
+    const balanceAmount = Math.max(0, totalAmount - paidTicket);
+    const landPayment = Math.max(0, Number(next.landPayment || 0));
+    const profitAmount = next.landPaidAt && landPayment > 0
+      ? totalAmount - ticketAmount - airportTaxAmount - businessUpgradeTotal - landPayment
+      : 0;
+    return {
+      ...next,
+      passengerCount: pax,
+      sellingPricePerPerson,
+      singleRoomCount,
+      singleSupplementPerPerson,
+      singleSupplementTotal,
+      additionalItems,
+      additionalItemsTotal,
+      totalAmount,
+      ticketPricePerPerson,
+      ticketAmount,
+      airportTaxPerPerson,
+      airportTaxAmount,
+      businessUpgradeCount,
+      businessUpgradePerPerson,
+      businessUpgradeTotal,
+      depositAmount,
+      balanceAmount,
+      profitAmount,
+    };
+  }
+
+  function updatePricingFields(patch: Partial<CustomerTracking>) {
+    setForm((current) => current ? recalculateFinancials(current, patch) : current);
+  }
+
   function updateSingleRoomDetails(nextCount: number, nextPerPerson: number) {
-    setForm((current) => {
-      if (!current) return current;
-      const count = Math.min(Math.max(0, Math.round(nextCount)), Math.max(1, Math.round(current.passengerCount || 1)));
-      const perPerson = Math.max(0, nextPerPerson || 0);
-      const nextTotal = count * perPerson;
-      const difference = nextTotal - Math.max(0, current.singleSupplementTotal || 0);
-      return {
-        ...current,
-        singleRoomCount: count,
-        singleSupplementPerPerson: perPerson,
-        singleSupplementTotal: nextTotal,
-        totalAmount: Math.max(0, current.totalAmount + difference),
-      };
-    });
+    updatePricingFields({ singleRoomCount: nextCount, singleSupplementPerPerson: nextPerPerson });
   }
   const selectedPackage = packages.find((x) => x.id === currentForm.packageId);
   const currentStage = getJourneyStage(currentForm);
@@ -352,15 +397,15 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   function updateLandFinancials(patch: Partial<Pick<CustomerTracking, 'landInvoiceAmountUSD' | 'landExchangeRate' | 'landTransferFeeTHB'>>) {
     setForm((current) => {
       if (!current) return current;
-      const next = { ...current, ...patch };
-      const usd = Math.max(0, next.landInvoiceAmountUSD || 0);
-      const rate = Math.max(0, next.landExchangeRate || 0);
-      const fee = Math.max(0, next.landTransferFeeTHB || 0);
+      const base = recalculateFinancials(current, patch);
+      const usd = Math.max(0, base.landInvoiceAmountUSD || 0);
+      const rate = Math.max(0, base.landExchangeRate || 0);
+      const fee = Math.max(0, base.landTransferFeeTHB || 0);
       const landPayment = usd > 0 && rate > 0 ? Math.round((usd * rate + fee) * 100) / 100 : 0;
-      const profitAmount = next.landPaidAt && landPayment > 0
-        ? next.totalAmount - next.ticketAmount - next.airportTaxAmount - landPayment
+      const profitAmount = base.landPaidAt && landPayment > 0
+        ? base.totalAmount - base.ticketAmount - base.airportTaxAmount - landPayment
         : 0;
-      return { ...next, landPayment, profitAmount };
+      return { ...base, landPayment, profitAmount };
     });
   }
 
@@ -369,32 +414,16 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   }
   function syncPackage(id: string) {
     const pkg = packages.find((x) => x.id === id);
-    setForm((current) => {
-      if (!current) return current;
-      const oldSingleTotal = Math.max(0, current.singleSupplementTotal || 0);
-      return {
-        ...current,
-        packageId: id,
-        packageName: pkg?.name || '',
-        travelEndDate: current.travelStartDate ? addDays(current.travelStartDate, pkg?.nights || 0) : current.travelEndDate,
-        singleSupplementPerPerson: 0,
-        singleSupplementTotal: 0,
-        totalAmount: Math.max(0, current.totalAmount - oldSingleTotal),
-      };
-    });
+    setForm((current) => current ? recalculateFinancials(current, {
+      packageId: id,
+      packageName: pkg?.name || '',
+      travelEndDate: current.travelStartDate ? addDays(current.travelStartDate, pkg?.nights || 0) : current.travelEndDate,
+      singleSupplementPerPerson: 0,
+      singleRoomCount: 0,
+    }) : current);
   }
   function syncHotelCategory(category: HotelCategory) {
-    setForm((current) => {
-      if (!current) return current;
-      const oldSingleTotal = Math.max(0, current.singleSupplementTotal || 0);
-      return {
-        ...current,
-        hotelCategory: category,
-        singleSupplementPerPerson: 0,
-        singleSupplementTotal: 0,
-        totalAmount: Math.max(0, current.totalAmount - oldSingleTotal),
-      };
-    });
+    updatePricingFields({ hotelCategory: category, singleSupplementPerPerson: 0, singleRoomCount: 0 });
   }
   function calculateFromPricing() {
     if (!currentForm.packageId) return;
@@ -404,60 +433,47 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       passengerCount: Math.max(1, currentForm.passengerCount),
       hotelCategory: currentForm.hotelCategory,
       travelDate: currentForm.travelStartDate,
-      businessUpgradeCount: 0,
+      businessUpgradeCount: currentForm.businessUpgradeCount || 0,
+      businessUpgradePriceOverrideTHB: currentForm.businessUpgradePerPerson > 0 ? currentForm.businessUpgradePerPerson : null,
       singleRoomCount: Math.min(Math.max(0, currentForm.singleRoomCount || 0), Math.max(1, currentForm.passengerCount)),
       singleSupplementOverrideTHB: currentForm.singleSupplementPerPerson > 0 ? currentForm.singleSupplementPerPerson : null,
+      additionalItems: currentForm.additionalItems || [],
     }, settings, packages);
     if (!result) return;
-    const ticketAmount = result.airTicketPerPerson * result.passengerCount;
-    const airportTaxAmount = result.airportTaxPerPerson * result.passengerCount;
-    const depositAmount = ticketAmount + airportTaxAmount;
-    const actualLandPayment = Math.max(0, currentForm.landPayment || 0);
-    setForm((current) => current ? ({
-      ...current,
+    setForm((current) => current ? recalculateFinancials(current, {
       packageName: result.packageName,
       sellingPricePerPerson: result.sellingPricePerPerson,
       singleRoomCount: result.singleRoomCount,
       singleSupplementPerPerson: result.singleSupplementPerPerson,
-      singleSupplementTotal: result.singleSupplementTotal,
-      totalAmount: result.groupTotal,
-      ticketAmount,
-      airportTaxAmount,
-      landPayment: actualLandPayment,
-      profitAmount: actualLandPayment > 0 ? result.groupTotal - ticketAmount - airportTaxAmount - actualLandPayment : 0,
-      depositAmount,
-      balanceAmount: Math.max(0, result.groupTotal - depositAmount),
+      ticketPricePerPerson: result.airTicketPerPerson,
+      airportTaxPerPerson: result.airportTaxPerPerson,
+      businessUpgradeCount: result.businessUpgradeCount,
+      businessUpgradePerPerson: result.businessUpgradePerPerson,
+      additionalItems: result.additionalItems,
       balanceDueDate: current.travelStartDate ? minusOneMonth(current.travelStartDate) : current.balanceDueDate,
     }) : current);
   }
   function normalizeBeforeSave(): CustomerTracking {
-    const ticket = Math.max(0, currentForm.ticketAmount); const tax = Math.max(0, currentForm.airportTaxAmount); const total = Math.max(0, currentForm.totalAmount);
-    const computedLandPayment = currentForm.landInvoiceAmountUSD > 0 && currentForm.landExchangeRate > 0
-      ? Math.max(0, currentForm.landInvoiceAmountUSD * currentForm.landExchangeRate + Math.max(0, currentForm.landTransferFeeTHB || 0))
-      : Math.max(0, currentForm.landPayment || 0);
-    const deposit = ticket + tax; const paidTicket = ticketPaidAmount(currentForm, payments); const balance = Math.max(0, total - paidTicket);
-    const profit = currentForm.landPaidAt && computedLandPayment > 0 ? total - ticket - tax - computedLandPayment : 0;
-    const owner = users.find((x) => x.id === currentForm.salesOwnerId);
-    let status = currentForm.status;
-    if (currentForm.closedAt) status = 'completed'; else if (currentForm.bookingConfirmedAt && status !== 'lost') status = 'won'; else if (currentForm.quotationSentAt && ['new', 'following'].includes(status)) status = 'quote_sent';
-    const normalizedPax = Math.max(1, Math.round(currentForm.passengerCount));
-    const normalizedSingleCount = Math.min(normalizedPax, Math.max(0, Math.round(currentForm.singleRoomCount || 0)));
-    const normalizedSinglePerPerson = Math.max(0, currentForm.singleSupplementPerPerson || 0);
+    const recalculated = recalculateFinancials(currentForm);
+    const computedLandPayment = recalculated.landInvoiceAmountUSD > 0 && recalculated.landExchangeRate > 0
+      ? Math.max(0, recalculated.landInvoiceAmountUSD * recalculated.landExchangeRate + Math.max(0, recalculated.landTransferFeeTHB || 0))
+      : Math.max(0, recalculated.landPayment || 0);
+    const owner = users.find((x) => x.id === recalculated.salesOwnerId);
+    let status = recalculated.status;
+    if (recalculated.closedAt) status = 'completed';
+    else if (recalculated.bookingConfirmedAt && status !== 'lost') status = 'won';
+    else if (recalculated.quotationSentAt && ['new', 'following'].includes(status)) status = 'quote_sent';
     return {
-      ...currentForm,
-      passengerCount: normalizedPax,
-      singleRoomCount: normalizedSingleCount,
-      singleSupplementPerPerson: normalizedSinglePerPerson,
-      singleSupplementTotal: normalizedSingleCount * normalizedSinglePerPerson,
-      landInvoiceAmountUSD: Math.max(0, currentForm.landInvoiceAmountUSD || 0),
-      landExchangeRate: Math.max(0, currentForm.landExchangeRate || 0),
-      landTransferFeeTHB: Math.max(0, currentForm.landTransferFeeTHB || 0),
+      ...recalculated,
+      landInvoiceAmountUSD: Math.max(0, recalculated.landInvoiceAmountUSD || 0),
+      landExchangeRate: Math.max(0, recalculated.landExchangeRate || 0),
+      landTransferFeeTHB: Math.max(0, recalculated.landTransferFeeTHB || 0),
       landPayment: computedLandPayment,
-      depositAmount: deposit,
-      balanceAmount: balance,
-      profitAmount: profit,
+      profitAmount: recalculated.landPaidAt && computedLandPayment > 0
+        ? recalculated.totalAmount - recalculated.ticketAmount - recalculated.airportTaxAmount - recalculated.businessUpgradeTotal - computedLandPayment
+        : 0,
       status,
-      salesOwnerName: owner?.name || currentForm.salesOwnerName || currentUser.name,
+      salesOwnerName: owner?.name || recalculated.salesOwnerName || currentUser.name,
       updatedAt: new Date().toISOString(),
     };
   }
@@ -494,11 +510,11 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     setPaymentDraft({ type: 'ticket_deposit', amount: 0, paidAt: isoToday(), reference: '', note: '' });
   }
 
-  const deposit = Math.max(0, form.ticketAmount) + Math.max(0, form.airportTaxAmount);
+  const deposit = Math.max(0, form.ticketAmount) + Math.max(0, form.airportTaxAmount) + Math.max(0, form.businessUpgradeTotal);
   const paidTicket = ticketPaidAmount(form, payments); const paidPackage = packagePaidAmount(form, payments); const totalPaid = sumPayments(payments);
   const balance = Math.max(0, form.totalAmount - paidTicket - paidPackage);
   const hasLandConversion = form.landPayment > 0 && form.landInvoiceAmountUSD > 0 && form.landExchangeRate > 0;
-  const calculatedProfit = hasLandConversion ? form.totalAmount - form.ticketAmount - form.airportTaxAmount - form.landPayment : null;
+  const calculatedProfit = hasLandConversion ? form.totalAmount - form.ticketAmount - form.businessUpgradeTotal - form.airportTaxAmount - form.landPayment : null;
   const profit = form.landPaidAt && calculatedProfit !== null ? calculatedProfit : null;
 
   return <Modal open={open} title={th ? 'Customer Journey — รายละเอียดและขั้นตอนดำเนินงาน' : 'Customer Journey — workflow details'} onClose={onClose} wide>
@@ -526,28 +542,33 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
           <label className="field"><span>{th ? 'ระดับโรงแรม' : 'Hotel category'}</span><select value={form.hotelCategory} onChange={(e) => syncHotelCategory(e.target.value as HotelCategory)}><option>3 Stars</option><option>4 Stars</option><option>5 Stars</option></select></label>
           <label className="field"><span>{th ? 'วันเริ่มเดินทาง' : 'Travel start'}</span><input type="date" value={form.travelStartDate} onChange={(e) => syncDates(e.target.value)}/></label>
           <label className="field"><span>{th ? 'วันสิ้นสุด' : 'Travel end'}</span><input type="date" value={form.travelEndDate} onChange={(e) => set('travelEndDate', e.target.value)}/></label>
-          <label className="field"><span>{th ? 'จำนวนผู้เดินทาง' : 'No. of pax'}</span><input type="number" min="1" value={form.passengerCount} onChange={(e) => {
-            const pax = Math.max(1, Number(e.target.value));
-            setForm((current) => {
-              if (!current) return current;
-              const count = Math.min(current.singleRoomCount || 0, pax);
-              const nextSingleTotal = count * (current.singleSupplementPerPerson || 0);
-              const difference = nextSingleTotal - (current.singleSupplementTotal || 0);
-              return { ...current, passengerCount: pax, singleRoomCount: count, singleSupplementTotal: nextSingleTotal, totalAmount: Math.max(0, current.totalAmount + difference) };
-            });
-          }}/></label>
+          <label className="field"><span>{th ? 'จำนวนผู้เดินทาง' : 'No. of pax'}</span><input type="number" min="1" value={form.passengerCount} onChange={(e) => updatePricingFields({ passengerCount: Math.max(1, Number(e.target.value)) })}/></label>
           <label className="field"><span>{th ? 'จำนวนผู้พักเดี่ยว' : 'Single-room travellers'}</span><input type="number" min="0" max={Math.max(1, form.passengerCount)} value={form.singleRoomCount} onChange={(e) => updateSingleRoomDetails(Number(e.target.value), form.singleSupplementPerPerson)}/></label>
-          <div className="tracking-calc-action"><button className="secondary-button" type="button" onClick={calculateFromPricing}><CircleDollarSign/>{th ? 'ดึงราคาจากระบบคำนวณ' : 'Calculate from pricing system'}</button></div>
+          <div className="tracking-calc-action"><button className="secondary-button" type="button" onClick={calculateFromPricing}><CircleDollarSign/>{th ? 'ดึงราคามาตรฐานจากระบบ' : 'Load standard pricing'}</button></div>
         </div>
-        <div className="tracking-form-grid money-grid journey-money-grid">
-          <MoneyField label={th ? 'ราคาขายต่อท่าน' : 'Selling / pax'} value={form.sellingPricePerPerson} onChange={(v) => set('sellingPricePerPerson', v)}/>
+        <div className="tracking-form-grid money-grid journey-money-grid pricing-input-grid">
+          <MoneyField label={th ? 'ราคาขายแพ็กเกจ / ท่าน' : 'Package selling price / pax'} value={form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ sellingPricePerPerson: v })}/>
+          <MoneyField label={th ? 'ราคาตั๋วเครื่องบิน / ท่าน' : 'Airfare / pax'} value={form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ ticketPricePerPerson: v })}/>
+          <MoneyField label={th ? 'ภาษีสนามบิน / ท่าน' : 'Airport tax / pax'} value={form.airportTaxPerPerson} onChange={(v) => updatePricingFields({ airportTaxPerPerson: v })}/>
+          <MoneyField label={th ? 'Business Class เพิ่ม / ท่าน' : 'Business Class upgrade / pax'} value={form.businessUpgradePerPerson} onChange={(v) => updatePricingFields({ businessUpgradePerPerson: v })}/>
+          <label className="field"><span>{th ? 'จำนวนผู้โดยสาร Business Class' : 'Business Class passengers'}</span><input type="number" min="0" max={form.passengerCount} value={form.businessUpgradeCount} onChange={(e) => updatePricingFields({ businessUpgradeCount: Math.min(form.passengerCount, Math.max(0, Number(e.target.value))) })}/></label>
           <MoneyField label={th ? 'ส่วนต่างพักเดี่ยว / ท่าน' : 'Single supplement / pax'} value={form.singleSupplementPerPerson} onChange={(v) => updateSingleRoomDetails(form.singleRoomCount, v)}/>
-          <div className="calculated-money single-room-calculated"><span>{th ? 'พักเดี่ยวรวม' : 'Total single supplement'}</span><strong>{formatTHB(form.singleSupplementTotal, language)}</strong><small>{form.singleRoomCount} {th ? 'ท่าน' : 'pax'} × {formatTHB(form.singleSupplementPerPerson, language)}</small></div>
-          <MoneyField label={th ? 'ยอดแพ็กเกจทั้งหมด' : 'Total package amount'} value={form.totalAmount} onChange={(v) => set('totalAmount', v)}/>
-          <MoneyField label={th ? 'ราคาตั๋วรวมทั้งหมด' : 'Total ticket price'} value={form.ticketAmount} onChange={(v) => set('ticketAmount', v)}/>
-          <MoneyField label={th ? 'ภาษีสนามบินรวม' : 'Total airport tax'} value={form.airportTaxAmount} onChange={(v) => set('airportTaxAmount', v)}/>
-          <div className="calculated-money land-cost-pending"><span>{th ? 'ต้นทุน LAND จริง' : 'Actual land cost'}</span><strong>{form.landPayment > 0 ? formatTHB(form.landPayment, language) : (th ? 'รอ Land Invoice' : 'Awaiting land invoice')}</strong><small>{th ? 'บันทึกยอด USD และอัตราแลกเปลี่ยนใน Step 4–6' : 'Record the USD invoice and actual exchange rate in Steps 4–6.'}</small></div>
-          <div className={`calculated-money ${profit !== null && profit < 0 ? 'negative' : ''}`}><span>{th ? 'กำไรจริงจากการขาย' : 'Realized sales profit'}</span><strong>{profit === null ? (th ? 'รอชำระ LAND' : 'Pending land payment') : formatTHB(profit, language)}</strong><small>{th ? 'ยอดขาย − ตั๋ว − ภาษี − LAND ที่โอนจริง' : 'Sales − ticket − tax − actual land transfer'}</small></div>
+        </div>
+        <AdditionalItemsEditor compact items={form.additionalItems || []} passengerCount={form.passengerCount} language={language} onChange={(items) => updatePricingFields({ additionalItems: items })}/>
+        <div className="automatic-totals-panel">
+          <div className="automatic-totals-head"><div><b>{th ? 'สรุปราคาอัตโนมัติ' : 'Automatic price summary'}</b><span>{th ? 'กรอกเฉพาะราคาต่อหน่วย ระบบคูณจำนวนผู้เดินทางและรวมยอดให้เอง' : 'Enter unit prices only; the system multiplies quantities and totals automatically.'}</span></div><strong>{formatTHB(form.totalAmount, language)}</strong></div>
+          <div className="automatic-totals-grid">
+            <AutoTotal label={th ? 'แพ็กเกจพื้นฐาน' : 'Base package'} formula={`${formatTHB(form.sellingPricePerPerson, language)} × ${form.passengerCount}`} value={form.sellingPricePerPerson * form.passengerCount} language={language}/>
+            <AutoTotal label={th ? 'Business Class รวม' : 'Business Class total'} formula={`${form.businessUpgradeCount} × ${formatTHB(form.businessUpgradePerPerson, language)}`} value={form.businessUpgradeTotal} language={language}/>
+            <AutoTotal label={th ? 'พักเดี่ยวรวม' : 'Single supplement'} formula={`${form.singleRoomCount} × ${formatTHB(form.singleSupplementPerPerson, language)}`} value={form.singleSupplementTotal} language={language}/>
+            <AutoTotal label={th ? 'รายการเพิ่มเติมรวม' : 'Additional services'} formula={`${form.additionalItems?.length || 0} ${th ? 'รายการ' : 'items'}`} value={form.additionalItemsTotal} language={language}/>
+            <AutoTotal featured label={th ? 'ยอดแพ็กเกจทั้งหมด' : 'Total package amount'} formula={th ? 'แพ็กเกจ + Business + พักเดี่ยว + รายการเพิ่มเติม' : 'Package + Business + single rooms + additional services'} value={form.totalAmount} language={language}/>
+            <AutoTotal label={th ? 'ค่าตั๋วเครื่องบินทั้งหมด' : 'Total airfare'} formula={`${formatTHB(form.ticketPricePerPerson, language)} × ${form.passengerCount}`} value={form.ticketAmount} language={language}/>
+            <AutoTotal label={th ? 'ภาษีสนามบินทั้งหมด' : 'Total airport tax'} formula={`${formatTHB(form.airportTaxPerPerson, language)} × ${form.passengerCount}`} value={form.airportTaxAmount} language={language}/>
+            <AutoTotal featured label={th ? 'ยอด Invoice 1' : 'Invoice 1 total'} formula={th ? 'ค่าตั๋วทั้งหมด + Business Class + ภาษีทั้งหมด' : 'Total airfare + Business Class + total airport tax'} value={deposit} language={language}/>
+            <div className="calculated-money land-cost-pending"><span>{th ? 'ต้นทุน LAND จริง' : 'Actual land cost'}</span><strong>{form.landPayment > 0 ? formatTHB(form.landPayment, language) : (th ? 'รอ Land Invoice' : 'Awaiting land invoice')}</strong><small>{th ? 'บันทึกยอด USD และอัตราแลกเปลี่ยนใน Step 4–6' : 'Record the USD invoice and actual exchange rate in Steps 4–6.'}</small></div>
+            <div className={`calculated-money ${profit !== null && profit < 0 ? 'negative' : ''}`}><span>{th ? 'กำไรจริงจากการขาย' : 'Realized sales profit'}</span><strong>{profit === null ? (th ? 'รอชำระ LAND' : 'Pending land payment') : formatTHB(profit, language)}</strong><small>{th ? 'ยอดขาย − ตั๋ว − Business − ภาษี − LAND ที่โอนจริง' : 'Sales − ticket − Business − tax − actual land transfer'}</small></div>
+          </div>
         </div>
       </WorkflowSection>
 
@@ -596,8 +617,8 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         </div>
         <div className="land-profit-breakdown">
           <div><span>{th ? 'ยอดขายแพ็กเกจทั้งหมด' : 'Total package sales'}</span><b>{formatTHB(form.totalAmount, language)}</b></div>
-          <div className="deduction"><span>{th ? 'หัก ต้นทุนตั๋ว + ภาษีสนามบิน' : 'Less airfare + airport taxes'}</span><b>-{formatTHB(form.ticketAmount + form.airportTaxAmount, language)}</b></div>
-          <div><span>{th ? 'ยอดค่าแพ็กเกจหลังหักค่าตั๋ว' : 'Package balance after airfare'}</span><b>{formatTHB(form.totalAmount - form.ticketAmount - form.airportTaxAmount, language)}</b></div>
+          <div className="deduction"><span>{th ? 'หัก ต้นทุนตั๋ว + Business Class + ภาษีสนามบิน' : 'Less airfare + Business Class + airport taxes'}</span><b>-{formatTHB(form.ticketAmount + form.businessUpgradeTotal + form.airportTaxAmount, language)}</b></div>
+          <div><span>{th ? 'ยอดค่าแพ็กเกจหลังหักค่าตั๋ว' : 'Package balance after airfare'}</span><b>{formatTHB(form.totalAmount - form.ticketAmount - form.businessUpgradeTotal - form.airportTaxAmount, language)}</b></div>
           <div className="deduction"><span>{th ? 'หัก LAND Payment (เงินบาท)' : 'Less land payment (THB)'}</span><b>{form.landPayment > 0 ? `-${formatTHB(form.landPayment, language)}` : '-'}</b></div>
           <div className={`land-profit-total ${calculatedProfit !== null && calculatedProfit < 0 ? 'negative' : ''}`}><span>{form.landPaidAt ? (th ? 'กำไรขั้นต้นจริง' : 'Realized gross profit') : (th ? 'กำไรคาดการณ์ตามอัตรานี้' : 'Projected profit at this rate')}</span><strong>{calculatedProfit === null ? (th ? 'กรอกยอด USD และอัตราแลกเปลี่ยน' : 'Enter USD and FX rate') : formatTHB(calculatedProfit, language)}</strong></div>
         </div>
@@ -630,6 +651,10 @@ function MoneyField({ label, value, onChange }: { label: string; value: number; 
   return <label className="field money-input"><span>{label}</span><div><input type="number" min="0" step="0.01" value={value} onChange={(e) => onChange(Number(e.target.value))}/><em>THB</em></div></label>;
 }
 
+function AutoTotal({ label, formula, value, language, featured = false }: { label: string; formula: string; value: number; language: 'th' | 'en'; featured?: boolean }) {
+  return <div className={`auto-total-card ${featured ? 'featured' : ''}`}><span>{label}</span><strong>{formatTHB(value, language)}</strong><small>{formula}</small></div>;
+}
+
 function InvoicePreview({ value, language, payments, onClose, onSaveInvoice, onSaveTracking }: {
   value: { tracking: CustomerTracking; invoice: PaymentInvoice } | null; language: 'th' | 'en'; payments: PaymentTransaction[]; onClose: () => void;
   onSaveInvoice: (item: PaymentInvoice) => Promise<void>; onSaveTracking: (item: CustomerTracking) => Promise<void>;
@@ -657,10 +682,12 @@ function InvoicePreview({ value, language, payments, onClose, onSaveInvoice, onS
         <h3>{th ? 'มูลค่าแพ็กเกจทั้งหมด' : 'Full package value'}</h3>
         <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Passenger / Service'}</span><span>PTC</span><span>QTY</span><span>{th ? 'ราคาต่อท่าน' : 'Selling / Pax'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
         <div className="journey-invoice-package-row"><span><b>{tracking.packageName}</b><small>{tracking.hotelCategory} · {tracking.travelStartDate && tracking.travelEndDate ? `${formatDate(tracking.travelStartDate, language)} – ${formatDate(tracking.travelEndDate, language)}` : ''}</small></span><span>ADT</span><span>{tracking.passengerCount}</span><span>{formatNumber(tracking.sellingPricePerPerson, 2)}</span><span>{formatNumber(tracking.sellingPricePerPerson * tracking.passengerCount, 2)}</span></div>
+        {tracking.businessUpgradeCount > 0 && <div className="journey-invoice-package-row journey-invoice-single-row"><span><b>Business Class Upgrade</b><small>{th ? 'ส่วนเพิ่มชั้นโดยสาร' : 'Cabin upgrade'}</small></span><span>ADT</span><span>{tracking.businessUpgradeCount}</span><span>{formatNumber(tracking.businessUpgradePerPerson, 2)}</span><span>{formatNumber(tracking.businessUpgradeTotal, 2)}</span></div>}
         {tracking.singleRoomCount > 0 && <div className="journey-invoice-package-row journey-invoice-single-row"><span><b>{th ? 'ส่วนต่างห้องพักเดี่ยว' : 'Single-room supplement'}</b><small>{tracking.hotelCategory}</small></span><span>ADT</span><span>{tracking.singleRoomCount}</span><span>{formatNumber(tracking.singleSupplementPerPerson, 2)}</span><span>{formatNumber(tracking.singleSupplementTotal, 2)}</span></div>}
+        {(tracking.additionalItems || []).map((extra) => <div className="journey-invoice-package-row journey-invoice-single-row" key={extra.id}><span><b>{extra.description || (th ? 'รายการเพิ่มเติม' : 'Additional service')}</b><small>{extra.basis === 'per_person' ? (th ? 'ต่อท่าน' : 'Per person') : extra.basis === 'per_group' ? (th ? 'เหมาทั้งกลุ่ม' : 'Per group') : (th ? 'จำนวนกำหนดเอง' : 'Custom quantity')}</small></span><span>SRV</span><span>{formatNumber(extra.quantity, 0)}</span><span>{formatNumber(extra.unitPriceTHB, 2)}</span><span>{formatNumber(extra.totalTHB, 2)}</span></div>)}
         <div className="journey-invoice-package-total"><span>{th ? 'รวมมูลค่าแพ็กเกจ' : 'Total package value'}</span><strong>{formatNumber(tracking.totalAmount, 2)}</strong></div>
       </section>
-      {isDeposit ? <section className="journey-payment-breakdown"><h3>{th ? 'การชำระงวดที่ 1 — ค่าตั๋วเครื่องบินทั้งหมด' : 'Payment 1 — full airfare deposit'}</h3><div><span>{th ? 'ค่าตั๋วเครื่องบินไป–กลับ ชั้น Economy' : 'Round-trip Economy Class airfare'}</span><b>{formatNumber(tracking.ticketAmount, 2)}</b></div><div><span>{th ? 'ภาษีสนามบินทั้งหมด' : 'Total airport taxes'}</span><b>{formatNumber(tracking.airportTaxAmount, 2)}</b></div><div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 1' : 'Payment 1 amount due'}</span><strong>{formatNumber(tracking.depositAmount, 2)}</strong></div></section> : <section className="journey-payment-breakdown"><h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจส่วนที่เหลือ' : 'Payment 2 — remaining package balance'}</h3><div><span>{th ? 'ค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(tracking.totalAmount, 2)}</b></div>{ticketPayments.length ? ticketPayments.map((payment, index) => <div key={payment.id} className="deduction"><span>{th ? `หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว ครั้งที่ ${index + 1}` : `Less ticket payment ${index + 1}`} {payment.reference ? `(${payment.reference})` : ''}</span><b>-{formatNumber(payment.amount, 2)}</b></div>) : <div className="deduction"><span>{th ? 'หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว' : 'Less ticket payment received'}</span><b>-{formatNumber(paidTicket, 2)}</b></div>}<div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 2' : 'Payment 2 amount due'}</span><strong>{formatNumber(balanceDue, 2)}</strong></div></section>}
+      {isDeposit ? <section className="journey-payment-breakdown"><h3>{th ? 'การชำระงวดที่ 1 — ค่าตั๋วเครื่องบินและค่าใช้จ่ายสายการบิน' : 'Payment 1 — airfare and airline charges'}</h3><div><span>{th ? 'ค่าตั๋วเครื่องบินไป–กลับ ชั้น Economy' : 'Round-trip Economy Class airfare'}</span><b>{formatNumber(tracking.ticketAmount, 2)}</b></div>{tracking.businessUpgradeTotal > 0 && <div><span>{th ? 'ส่วนเพิ่ม Business Class' : 'Business Class upgrade'}</span><b>{formatNumber(tracking.businessUpgradeTotal, 2)}</b></div>}<div><span>{th ? 'ภาษีสนามบินทั้งหมด' : 'Total airport taxes'}</span><b>{formatNumber(tracking.airportTaxAmount, 2)}</b></div><div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 1' : 'Payment 1 amount due'}</span><strong>{formatNumber(tracking.depositAmount, 2)}</strong></div></section> : <section className="journey-payment-breakdown"><h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจส่วนที่เหลือ' : 'Payment 2 — remaining package balance'}</h3><div><span>{th ? 'ค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(tracking.totalAmount, 2)}</b></div>{ticketPayments.length ? ticketPayments.map((payment, index) => <div key={payment.id} className="deduction"><span>{th ? `หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว ครั้งที่ ${index + 1}` : `Less ticket payment ${index + 1}`} {payment.reference ? `(${payment.reference})` : ''}</span><b>-{formatNumber(payment.amount, 2)}</b></div>) : <div className="deduction"><span>{th ? 'หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว' : 'Less ticket payment received'}</span><b>-{formatNumber(paidTicket, 2)}</b></div>}<div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 2' : 'Payment 2 amount due'}</span><strong>{formatNumber(balanceDue, 2)}</strong></div></section>}
       <section className="invoice-total"><div><span>{th ? `ยอดชำระงวดที่ ${isDeposit ? '1' : '2'}` : `Payment ${isDeposit ? '1' : '2'} due`}</span><strong>THB {formatNumber(isDeposit ? tracking.depositAmount : balanceDue, 2)}</strong><small>{invoice.dueDate ? `${th ? 'ภายในวันที่' : 'Due by'} ${formatDate(invoice.dueDate, language)}` : '-'}</small></div></section>
       <section className="invoice-note"><h3>{th ? 'หมายเหตุการชำระเงิน' : 'Payment note'}</h3><p>{isDeposit ? (th ? 'เมื่อบริษัทตรวจสอบยอดชำระงวดที่ 1 เรียบร้อยแล้ว เจ้าหน้าที่จะส่งตั๋วเครื่องบินให้ลูกค้า' : 'Flight tickets will be sent after Payment 1 is verified.') : (th ? 'หลังชำระค่าแพ็กเกจครบ บริษัทจะจัดทำและส่ง Itinerary พร้อมเอกสารเตรียมเดินทาง' : 'The itinerary and pre-departure documents will be sent after full payment.')}</p></section>
       <footer className="invoice-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div><div><span>{th ? 'ผู้จัดทำ' : 'Prepared by'}</span><b>{tracking.salesOwnerName || '-'}</b></div></footer>

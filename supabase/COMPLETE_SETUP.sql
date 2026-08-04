@@ -36,6 +36,7 @@ create table if not exists public.app_settings (
   agent_margin_thb numeric not null default 3000,
   group_discount_min_pax integer not null default 10 check (group_discount_min_pax >= 1),
   group_discount_percent numeric not null default 10 check (group_discount_percent >= 0 and group_discount_percent <= 100),
+  business_upgrade_thb numeric not null default 15000,
   logo_url text not null default '',
   updated_at timestamptz not null default now()
 );
@@ -126,6 +127,7 @@ alter table public.app_settings add column if not exists agent_ticket_discount_p
 alter table public.app_settings add column if not exists agent_margin_thb numeric not null default 3000;
 alter table public.app_settings add column if not exists group_discount_min_pax integer not null default 10;
 alter table public.app_settings add column if not exists group_discount_percent numeric not null default 10;
+alter table public.app_settings add column if not exists business_upgrade_thb numeric not null default 15000;
 alter table public.app_settings add column if not exists logo_url text not null default '';
 alter table public.tour_packages add column if not exists single_supplements_thb jsonb not null default '{"star3":0,"star4":0,"star5":0}'::jsonb;
 update public.app_settings set agent_ticket_price_thb = 25220 where agent_ticket_price_thb is null;
@@ -166,10 +168,10 @@ insert into public.app_settings (
   id, exchange_rate_usd, ticket_price_thb, airport_tax_thb, visa_fee_usd, margin_thb,
   hotel_3_star_pax1_usd, hotel_3_star_pax2_usd, hotel_3_star_pax3_plus_usd,
   hotel_4_star_pax1_usd, hotel_4_star_pax2_usd, hotel_4_star_pax3_plus_usd,
-  agent_ticket_price_thb, agent_ticket_discount_percent, agent_margin_thb, group_discount_min_pax, group_discount_percent, logo_url, updated_at
+  agent_ticket_price_thb, agent_ticket_discount_percent, agent_margin_thb, group_discount_min_pax, group_discount_percent, business_upgrade_thb, logo_url, updated_at
 ) values (
   '00000000-0000-0000-0000-000000000001', 35, 26000, 6500, 40, 5000,
-  250, 200, 180, 300, 240, 220, 25220, 3, 3000, 10, 10, '', now()
+  250, 200, 180, 300, 240, 220, 25220, 3, 3000, 10, 10, 15000, '', now()
 )
 on conflict (id) do nothing;
 

@@ -10,6 +10,7 @@ import { calculatePrice, getPackageSingleSupplement } from '../utils/pricing';
 import { formatDate, formatNumber, formatTHB, formatUSD, makeQuotationNo } from '../utils/format';
 import { Brand } from './Brand';
 import { Modal } from './Ui';
+import { AdditionalItemsEditor } from './AdditionalItemsEditor';
 
 interface FrontOfficeProps {
   settings: GlobalSettings;
@@ -33,8 +34,10 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
     hotelCategory: firstCategory,
     travelDate: '',
     businessUpgradeCount: 0,
+    businessUpgradePriceOverrideTHB: null,
     singleRoomCount: 0,
     singleSupplementOverrideTHB: null,
+    additionalItems: [],
   });
   const [customer, setCustomer] = useState<CustomerDetails>(emptyCustomer);
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -50,6 +53,7 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
   const selectedPackage = packages.find((pkg) => pkg.id === input.packageId);
   const packageSingleSupplement = getPackageSingleSupplement(selectedPackage, input.hotelCategory);
   const effectiveSingleSupplement = input.singleSupplementOverrideTHB ?? packageSingleSupplement;
+  const effectiveBusinessUpgrade = input.businessUpgradePriceOverrideTHB ?? settings.businessUpgradeTHB ?? 15000;
   const agentDiscount = settings.ticketPriceTHB > 0
     ? ((settings.ticketPriceTHB - (settings.agentTicketPriceTHB ?? 25220)) / settings.ticketPriceTHB) * 100
     : 0;
@@ -126,25 +130,48 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
             </div>
           </div>
 
-          <div className="upgrade-row">
+          <div className="upgrade-row business-upgrade-row">
             <div className="upgrade-icon"><BriefcaseBusiness/></div>
             <div className="upgrade-copy"><b>{t('businessUpgrade')}</b><span>{t('businessUpgradeHint')}</span></div>
-            <div className="stepper"><button type="button" onClick={() => update('businessUpgradeCount', Math.max(0, input.businessUpgradeCount - 1))}>−</button><strong>{input.businessUpgradeCount}</strong><button type="button" onClick={() => update('businessUpgradeCount', Math.min(input.passengerCount, input.businessUpgradeCount + 1))}>+</button></div>
+            <div className="business-upgrade-controls">
+              <div className="business-upgrade-price">
+                <label>{language === 'th' ? 'ส่วนเพิ่ม / ท่าน' : 'Upgrade / pax'}</label>
+                <div><input type="number" min="0" step="100" value={effectiveBusinessUpgrade} onChange={(event) => update('businessUpgradePriceOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div>
+                {input.businessUpgradePriceOverrideTHB !== null && input.businessUpgradePriceOverrideTHB !== undefined
+                  ? <button type="button" onClick={() => update('businessUpgradePriceOverrideTHB', null)}><RotateCcw/>{t('resetDefault')}</button>
+                  : <small>{language === 'th' ? 'ราคาตั้งต้นจากหลังบ้าน' : 'Default from back office'}</small>}
+              </div>
+              <div className="business-upgrade-count"><label>{language === 'th' ? 'จำนวนผู้โดยสาร' : 'Passengers'}</label><div className="stepper"><button type="button" onClick={() => update('businessUpgradeCount', Math.max(0, input.businessUpgradeCount - 1))}>−</button><strong>{input.businessUpgradeCount}</strong><button type="button" onClick={() => update('businessUpgradeCount', Math.min(input.passengerCount, input.businessUpgradeCount + 1))}>+</button></div></div>
+            </div>
           </div>
+
+          <AdditionalItemsEditor
+            items={input.additionalItems}
+            passengerCount={input.passengerCount}
+            language={language}
+            onChange={(items) => update('additionalItems', items)}
+          />
         </section>
 
         <aside className="price-summary-card">
           <div className="summary-top"><span className={`channel-badge ${input.channel}`}>{input.channel === 'retail' ? t('retail') : t('agent')}</span><span className="live-dot"><i/> LIVE</span></div>
           <div className="summary-hero"><span>{t('perPerson')}</span><strong>{formatTHB(result?.sellingPricePerPerson || 0, language)}</strong><small>{selectedPackage?.nights || 0} {t('nights')} · {input.passengerCount} {t('people')}</small></div>
           <div className="summary-lines">
-            <PriceLine icon={<Plane/>} label={t('flight')} value={formatTHB(result?.airTicketPerPerson || 0, language)} note={result?.hasGroupFlightDiscount ? groupDiscountLabel : undefined}/>
-            <PriceLine icon={<WalletCards/>} label={t('airportTax')} value={formatTHB(result?.airportTaxPerPerson || 0, language)}/>
-            <PriceLine icon={<HotelIcon/>} label={t('ground')} value={formatTHB(result?.groundCostTHBPerPerson || 0, language)} note={`${formatUSD(result?.groundRateUSDPerPersonPerNight || 0)} / night`}/>
+            <PriceLine icon={<Plane/>} label={language === 'th' ? 'ค่าตั๋วรวม' : 'Total airfare'} value={formatTHB(result?.flightTotal || 0, language)} note={`${formatTHB(result?.airTicketPerPerson || 0, language)} × ${input.passengerCount}${result?.hasGroupFlightDiscount ? ` · ${groupDiscountLabel}` : ''}`}/>
+            <PriceLine icon={<WalletCards/>} label={language === 'th' ? 'ภาษีสนามบินรวม' : 'Total airport tax'} value={formatTHB(result?.airportTaxTotal || 0, language)} note={`${formatTHB(result?.airportTaxPerPerson || 0, language)} × ${input.passengerCount}`}/>
+            <PriceLine icon={<HotelIcon/>} label={t('ground')} value={formatTHB(result?.groundCostTHBPerPerson || 0, language)} note={`${formatUSD(result?.groundRateUSDPerPersonPerNight || 0)} / night / pax`}/>
             {(result?.singleRoomCount || 0) > 0 && <PriceLine icon={<BedDouble/>} label={t('singleRoom')} value={formatTHB(result?.singleSupplementTotal || 0, language)} note={`${result?.singleRoomCount || 0} ${t('people')} × ${formatTHB(result?.singleSupplementPerPerson || 0, language)}`}/>} 
+            {(result?.additionalItemsTotal || 0) > 0 && <PriceLine icon={<Sparkles/>} label={language === 'th' ? 'รายการเพิ่มเติมรวม' : 'Additional services'} value={formatTHB(result?.additionalItemsTotal || 0, language)} note={`${result?.additionalItems.length || 0} ${language === 'th' ? 'รายการ' : 'items'}`}/>} 
             <PriceLine icon={<ShieldCheck/>} label={t('visa')} value={formatTHB(result?.visaTHBPerPerson || 0, language)} note={formatUSD(result?.visaUSDPerPerson || 0)}/>
           </div>
-          <div className="profit-strip"><div><span>{t('cost')}</span><b>{formatTHB(result?.baseCostPerPerson || 0, language)}</b></div><div><span>{t('profit')}</span><b>{formatTHB(result?.profitPerPerson || 0, language)}</b></div></div>
-          <div className="group-total"><span>{t('groupTotal')}</span><strong>{formatTHB(result?.groupTotal || 0, language)}</strong>{(result?.singleSupplementTotal || 0) > 0 && <small>+ {t('singleRoom')} {formatTHB(result?.singleSupplementTotal || 0, language)}</small>}{(result?.businessUpgradeTotal || 0) > 0 && <small>+ Business {formatTHB(result?.businessUpgradeTotal || 0, language)}</small>}</div>
+          <div className="profit-strip"><div><span>{language === 'th' ? 'ต้นทุนต่อท่าน' : 'Cost / pax'}</span><b>{formatTHB(result?.baseCostPerPerson || 0, language)}</b></div><div><span>{language === 'th' ? 'กำไรต่อท่าน' : 'Profit / pax'}</span><b>{formatTHB(result?.profitPerPerson || 0, language)}</b></div></div>
+          <div className="auto-total-breakdown">
+            <div><span>{language === 'th' ? 'แพ็กเกจพื้นฐาน' : 'Base package'}</span><b>{formatTHB(result?.groupSubtotal || 0, language)}</b></div>
+            {(result?.singleSupplementTotal || 0) > 0 && <div><span>{t('singleRoom')}</span><b>+ {formatTHB(result?.singleSupplementTotal || 0, language)}</b></div>}
+            {(result?.businessUpgradeTotal || 0) > 0 && <div><span>Business Class</span><b>+ {formatTHB(result?.businessUpgradeTotal || 0, language)}</b></div>}
+            {(result?.additionalItemsTotal || 0) > 0 && <div><span>{language === 'th' ? 'รายการเพิ่มเติม' : 'Additional services'}</span><b>+ {formatTHB(result?.additionalItemsTotal || 0, language)}</b></div>}
+          </div>
+          <div className="group-total"><span>{language === 'th' ? 'ยอดรวมทั้งหมด ก่อนออกเอกสาร' : 'Grand total before document'}</span><strong>{formatTHB(result?.groupTotal || 0, language)}</strong><small>{language === 'th' ? 'ระบบคำนวณจากจำนวนผู้เดินทางและรายการทั้งหมดอัตโนมัติ' : 'Automatically calculated from all travellers and services'}</small></div>
           <button className="primary-button quote-button" disabled={!result} onClick={() => setCustomerOpen(true)}><FileText/><span>{t('createQuote')}</span><ArrowRight/></button>
           <div className="summary-foot"><CircleDollarSign/><span>1 USD = {formatNumber(settings.exchangeRateUSD, 2)} THB · Rounded up / 500 THB</span></div>
         </aside>
@@ -277,9 +304,21 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
           <span className="quote-center-cell"><b>ADT</b></span>
           <span className="quote-center-cell"><b>{result.passengerCount}</b></span>
           <span className="quote-number-cell"><b>{formatNumber(result.sellingPricePerPerson, 2)}</b></span>
-          <span className="quote-number-cell"><b>{result.businessUpgradeTotal > 0 ? formatNumber(result.businessUpgradeTotal, 2) : '—'}</b></span>
-          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.groupSubtotal + result.businessUpgradeTotal, 2)}</b></span>
+          <span className="quote-number-cell"><b>—</b></span>
+          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.groupSubtotal, 2)}</b></span>
         </div>
+        {result.businessUpgradeCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row">
+          <span className="quote-service-cell"><strong>Business Class Upgrade</strong><small>{language === 'th' ? 'อัปเกรดชั้นโดยสาร' : 'Cabin upgrade'}</small></span>
+          <span className="quote-center-cell"><b>ADT</b></span><span className="quote-center-cell"><b>{result.businessUpgradeCount}</b></span>
+          <span className="quote-number-cell"><b>{formatNumber(result.businessUpgradePerPerson, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
+          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.businessUpgradeTotal, 2)}</b></span>
+        </div>}
+        {result.additionalItems.map((item) => <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row" key={item.id}>
+          <span className="quote-service-cell"><strong>{item.description || (language === 'th' ? 'รายการเพิ่มเติม' : 'Additional service')}</strong><small>{item.basis === 'per_person' ? (language === 'th' ? 'คิดต่อท่าน' : 'Per person') : item.basis === 'per_group' ? (language === 'th' ? 'เหมาทั้งกลุ่ม' : 'Per group') : (language === 'th' ? 'จำนวนกำหนดเอง' : 'Custom quantity')}</small></span>
+          <span className="quote-center-cell"><b>SRV</b></span><span className="quote-center-cell"><b>{formatNumber(item.quantity, 0)}</b></span>
+          <span className="quote-number-cell"><b>{formatNumber(item.unitPriceTHB, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
+          <span className="quote-number-cell quote-line-total"><b>{formatNumber(item.totalTHB, 2)}</b></span>
+        </div>)}
         {result.singleRoomCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-single-room-row">
           <span className="quote-service-cell"><strong>{language === 'th' ? 'ส่วนต่างห้องพักเดี่ยว' : 'Single-room supplement'}</strong><small>{result.hotelCategory} · {result.nights} {t('nights')}</small></span>
           <span className="quote-center-cell"><b>ADT</b></span>

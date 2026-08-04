@@ -1441,3 +1441,87 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .land-invoice-summary > div { min-height: 72px; }
   .land-profit-breakdown > div { align-items: flex-start; }
 }
+
+/* =========================================================
+   v12.3 — Flexible pricing, automatic totals & Business Class
+   ========================================================= */
+.business-upgrade-row {
+  margin-top: 14px;
+  grid-template-columns: 38px minmax(170px,1fr) minmax(300px,auto);
+}
+.business-upgrade-controls { display:flex; align-items:flex-end; justify-content:flex-end; gap:14px; }
+.business-upgrade-price { min-width:190px; display:grid; gap:4px; }
+.business-upgrade-price > label,
+.business-upgrade-count > label { color:#60756b; font-size:10px; font-weight:800; }
+.business-upgrade-price > div { height:38px; display:flex; align-items:center; overflow:hidden; border:1px solid #d1ddd7; border-radius:10px; background:#fff; }
+.business-upgrade-price input { flex:1; min-width:0; height:100%; padding:0 10px; border:0; outline:0; background:transparent; font-size:13px; font-weight:800; font-variant-numeric:tabular-nums; }
+.business-upgrade-price em { padding:0 10px; color:#789087; font-style:normal; font-size:9px; font-weight:850; }
+.business-upgrade-price button { justify-self:start; display:inline-flex; align-items:center; gap:4px; color:var(--green-700); background:transparent; font-size:9px; font-weight:800; }
+.business-upgrade-price button svg { width:11px; height:11px; }
+.business-upgrade-price small { color:#789087; font-size:9px; }
+.business-upgrade-count { display:grid; gap:4px; }
+
+.additional-items-editor { margin-top:16px; padding:18px; border:1px solid #dbe7e1; border-radius:18px; background:linear-gradient(180deg,#fbfdfc 0%,#f5f9f7 100%); }
+.additional-items-editor.compact { margin-top:14px; }
+.additional-items-head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+.additional-items-head > div { display:flex; align-items:flex-start; gap:12px; }
+.additional-items-head > div > span { width:36px; height:36px; display:grid; place-items:center; border-radius:11px; color:#17634d; background:#e4f2ec; }
+.additional-items-head svg { width:18px; height:18px; }
+.additional-items-head h3 { margin:0; color:#153b30; font-size:15px; }
+.additional-items-head p { margin:3px 0 0; color:#72837a; font-size:11px; line-height:1.5; }
+.additional-quick-add { margin-top:12px; display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
+.additional-quick-add small { margin-right:2px; color:#718178; font-size:10px; font-weight:800; }
+.additional-quick-add button { padding:7px 10px; border:1px solid #d4e3dc; border-radius:999px; color:#31594b; background:#fff; font-size:10px; font-weight:750; }
+.additional-quick-add button:hover { border-color:#8ebcab; background:#edf7f2; }
+.additional-empty { margin-top:13px; padding:18px; border:1px dashed #cfded7; border-radius:12px; text-align:center; color:#87968f; background:#fff; font-size:11px; }
+.additional-items-list { margin-top:14px; overflow:hidden; border:1px solid #dfe8e3; border-radius:13px; background:#fff; }
+.additional-items-labels,
+.additional-item-row { display:grid; grid-template-columns:minmax(160px,1.7fr) 130px 82px 145px 115px 42px; gap:8px; align-items:center; }
+.additional-items-labels { min-height:36px; padding:0 10px; color:#74837b; background:#f1f6f3; font-size:9px; font-weight:850; text-transform:uppercase; }
+.additional-item-row { min-height:58px; padding:8px 10px; border-top:1px solid #e7ece9; }
+.additional-item-row input,
+.additional-item-row select { width:100%; height:38px; padding:0 10px; border:1px solid #d5dfda; border-radius:9px; background:#fff; color:#223b32; font:inherit; font-size:11px; }
+.additional-item-row input:disabled { color:#65746d; background:#f2f5f3; }
+.additional-money-input { height:38px; display:flex; align-items:center; overflow:hidden; border:1px solid #d5dfda; border-radius:9px; }
+.additional-money-input input { min-width:0; border:0; border-radius:0; }
+.additional-money-input em { padding:0 8px; color:#839088; font-style:normal; font-size:8px; font-weight:850; }
+.additional-item-row > strong { text-align:right; color:#174c3b; font-family:Inter,Arial,sans-serif; font-size:12px; font-variant-numeric:tabular-nums; }
+.additional-item-row .icon-button { width:34px; height:34px; }
+
+.pricing-input-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.automatic-totals-panel { margin-top:16px; overflow:hidden; border:1px solid #d8e4de; border-radius:18px; background:#fff; }
+.automatic-totals-head { min-height:72px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:20px; background:linear-gradient(135deg,#eef7f3,#f9fbfa); border-bottom:1px solid #dde8e2; }
+.automatic-totals-head > div { display:grid; gap:3px; }
+.automatic-totals-head b { color:#153d31; font-size:15px; }
+.automatic-totals-head span { color:#718179; font-size:11px; }
+.automatic-totals-head > strong { color:#0f5b44; font-family:Inter,Arial,sans-serif; font-size:22px; font-variant-numeric:tabular-nums; }
+.automatic-totals-grid { padding:14px; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.auto-total-card { min-height:94px; padding:13px; display:flex; flex-direction:column; justify-content:center; gap:5px; border:1px solid #e0e7e3; border-radius:13px; background:#fbfcfb; }
+.auto-total-card > span { color:#667870; font-size:10px; font-weight:750; }
+.auto-total-card > strong { color:#1c3c32; font-family:Inter,Arial,sans-serif; font-size:17px; font-variant-numeric:tabular-nums; }
+.auto-total-card > small { color:#8a9791; font-size:9px; line-height:1.45; }
+.auto-total-card.featured { border-color:#b9d6c9; background:linear-gradient(145deg,#eaf5ef,#f6faf8); }
+.auto-total-card.featured > strong { color:#0e6046; font-size:19px; }
+.auto-total-breakdown { margin-top:12px; padding:10px 0; border-top:1px solid rgba(255,255,255,.12); border-bottom:1px solid rgba(255,255,255,.12); }
+.auto-total-breakdown > div { min-height:29px; display:flex; align-items:center; justify-content:space-between; gap:12px; color:rgba(255,255,255,.8); font-size:10px; }
+.auto-total-breakdown b { color:#fff; font-family:Inter,Arial,sans-serif; font-size:11px; font-variant-numeric:tabular-nums; }
+.quote-extra-row { min-height:58px !important; background:#fbfcfb; }
+
+@media (max-width:1100px) {
+  .additional-items-labels,
+  .additional-item-row { grid-template-columns:minmax(150px,1.5fr) 120px 74px 130px 100px 38px; }
+  .automatic-totals-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:760px) {
+  .business-upgrade-row { grid-template-columns:38px 1fr; }
+  .business-upgrade-controls { grid-column:1 / -1; align-items:stretch; flex-direction:column; }
+  .business-upgrade-price { min-width:0; }
+  .additional-items-head { flex-direction:column; }
+  .additional-items-head .secondary-button { width:100%; }
+  .additional-items-list { overflow-x:auto; }
+  .additional-items-labels,
+  .additional-item-row { min-width:760px; }
+  .pricing-input-grid { grid-template-columns:1fr; }
+  .automatic-totals-head { align-items:flex-start; flex-direction:column; }
+  .automatic-totals-grid { grid-template-columns:1fr; }
+}

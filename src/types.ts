@@ -2,6 +2,16 @@ export type UserRole = 'admin' | 'sales';
 export type PricingChannel = 'retail' | 'agent';
 export type HotelCategory = '3 Stars' | '4 Stars' | '5 Stars';
 export type Language = 'th' | 'en';
+export type AdditionalChargeBasis = 'per_person' | 'per_group' | 'custom';
+
+export interface AdditionalCharge {
+  id: string;
+  description: string;
+  basis: AdditionalChargeBasis;
+  quantity: number;
+  unitPriceTHB: number;
+  totalTHB: number;
+}
 
 export interface User {
   id: string;
@@ -61,6 +71,7 @@ export interface GlobalSettings {
   agentMarginTHB?: number;
   groupDiscountMinPax?: number;
   groupDiscountPercent?: number;
+  businessUpgradeTHB?: number;
   logoUrl?: string;
 }
 
@@ -71,10 +82,14 @@ export interface PricingInput {
   hotelCategory: HotelCategory;
   travelDate: string;
   businessUpgradeCount: number;
+  /** Optional manual Business Class surcharge per upgraded traveller. */
+  businessUpgradePriceOverrideTHB?: number | null;
   /** Number of travellers who require a private single room. */
   singleRoomCount: number;
   /** Optional manual override. null/undefined uses the package default. */
   singleSupplementOverrideTHB?: number | null;
+  /** Flexible extra services such as hotel upgrades, mask dance, baggage vehicle, etc. */
+  additionalItems: AdditionalCharge[];
 }
 
 export interface PricingResult {
@@ -103,6 +118,10 @@ export interface PricingResult {
   singleRoomCount: number;
   singleSupplementPerPerson: number;
   singleSupplementTotal: number;
+  additionalItems: AdditionalCharge[];
+  additionalItemsTotal: number;
+  flightTotal: number;
+  airportTaxTotal: number;
   groupTotal: number;
   groupProfit: number;
   hasGroupFlightDiscount: boolean;
@@ -144,8 +163,15 @@ export interface CustomerTracking {
   singleSupplementPerPerson: number;
   singleSupplementTotal: number;
   totalAmount: number;
+  ticketPricePerPerson: number;
   ticketAmount: number;
+  airportTaxPerPerson: number;
   airportTaxAmount: number;
+  businessUpgradeCount: number;
+  businessUpgradePerPerson: number;
+  businessUpgradeTotal: number;
+  additionalItems: AdditionalCharge[];
+  additionalItemsTotal: number;
   landInvoiceNo: string;
   landInvoiceReceivedAt: string;
   landInvoiceAmountUSD: number;

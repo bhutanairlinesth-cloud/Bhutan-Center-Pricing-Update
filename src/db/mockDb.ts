@@ -64,6 +64,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   agentMarginTHB: 3000,
   groupDiscountMinPax: 10,
   groupDiscountPercent: 10,
+  businessUpgradeTHB: 15000,
   logoUrl: '',
 };
 
@@ -122,6 +123,13 @@ export const mockDb = {
     singleRoomCount: item.singleRoomCount ?? 0,
     singleSupplementPerPerson: item.singleSupplementPerPerson ?? 0,
     singleSupplementTotal: item.singleSupplementTotal ?? 0,
+    ticketPricePerPerson: item.ticketPricePerPerson ?? ((item.passengerCount || 0) > 0 ? (item.ticketAmount || 0) / item.passengerCount : 0),
+    airportTaxPerPerson: item.airportTaxPerPerson ?? ((item.passengerCount || 0) > 0 ? (item.airportTaxAmount || 0) / item.passengerCount : 0),
+    businessUpgradeCount: item.businessUpgradeCount ?? 0,
+    businessUpgradePerPerson: item.businessUpgradePerPerson ?? 15000,
+    businessUpgradeTotal: item.businessUpgradeTotal ?? 0,
+    additionalItems: item.additionalItems ?? [],
+    additionalItemsTotal: item.additionalItemsTotal ?? 0,
     landInvoiceNo: item.landInvoiceNo ?? '',
     landInvoiceReceivedAt: item.landInvoiceReceivedAt ?? '',
     landInvoiceAmountUSD: item.landInvoiceAmountUSD ?? 0,

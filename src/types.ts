@@ -175,7 +175,10 @@ export interface TravelerAddition {
   singleSupplementPerPerson: number;
   singleSupplementCostPerPerson: number;
   extraLines: SupplementalInvoiceLine[];
+  /** Full added-package sales value that will be consolidated into Invoice 2. */
   customerChargeTotal: number;
+  /** Ticket + airport-tax amount collected first for this added group. */
+  ticketDepositTotal?: number;
   internalCostTotal: number;
   invoiceId: string;
   note: string;

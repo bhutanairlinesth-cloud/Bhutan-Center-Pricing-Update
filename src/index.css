@@ -2170,3 +2170,43 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .traveler-addition-form-title { align-items: flex-start; flex-direction: column; }
   .traveler-addition-form-title small { max-width: none; text-align: left; }
 }
+
+/* =========================================================
+   v12.4.4 — Added-traveller ticket-first workflow
+   ========================================================= */
+.traveler-payment-pending {
+  color: #9a4f00 !important;
+  background: #fff0d8 !important;
+}
+.visa-readiness-alert {
+  margin: 0 0 14px;
+  padding: 13px 15px;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  border: 1px solid #f0cf9a;
+  border-radius: 14px;
+  color: #78410a;
+  background: #fff9ef;
+}
+.visa-readiness-alert.ready {
+  border-color: #b8ddca;
+  color: #0c6347;
+  background: #eef9f3;
+}
+.visa-readiness-alert > svg { width: 20px; height: 20px; flex: 0 0 auto; margin-top: 1px; }
+.visa-readiness-alert > div { display: grid; gap: 3px; }
+.visa-readiness-alert b { font-size: 13px; }
+.visa-readiness-alert span { font-size: 11px; line-height: 1.5; }
+.milestone-field.disabled {
+  opacity: .68;
+  border-style: dashed;
+  background: #f4f6f5;
+}
+.milestone-field.disabled input,
+.milestone-field.disabled button { cursor: not-allowed; }
+.milestone-field label small { color: #9a6a2a; font-size: 9px; line-height: 1.35; }
+@media (max-width: 760px) {
+  .traveler-addition-inline-stats { flex-wrap: wrap; justify-content: flex-start; }
+  .visa-readiness-alert { padding: 12px; }
+}

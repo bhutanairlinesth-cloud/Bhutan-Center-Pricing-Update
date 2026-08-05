@@ -57,3 +57,7 @@ supabase/MIGRATE_LAND_INVOICE_USD_V12_2.sql
 ```
 
 รายละเอียดดูที่ `README_V12_2_LAND_PAYMENT_USD_TH.md`
+
+
+## อัปเดต v12.4.6 — Invoice Snapshot
+ก่อนใช้งานเวอร์ชันนี้ ให้รันไฟล์ `supabase/MIGRATE_INVOICE_DOCUMENT_SNAPSHOTS_V12_4_6.sql` หนึ่งครั้ง เพื่อให้ระบบล็อกข้อมูลบน Invoice ตามวันที่ออกเอกสาร ไม่เปลี่ยนตามการเพิ่มผู้เดินทางหรือพักเดี่ยวในภายหลัง

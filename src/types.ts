@@ -289,6 +289,54 @@ export interface PaymentTransaction {
   updatedAt: string;
 }
 
+
+export interface InvoicePackageLineSnapshot {
+  id: string;
+  descriptionTh: string;
+  descriptionEn: string;
+  detailTh: string;
+  detailEn: string;
+  ptc: string;
+  quantity: number;
+  unitPriceTHB: number;
+  totalTHB: number;
+}
+
+export interface InvoiceTicketBatchSnapshot {
+  batchLabelTh: string;
+  batchLabelEn: string;
+  passengerCount: number;
+  passengerNames: string[];
+  pnr: string;
+  airline: string;
+  cabinClass: string;
+  farePerPersonTHB: number;
+  airportTaxPerPersonTHB: number;
+  fareTotalTHB: number;
+  airportTaxTotalTHB: number;
+  totalDueTHB: number;
+}
+
+export interface InvoiceDeductionSnapshot {
+  id: string;
+  labelTh: string;
+  labelEn: string;
+  amountTHB: number;
+  reference: string;
+}
+
+export interface InvoiceDocumentSnapshot {
+  version: number;
+  kind: 'ticket_original' | 'ticket_added' | 'package_balance' | 'supplemental';
+  packageRows: InvoicePackageLineSnapshot[];
+  packageTotalTHB: number;
+  totalPassengerCount: number;
+  ticketBatch?: InvoiceTicketBatchSnapshot;
+  deductions?: InvoiceDeductionSnapshot[];
+  balanceDueTHB?: number;
+  capturedAt: string;
+}
+
 export interface PaymentInvoice {
   id: string;
   trackingId: string;
@@ -306,6 +354,8 @@ export interface PaymentInvoice {
   status: PaymentStageStatus;
   paidAt: string;
   note: string;
+  /** Immutable customer-facing values captured when the invoice is issued. */
+  documentData?: InvoiceDocumentSnapshot | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -286,6 +286,7 @@ const mapInvoice = (row: any): PaymentInvoice => ({
   status: row.status || 'pending',
   paidAt: row.paid_at || '',
   note: row.note || '',
+  documentData: row.document_data && typeof row.document_data === 'object' ? row.document_data : null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -305,6 +306,7 @@ const invoiceRow = (item: PaymentInvoice) => ({
   status: item.status,
   paid_at: item.paidAt || null,
   note: item.note,
+  document_data: item.documentData || null,
   created_at: item.createdAt,
   updated_at: new Date().toISOString(),
 });

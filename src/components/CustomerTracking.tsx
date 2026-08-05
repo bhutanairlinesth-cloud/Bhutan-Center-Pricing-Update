@@ -303,6 +303,22 @@ function customerGrandTotal(item: CustomerTracking, invoices?: PaymentInvoice[])
   const extras = invoices ? customerSupplementalSalesTotal(item, invoices) : Math.max(0, item.supplementalInvoiceTotal || 0);
   return Math.max(0, item.totalAmount || 0) + extras;
 }
+/**
+ * Internal costs carried by supplemental flows, excluding added-traveller airfare/tax.
+ * Added-traveller airfare/tax is already included in totalAirfareAndTaxCost(), so it
+ * must not be deducted twice when calculating realized profit.
+ */
+function supplementalNonTicketCostTotal(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  const allSupplementalCosts = customerSupplementalCostTotal(item, invoices);
+  const addedTravellerAirfareAndTax = addedTravelerAirfareTotal(item) + addedTravelerAirportTaxTotal(item);
+  return Math.max(0, allSupplementalCosts - addedTravellerAirfareAndTax);
+}
+function realizedGrossProfit(item: CustomerTracking, invoices: PaymentInvoice[], landPayment = item.landPayment) {
+  return customerGrandTotal(item, invoices)
+    - totalAirfareAndTaxCost(item)
+    - Math.max(0, landPayment || 0)
+    - supplementalNonTicketCostTotal(item, invoices);
+}
 function mergeInvoicePackageLines(lines: InvoicePackageLineSnapshot[]) {
   const merged = new Map<string, InvoicePackageLineSnapshot>();
   for (const line of lines) {
@@ -676,15 +692,17 @@ export function CustomerTrackingWorkspace(props: Props) {
     const nextInvoiceList = [invoice, ...props.invoices.filter((x) => x.id !== invoice.id)];
     const extraRevenue = customerSupplementalSalesTotal(tracking, nextInvoiceList);
     const extraCost = customerSupplementalCostTotal(tracking, nextInvoiceList);
-    const baseProfit = tracking.landPaidAt && tracking.landPayment > 0
-      ? tracking.totalAmount - tracking.ticketAmount - tracking.airportTaxAmount - tracking.landPayment
-      : 0;
-    const nextTracking: CustomerTracking = {
+    const nextTrackingBase: CustomerTracking = {
       ...tracking,
       supplementalInvoiceTotal: extraRevenue,
       supplementalCostTotal: extraCost,
-      grandTotalAmount: tracking.totalAmount + extraRevenue,
-      profitAmount: baseProfit + (extraRevenue - extraCost),
+      grandTotalAmount: customerGrandTotal(tracking, nextInvoiceList),
+    };
+    const nextTracking: CustomerTracking = {
+      ...nextTrackingBase,
+      profitAmount: tracking.landPaidAt && tracking.landPayment > 0
+        ? realizedGrossProfit(nextTrackingBase, nextInvoiceList, tracking.landPayment)
+        : 0,
       nextAction: th ? `ติดตามชำระ Invoice ${sequenceNumber}` : `Follow up Invoice ${sequenceNumber}`,
       nextActionDueDate: draft.dueDate || tracking.nextActionDueDate,
       updatedAt: now,
@@ -757,16 +775,20 @@ export function CustomerTrackingWorkspace(props: Props) {
     const nextInvoiceList = [invoice, ...props.invoices.filter((x) => x.id !== invoice.id)];
     const extraRevenue = customerSupplementalSalesTotal(trackingWithAddition, nextInvoiceList);
     const extraCost = customerSupplementalCostTotal(trackingWithAddition, nextInvoiceList);
-    const baseProfit = tracking.landPaidAt && tracking.landPayment > 0 ? tracking.totalAmount - tracking.ticketAmount - tracking.airportTaxAmount - tracking.landPayment : 0;
     const combinedPackageTotal = packageSalesTotal(trackingWithAddition);
     const projectedTicketReceived = totalTicketPaymentsReceived(trackingWithAddition, nextInvoiceList, props.payments);
-    const nextTracking: CustomerTracking = {
+    const nextTrackingBase: CustomerTracking = {
       ...trackingWithAddition,
       supplementalInvoiceTotal: extraRevenue,
       supplementalCostTotal: extraCost,
-      grandTotalAmount: tracking.totalAmount + extraRevenue,
+      grandTotalAmount: customerGrandTotal(trackingWithAddition, nextInvoiceList),
       balanceAmount: Math.max(0, combinedPackageTotal - projectedTicketReceived),
-      profitAmount: baseProfit + (extraRevenue - extraCost),
+    };
+    const nextTracking: CustomerTracking = {
+      ...nextTrackingBase,
+      profitAmount: tracking.landPaidAt && tracking.landPayment > 0
+        ? realizedGrossProfit(nextTrackingBase, nextInvoiceList, tracking.landPayment)
+        : 0,
       nextAction: th ? `ติดตามชำระ Invoice 1 ค่าตั๋วผู้เดินทางเพิ่ม ชุดที่ ${addedBatchNumber} ก่อนส่งเอกสารยื่นวีซ่า` : `Collect Invoice 1 for added-traveller ticket batch ${addedBatchNumber} before visa submission`,
       nextActionDueDate: dueDate || tracking.nextActionDueDate, updatedAt: now,
     };
@@ -789,10 +811,8 @@ export function CustomerTrackingWorkspace(props: Props) {
     const trackingWithoutInvoice = { ...tracking, travelerAdditions: (tracking.travelerAdditions || []).filter((entry) => entry.invoiceId !== invoice.id) };
     const extraRevenue = customerSupplementalSalesTotal(trackingWithoutInvoice, nextInvoiceList);
     const extraCost = customerSupplementalCostTotal(trackingWithoutInvoice, nextInvoiceList);
-    const baseProfit = tracking.landPaidAt && tracking.landPayment > 0
-      ? tracking.totalAmount - tracking.ticketAmount - tracking.airportTaxAmount - tracking.landPayment
-      : 0;
-    const nextTracking = { ...trackingWithoutInvoice, supplementalInvoiceTotal: extraRevenue, supplementalCostTotal: extraCost, grandTotalAmount: tracking.totalAmount + extraRevenue, profitAmount: baseProfit + (extraRevenue - extraCost), updatedAt: new Date().toISOString() };
+    const nextTrackingBase = { ...trackingWithoutInvoice, supplementalInvoiceTotal: extraRevenue, supplementalCostTotal: extraCost, grandTotalAmount: customerGrandTotal(trackingWithoutInvoice, nextInvoiceList), updatedAt: new Date().toISOString() } as CustomerTracking;
+    const nextTracking = { ...nextTrackingBase, profitAmount: tracking.landPaidAt && tracking.landPayment > 0 ? realizedGrossProfit(nextTrackingBase, nextInvoiceList, tracking.landPayment) : 0 };
     await props.onSaveTracking(nextTracking);
     setEditing(nextTracking);
   }
@@ -939,11 +959,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     const landPayment = Math.max(0, Number(next.landPayment || 0));
     const supplementalInvoiceTotalValue = customerSupplementalSalesTotal(recalculatedTracking, invoices);
     const supplementalCostTotalValue = customerSupplementalCostTotal(recalculatedTracking, invoices);
-    const grandTotalAmount = totalAmount + supplementalInvoiceTotalValue;
-    const baseProfit = next.landPaidAt && landPayment > 0
-      ? totalAmount - ticketAmount - airportTaxAmount - landPayment
+    const grandTotalAmount = customerGrandTotal(recalculatedTracking, invoices);
+    const profitAmount = next.landPaidAt && landPayment > 0
+      ? realizedGrossProfit(recalculatedTracking, invoices, landPayment)
       : 0;
-    const profitAmount = baseProfit + (supplementalInvoiceTotalValue - supplementalCostTotalValue);
     return {
       ...next,
       passengerCount: pax,
@@ -994,11 +1013,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       const rate = Math.max(0, base.landExchangeRate || 0);
       const fee = Math.max(0, base.landTransferFeeTHB || 0);
       const landPayment = usd > 0 && rate > 0 ? Math.round((usd * rate + fee) * 100) / 100 : 0;
-      const baseProfit = base.landPaidAt && landPayment > 0
-        ? base.totalAmount - base.ticketAmount - base.airportTaxAmount - landPayment
+      const profitAmount = base.landPaidAt && landPayment > 0
+        ? realizedGrossProfit(base, invoices, landPayment)
         : 0;
-      const profitAmount = baseProfit + Math.max(0, base.supplementalInvoiceTotal || 0) - Math.max(0, base.supplementalCostTotal || 0);
-      return { ...base, landPayment, profitAmount };
+      return { ...base, landPayment, grandTotalAmount: customerGrandTotal(base, invoices), profitAmount };
     });
   }
 
@@ -1066,10 +1084,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       landPayment: computedLandPayment,
       supplementalInvoiceTotal,
       supplementalCostTotal,
-      grandTotalAmount: recalculated.totalAmount + supplementalInvoiceTotal,
-      profitAmount: (recalculated.landPaidAt && computedLandPayment > 0
-        ? recalculated.totalAmount - recalculated.ticketAmount - recalculated.airportTaxAmount - computedLandPayment
-        : 0) + supplementalInvoiceTotal - supplementalCostTotal,
+      grandTotalAmount: customerGrandTotal(recalculated, invoices),
+      profitAmount: recalculated.landPaidAt && computedLandPayment > 0
+        ? realizedGrossProfit(recalculated, invoices, computedLandPayment)
+        : 0,
       status,
       salesOwnerName: owner?.name || recalculated.salesOwnerName || currentUser.name,
       updatedAt: new Date().toISOString(),
@@ -1084,7 +1102,7 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         : Math.max(0, next.landPayment || 0);
       const supplementalInvoiceTotal = customerSupplementalSalesTotal(next, invoices);
       const supplementalCostTotal = customerSupplementalCostTotal(next, invoices);
-      next = { ...next, landPayment, supplementalInvoiceTotal, supplementalCostTotal, grandTotalAmount: next.totalAmount + supplementalInvoiceTotal, profitAmount: (landPayment > 0 ? next.totalAmount - next.ticketAmount - next.airportTaxAmount - landPayment : 0) + supplementalInvoiceTotal - supplementalCostTotal };
+      next = { ...next, landPayment, supplementalInvoiceTotal, supplementalCostTotal, grandTotalAmount: customerGrandTotal(next, invoices), profitAmount: landPayment > 0 ? realizedGrossProfit(next, invoices, landPayment) : 0 };
     }
     setForm(next);
     await onSave({ ...next, updatedAt: new Date().toISOString() });
@@ -1298,9 +1316,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   const combinedAirportTaxTotal = Math.max(0, form.airportTaxAmount || 0) + addedTravelerAirportTaxTotal(form);
   const combinedTicketAndTaxTotal = combinedAirfareTotal + combinedAirportTaxTotal;
   const grandTotal = combinedPackageTotal + generalSupplementalRevenue;
+  const supplementalNonTicketCosts = supplementalNonTicketCostTotal(form, invoices);
   const balance = Math.max(0, grandTotal - totalPaid);
   const hasLandConversion = form.landPayment > 0 && form.landInvoiceAmountUSD > 0 && form.landExchangeRate > 0;
-  const calculatedProfit = hasLandConversion ? form.totalAmount - form.ticketAmount - form.airportTaxAmount - form.landPayment + supplementalRevenue - supplementalCosts : null;
+  const calculatedProfit = hasLandConversion ? realizedGrossProfit(form, invoices, form.landPayment) : null;
   const profit = form.landPaidAt && calculatedProfit !== null ? calculatedProfit : null;
 
   return <Modal open={open} title={th ? 'Customer Journey — รายละเอียดและขั้นตอนดำเนินงาน' : 'Customer Journey — workflow details'} onClose={onClose} wide>
@@ -1473,8 +1492,11 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         </div>
         <div className="land-profit-breakdown">
           <div><span>{th ? `ยอดขายแพ็กเกจรวม ${combinedPassengerCount} ท่าน` : `Combined package sales — ${combinedPassengerCount} pax`}</span><b>{formatTHB(combinedPackageTotal, language)}</b></div>
+          {generalSupplementalRevenue > 0 && <div className="addition"><span>{th ? 'บวก Invoice เพิ่มเติมทั้งหมด' : 'Add all supplemental invoices'}</span><b>+{formatTHB(generalSupplementalRevenue, language)}</b></div>}
+          <div className="land-sales-grand-total"><span>{th ? 'ยอดขายรวมลูกค้าทั้งหมด' : 'Customer grand sales total'}</span><b>{formatTHB(grandTotal, language)}</b></div>
           <div className="deduction"><span>{th ? 'หัก ค่าตั๋วตาม PNR + ภาษีสนามบินทุกชุด' : 'Less airfare + airport tax for every ticket batch'}</span><b>-{formatTHB(combinedTicketAndTaxTotal, language)}</b></div>
-          <div><span>{th ? 'ยอดค่าแพ็กเกจรวมหลังหักค่าตั๋วและภาษี' : 'Combined package balance after airfare and tax'}</span><b>{formatTHB(Math.max(0, combinedPackageTotal - combinedTicketAndTaxTotal), language)}</b></div>
+          {supplementalNonTicketCosts > 0 && <div className="deduction"><span>{th ? 'หัก ต้นทุนของ Invoice / บริการเพิ่มเติม' : 'Less supplemental service costs'}</span><b>-{formatTHB(supplementalNonTicketCosts, language)}</b></div>}
+          <div><span>{th ? 'ยอดขายหลังหักค่าตั๋ว ภาษี และต้นทุนบริการเพิ่ม' : 'Sales after airfare, tax and supplemental costs'}</span><b>{formatTHB(Math.max(0, grandTotal - combinedTicketAndTaxTotal - supplementalNonTicketCosts), language)}</b></div>
           <div className="deduction"><span>{th ? 'หัก LAND Payment (เงินบาท)' : 'Less land payment (THB)'}</span><b>{form.landPayment > 0 ? `-${formatTHB(form.landPayment, language)}` : '-'}</b></div>
           <div className={`land-profit-total ${calculatedProfit !== null && calculatedProfit < 0 ? 'negative' : ''}`}><span>{form.landPaidAt ? (th ? 'กำไรขั้นต้นจริง' : 'Realized gross profit') : (th ? 'กำไรคาดการณ์ตามอัตรานี้' : 'Projected profit at this rate')}</span><strong>{calculatedProfit === null ? (th ? 'กรอกยอด USD และอัตราแลกเปลี่ยน' : 'Enter USD and FX rate') : formatTHB(calculatedProfit, language)}</strong></div>
         </div>
@@ -1762,15 +1784,14 @@ function InvoicePreview({ value, language, payments, invoices, onClose, onSaveIn
       const costDelta = (willBeActive ? costValue : 0) - (wasActive ? costValue : 0);
       const supplementalInvoiceTotal = Math.max(0, (tracking.supplementalInvoiceTotal || 0) + revenueDelta);
       const supplementalCostTotal = Math.max(0, (tracking.supplementalCostTotal || 0) + costDelta);
-      const baseProfit = tracking.landPaidAt && tracking.landPayment > 0 ? tracking.totalAmount - tracking.ticketAmount - tracking.airportTaxAmount - tracking.landPayment : 0;
       const travelerAdditions = (tracking.travelerAdditions || []).map((entry) => entry.invoiceId === invoice.id ? { ...entry, status: next === 'cancelled' ? 'cancelled' as const : 'active' as const } : entry);
       const updatedTracking = { ...tracking, travelerAdditions } as CustomerTracking;
       const projectedInvoices = invoices.map((item) => item.id === invoice.id ? { ...item, status: next, paidAt: next === 'paid' ? isoToday() : item.paidAt } : item);
       const ticketFlowComplete = travelerAddition ? allTicketPaymentsReceived(updatedTracking, projectedInvoices, payments) : false;
+      const updatedTrackingFinancials = { ...updatedTracking, supplementalInvoiceTotal, supplementalCostTotal, grandTotalAmount: customerGrandTotal(updatedTracking, projectedInvoices) } as CustomerTracking;
       await onSaveTracking({
-        ...updatedTracking, supplementalInvoiceTotal, supplementalCostTotal,
-        grandTotalAmount: tracking.totalAmount + supplementalInvoiceTotal,
-        profitAmount: baseProfit + supplementalInvoiceTotal - supplementalCostTotal,
+        ...updatedTrackingFinancials,
+        profitAmount: tracking.landPaidAt && tracking.landPayment > 0 ? realizedGrossProfit(updatedTrackingFinancials, projectedInvoices, tracking.landPayment) : 0,
         nextAction: travelerAddition && next === 'paid'
           ? (ticketFlowComplete
             ? (th ? 'ค่าตั๋วทุกชุดครบแล้ว — ส่ง Passport + รูป + ตั๋วทั้งหมดให้ Land ยื่นวีซ่า' : 'All ticket invoices are complete — submit all passports, photos and tickets to land for visa processing')

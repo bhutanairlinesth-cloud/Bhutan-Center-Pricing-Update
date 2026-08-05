@@ -2259,3 +2259,26 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .invoice1-added-row { grid-template-columns: 1fr; }
   .invoice1-added-row .secondary-button { width: 100%; justify-content: center; }
 }
+
+/* =========================================================
+   v12.4.9 — Supplemental invoice revenue in LAND/profit view
+   ========================================================= */
+.land-profit-breakdown .addition {
+  background: #f1faf5;
+}
+.land-profit-breakdown .addition b {
+  color: #08704f;
+}
+.land-profit-breakdown .land-sales-grand-total {
+  background: #e8f4ee;
+  border-top: 1px solid #cfe3d8;
+  border-bottom: 1px solid #cfe3d8;
+}
+.land-profit-breakdown .land-sales-grand-total span,
+.land-profit-breakdown .land-sales-grand-total b {
+  color: #0b5d44;
+  font-weight: 900;
+}
+.land-profit-breakdown .land-sales-grand-total b {
+  font-size: 18px;
+}

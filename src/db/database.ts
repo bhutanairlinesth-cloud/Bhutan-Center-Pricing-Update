@@ -5,6 +5,7 @@ import { mockDb } from './mockDb';
 const SETTINGS_ID = '00000000-0000-0000-0000-000000000001';
 const BRAND_BUCKET = 'branding';
 const BRAND_LOGO_PATH = 'company-logo';
+const PAYMENT_SLIP_BUCKET = 'payment-slips';
 
 function fail(error: any, fallback: string): never {
   throw new Error(error?.message || fallback);
@@ -300,6 +301,10 @@ const mapPaymentTransaction = (row: any): PaymentTransaction => ({
   paidAt: row.paid_at || '',
   reference: row.reference || '',
   note: row.note || '',
+  slipPath: row.slip_path || '',
+  slipFileName: row.slip_file_name || '',
+  slipMimeType: row.slip_mime_type || '',
+  slipSize: Number(row.slip_size || 0),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -312,6 +317,10 @@ const paymentTransactionRow = (item: PaymentTransaction) => ({
   paid_at: item.paidAt || null,
   reference: item.reference,
   note: item.note,
+  slip_path: item.slipPath || null,
+  slip_file_name: item.slipFileName || null,
+  slip_mime_type: item.slipMimeType || null,
+  slip_size: Math.max(0, Number(item.slipSize || 0)),
   created_at: item.createdAt,
   updated_at: new Date().toISOString(),
 });
@@ -463,6 +472,37 @@ export const database = {
     if (error) fail(error, 'ลบ Invoice ไม่สำเร็จ');
   },
 
+  async uploadPaymentSlip(trackingId: string, paymentId: string, file: File): Promise<{ path: string; fileName: string; mimeType: string; size: number }> {
+    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+    if (!allowed.includes(file.type)) throw new Error('รองรับสลิปเฉพาะ PNG, JPG, WEBP หรือ PDF');
+    if (file.size > 10 * 1024 * 1024) throw new Error('ไฟล์สลิปต้องมีขนาดไม่เกิน 10 MB');
+    if (!isSupabaseConfigured) {
+      return { path: await fileToDataUrl(file), fileName: file.name, mimeType: file.type, size: file.size };
+    }
+    const safeName = file.name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-').slice(-120) || 'payment-slip';
+    const path = `${trackingId}/${paymentId}/${Date.now()}-${safeName}`;
+    const { error } = await supabase.storage.from(PAYMENT_SLIP_BUCKET).upload(path, file, {
+      upsert: false,
+      contentType: file.type,
+      cacheControl: '3600',
+    });
+    if (error) fail(error, 'อัปโหลดสลิปไม่สำเร็จ');
+    return { path, fileName: file.name, mimeType: file.type, size: file.size };
+  },
+  async getPaymentSlipUrl(path: string): Promise<string> {
+    if (!path) throw new Error('ไม่พบไฟล์สลิป');
+    if (path.startsWith('data:') || path.startsWith('blob:') || path.startsWith('http')) return path;
+    if (!isSupabaseConfigured) return path;
+    const { data, error } = await supabase.storage.from(PAYMENT_SLIP_BUCKET).createSignedUrl(path, 60 * 10);
+    if (error || !data?.signedUrl) fail(error, 'เปิดไฟล์สลิปไม่สำเร็จ');
+    return data.signedUrl;
+  },
+  async deletePaymentSlip(path: string): Promise<void> {
+    if (!path || path.startsWith('data:') || path.startsWith('blob:') || path.startsWith('http') || !isSupabaseConfigured) return;
+    const { error } = await supabase.storage.from(PAYMENT_SLIP_BUCKET).remove([path]);
+    if (error) fail(error, 'ลบไฟล์สลิปไม่สำเร็จ');
+  },
+
   async getPaymentTransactions(): Promise<PaymentTransaction[]> {
     if (!isSupabaseConfigured) return mockDb.getPaymentTransactions();
     const { data, error } = await supabase.from('payment_transactions').select('*').order('paid_at', { ascending: false });
@@ -476,8 +516,13 @@ export const database = {
   },
   async deletePaymentTransaction(id: string): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.deletePaymentTransaction(id);
+    const { data: existing } = await supabase.from('payment_transactions').select('slip_path').eq('id', id).maybeSingle();
     const { error } = await supabase.from('payment_transactions').delete().eq('id', id);
     if (error) fail(error, 'ลบรายการรับชำระไม่สำเร็จ');
+    if (existing?.slip_path) {
+      const { error: storageError } = await supabase.storage.from(PAYMENT_SLIP_BUCKET).remove([existing.slip_path]);
+      if (storageError) console.warn('Unable to remove payment slip:', storageError.message);
+    }
   },
 
 };

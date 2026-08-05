@@ -144,6 +144,18 @@ export default function App() {
   const deleteInvoice = async (id: string) => run(async () => { await database.deleteInvoice(id); setInvoices(await database.getInvoices()); }, t('deleted'));
   const savePayment = async (value: PaymentTransaction) => run(async () => { await database.savePaymentTransaction(value); setPayments(await database.getPaymentTransactions()); });
   const deletePayment = async (id: string) => run(async () => { await database.deletePaymentTransaction(id); setPayments(await database.getPaymentTransactions()); }, t('deleted'));
+  const uploadPaymentSlip = async (trackingId: string, paymentId: string, file: File) => {
+    try { return await database.uploadPaymentSlip(trackingId, paymentId, file); }
+    catch (error: any) { notify(`${t('error')}: ${error?.message || 'อัปโหลดสลิปไม่สำเร็จ'}`, 'error'); throw error; }
+  };
+  const getPaymentSlipUrl = async (path: string) => {
+    try { return await database.getPaymentSlipUrl(path); }
+    catch (error: any) { notify(`${t('error')}: ${error?.message || 'เปิดสลิปไม่สำเร็จ'}`, 'error'); throw error; }
+  };
+  const deletePaymentSlip = async (path: string) => {
+    try { await database.deletePaymentSlip(path); }
+    catch (error: any) { notify(`${t('error')}: ${error?.message || 'ลบสลิปไม่สำเร็จ'}`, 'error'); throw error; }
+  };
 
   if (loading || (currentUser && !settings)) {
     return <div className="app-loading"><RefreshCw/><strong>{t('loading')}</strong><span>Bhutan Center Pricing</span></div>;
@@ -152,7 +164,7 @@ export default function App() {
   return <>
     {!currentUser && <Login users={users} onSuccess={loginSuccess}/>} 
     {currentUser && settings && workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onOpenTracking={() => setWorkspace('tracking')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
-    {currentUser && settings && workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} onBack={() => setWorkspace('front')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment}/>} 
+    {currentUser && settings && workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} onBack={() => setWorkspace('front')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment} onUploadPaymentSlip={uploadPaymentSlip} onGetPaymentSlipUrl={getPaymentSlipUrl} onDeletePaymentSlip={deletePaymentSlip}/>} 
     {currentUser && settings && workspace === 'admin' && currentUser.role === 'admin' && <Admin
       settings={settings} hotels={hotels} packages={packages} users={users} currentUser={currentUser} mode={database.mode}
       onBack={() => setWorkspace('front')} onLogout={logout} onRefresh={refresh}

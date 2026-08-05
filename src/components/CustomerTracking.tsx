@@ -3,7 +3,7 @@ import {
   ArrowLeft, BadgeCheck, CalendarClock, Check, ChevronDown, CircleDollarSign, ClipboardCheck,
   ClipboardList, Download, Edit3, FileCheck2, FileText, Filter, Flag, Hourglass, Landmark,
   LogOut, MessageSquareText, Plane, Plus, ReceiptText, Search, Send, Settings2, ShieldCheck,
-  Sparkles, Trash2, UserRoundCheck, Users, WalletCards,
+  Sparkles, Trash2, UserRoundCheck, Users, WalletCards, Paperclip, ExternalLink, LoaderCircle, Upload,
 } from 'lucide-react';
 import {
   CustomerTracking, GlobalSettings, HotelCategory, InvoiceInstallment, JourneyStage, LeadSource,
@@ -35,6 +35,9 @@ interface Props {
   onDeleteInvoice: (id: string) => Promise<void>;
   onSavePayment: (item: PaymentTransaction) => Promise<void>;
   onDeletePayment: (id: string) => Promise<void>;
+  onUploadPaymentSlip: (trackingId: string, paymentId: string, file: File) => Promise<{ path: string; fileName: string; mimeType: string; size: number }>;
+  onGetPaymentSlipUrl: (path: string) => Promise<string>;
+  onDeletePaymentSlip: (path: string) => Promise<void>;
 }
 
 const leadSources: LeadSource[] = ['LINE OA', 'LINE', 'Facebook', 'Call in', 'Referral', 'Walk in', 'Other'];
@@ -318,7 +321,8 @@ export function CustomerTrackingWorkspace(props: Props) {
 
     <TrackingEditor open={Boolean(editing)} item={editing} settings={props.settings} packages={props.packages} users={props.users} currentUser={props.currentUser}
       payments={editing ? paymentsFor(editing.id, props.payments) : []} onClose={() => setEditing(null)} onSave={async (item) => { await props.onSaveTracking(item); setEditing(item); }}
-      onSavePayment={props.onSavePayment} onDeletePayment={props.onDeletePayment} onIssueInvoice={issueInvoice}/>
+      onSavePayment={props.onSavePayment} onDeletePayment={props.onDeletePayment} onIssueInvoice={issueInvoice}
+      onUploadPaymentSlip={props.onUploadPaymentSlip} onGetPaymentSlipUrl={props.onGetPaymentSlipUrl} onDeletePaymentSlip={props.onDeletePaymentSlip}/>
     <InvoicePreview value={invoicePreview} language={language} payments={invoicePreview ? paymentsFor(invoicePreview.tracking.id, props.payments) : []} onClose={() => setInvoicePreview(null)} onSaveInvoice={props.onSaveInvoice} onSaveTracking={props.onSaveTracking}/>
   </div>;
 }
@@ -343,15 +347,20 @@ function paymentTypeLabel(type: PaymentTransactionType, th: boolean) {
   return labels[type];
 }
 
-function TrackingEditor({ open, item, settings, packages, users, currentUser, payments, onClose, onSave, onSavePayment, onDeletePayment, onIssueInvoice }: {
+function TrackingEditor({ open, item, settings, packages, users, currentUser, payments, onClose, onSave, onSavePayment, onDeletePayment, onIssueInvoice, onUploadPaymentSlip, onGetPaymentSlipUrl, onDeletePaymentSlip }: {
   open: boolean; item: CustomerTracking | null; settings: GlobalSettings; packages: TourPackage[]; users: User[]; currentUser: User; payments: PaymentTransaction[];
   onClose: () => void; onSave: (item: CustomerTracking) => Promise<void>; onSavePayment: (item: PaymentTransaction) => Promise<void>; onDeletePayment: (id: string) => Promise<void>;
   onIssueInvoice: (tracking: CustomerTracking, installment: InvoiceInstallment) => Promise<void>;
+  onUploadPaymentSlip: (trackingId: string, paymentId: string, file: File) => Promise<{ path: string; fileName: string; mimeType: string; size: number }>;
+  onGetPaymentSlipUrl: (path: string) => Promise<string>;
+  onDeletePaymentSlip: (path: string) => Promise<void>;
 }) {
   const { language } = useI18n();
   const th = language === 'th';
   const [form, setForm] = useState<CustomerTracking | null>(item);
-  const [paymentDraft, setPaymentDraft] = useState<{ type: PaymentTransactionType; amount: number; paidAt: string; reference: string; note: string }>({ type: 'ticket_deposit', amount: 0, paidAt: isoToday(), reference: '', note: '' });
+  const [paymentDraft, setPaymentDraft] = useState<{ type: PaymentTransactionType; amount: number; paidAt: string; reference: string; note: string; slipFile: File | null }>({ type: 'ticket_deposit', amount: 0, paidAt: isoToday(), reference: '', note: '', slipFile: null });
+  const [paymentBusy, setPaymentBusy] = useState<string>('');
+  const [slipInputKey, setSlipInputKey] = useState(0);
   React.useEffect(() => setForm(item), [item]);
   if (!form) return null;
   const currentForm = form;
@@ -511,24 +520,81 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     await onSave({ ...next, updatedAt: new Date().toISOString() });
   }
   async function addPayment() {
-    if (paymentDraft.amount <= 0 || !paymentDraft.paidAt) return;
+    if (paymentDraft.amount <= 0 || !paymentDraft.paidAt || paymentBusy) return;
     const now = new Date().toISOString();
-    const transaction: PaymentTransaction = { id: makeId('pay'), trackingId: currentForm.id, ...paymentDraft, createdAt: now, updatedAt: now };
-    await onSavePayment(transaction);
-    let next = currentForm;
-    if (paymentDraft.type === 'ticket_deposit') {
-      const receivedAfter = paidTicket + paymentDraft.amount;
-      const fullyPaid = receivedAfter >= deposit - 0.01;
-      next = { ...next, depositStatus: fullyPaid ? 'paid' : (next.depositStatus === 'pending' ? 'invoiced' : next.depositStatus), firstPaymentReceivedAt: fullyPaid ? (next.firstPaymentReceivedAt || paymentDraft.paidAt) : next.firstPaymentReceivedAt };
+    const paymentId = makeId('pay');
+    setPaymentBusy(paymentId);
+    try {
+      let slip = { path: '', fileName: '', mimeType: '', size: 0 };
+      if (paymentDraft.slipFile) slip = await onUploadPaymentSlip(currentForm.id, paymentId, paymentDraft.slipFile);
+      const transaction: PaymentTransaction = {
+        id: paymentId,
+        trackingId: currentForm.id,
+        type: paymentDraft.type,
+        amount: paymentDraft.amount,
+        paidAt: paymentDraft.paidAt,
+        reference: paymentDraft.reference,
+        note: paymentDraft.note,
+        slipPath: slip.path,
+        slipFileName: slip.fileName,
+        slipMimeType: slip.mimeType,
+        slipSize: slip.size,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await onSavePayment(transaction);
+      let next = currentForm;
+      if (paymentDraft.type === 'ticket_deposit') {
+        const receivedAfter = paidTicket + paymentDraft.amount;
+        const fullyPaid = receivedAfter >= deposit - 0.01;
+        next = { ...next, depositStatus: fullyPaid ? 'paid' : (next.depositStatus === 'pending' ? 'invoiced' : next.depositStatus), firstPaymentReceivedAt: fullyPaid ? (next.firstPaymentReceivedAt || paymentDraft.paidAt) : next.firstPaymentReceivedAt };
+      }
+      if (paymentDraft.type === 'package_balance') {
+        const packageReceivedAfter = paidPackage + paymentDraft.amount;
+        const packageDue = Math.max(0, currentForm.totalAmount - paidTicket);
+        const fullyPaid = packageReceivedAfter >= packageDue - 0.01;
+        next = { ...next, balanceStatus: fullyPaid ? 'paid' : (next.balanceStatus === 'pending' ? 'invoiced' : next.balanceStatus), fullPaymentReceivedAt: fullyPaid ? (next.fullPaymentReceivedAt || paymentDraft.paidAt) : next.fullPaymentReceivedAt };
+      }
+      setForm(next);
+      await onSave({ ...next, updatedAt: now });
+      setPaymentDraft({ type: 'ticket_deposit', amount: 0, paidAt: isoToday(), reference: '', note: '', slipFile: null });
+      setSlipInputKey((key) => key + 1);
+    } finally {
+      setPaymentBusy('');
     }
-    if (paymentDraft.type === 'package_balance') {
-      const packageReceivedAfter = paidPackage + paymentDraft.amount;
-      const packageDue = Math.max(0, currentForm.totalAmount - paidTicket);
-      const fullyPaid = packageReceivedAfter >= packageDue - 0.01;
-      next = { ...next, balanceStatus: fullyPaid ? 'paid' : (next.balanceStatus === 'pending' ? 'invoiced' : next.balanceStatus), fullPaymentReceivedAt: fullyPaid ? (next.fullPaymentReceivedAt || paymentDraft.paidAt) : next.fullPaymentReceivedAt };
+  }
+
+  async function viewPaymentSlip(payment: PaymentTransaction) {
+    if (!payment.slipPath || paymentBusy) return;
+    const previewWindow = window.open('', '_blank');
+    setPaymentBusy(payment.id);
+    try {
+      const url = await onGetPaymentSlipUrl(payment.slipPath);
+      if (previewWindow) {
+        previewWindow.opener = null;
+        previewWindow.location.href = url;
+      } else {
+        window.location.href = url;
+      }
+    } catch (error) {
+      previewWindow?.close();
+      throw error;
+    } finally {
+      setPaymentBusy('');
     }
-    setForm(next); await onSave({ ...next, updatedAt: now });
-    setPaymentDraft({ type: 'ticket_deposit', amount: 0, paidAt: isoToday(), reference: '', note: '' });
+  }
+
+  async function replacePaymentSlip(payment: PaymentTransaction, file: File) {
+    if (!file || paymentBusy) return;
+    setPaymentBusy(payment.id);
+    try {
+      const previousPath = payment.slipPath;
+      const slip = await onUploadPaymentSlip(currentForm.id, payment.id, file);
+      await onSavePayment({ ...payment, slipPath: slip.path, slipFileName: slip.fileName, slipMimeType: slip.mimeType, slipSize: slip.size, updatedAt: new Date().toISOString() });
+      if (previousPath && previousPath !== slip.path) await onDeletePaymentSlip(previousPath);
+    } finally {
+      setPaymentBusy('');
+    }
   }
 
   const deposit = Math.max(0, form.ticketAmount) + Math.max(0, form.airportTaxAmount);
@@ -621,9 +687,38 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         <div className="installment-card second journey-invoice-card"><div className="installment-head"><span>2</span><div><b>{th ? 'Invoice 2 — ค่าแพ็กเกจส่วนที่เหลือ' : 'Invoice 2 — remaining package balance'}</b><small>{th ? 'ยอดแพ็กเกจทั้งหมด หักยอดค่าตั๋วที่ลูกค้าชำระแล้ว' : 'Full package total less ticket payments already received.'}</small></div></div><strong>{formatTHB(Math.max(0, form.totalAmount - paidTicket), language)}</strong><div className="installment-fields"><label className="field"><span>{th ? 'กำหนดชำระ' : 'Due date'}</span><input type="date" value={form.balanceDueDate} onChange={(e) => set('balanceDueDate', e.target.value)}/></label><label className="field"><span>{th ? 'สถานะงวด 2' : 'Payment 2 status'}</span><select value={form.balanceStatus} onChange={(e) => set('balanceStatus', e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label></div><button className="secondary-button" type="button" disabled={!form.landInvoiceAmountUSD} onClick={() => onIssueInvoice(normalizeBeforeSave(), 'balance')}><FileText/>{th ? 'เปิด / ออก Invoice 2' : 'Open / issue Invoice 2'}</button>{!form.landInvoiceAmountUSD && <small className="invoice-requirement-note">{th ? 'กรอกยอด Land Invoice (USD) ก่อนออก Invoice 2' : 'Enter the land invoice amount in USD before issuing Invoice 2.'}</small>}</div>
       </WorkflowSection>
 
-      <WorkflowSection number="05" icon={<WalletCards/>} title={th ? 'ประวัติรับชำระเงิน' : 'Payment transactions'} subtitle={th ? 'รองรับลูกค้าทยอยชำระค่าตั๋วหลายครั้ง และใช้หักใน Invoice งวดที่ 2' : 'Supports multiple ticket payments and deducts them from Invoice 2.'}>
-        <div className="payment-entry-form"><label className="field"><span>{th ? 'ประเภทรายการ' : 'Payment type'}</span><select value={paymentDraft.type} onChange={(e) => setPaymentDraft({ ...paymentDraft, type: e.target.value as PaymentTransactionType })}>{paymentTypes.map((x) => <option key={x} value={x}>{paymentTypeLabel(x, th)}</option>)}</select></label><MoneyField label={th ? 'จำนวนเงิน' : 'Amount'} value={paymentDraft.amount} onChange={(amount) => setPaymentDraft({ ...paymentDraft, amount })}/><label className="field"><span>{th ? 'วันที่รับชำระ' : 'Paid date'}</span><input type="date" value={paymentDraft.paidAt} onChange={(e) => setPaymentDraft({ ...paymentDraft, paidAt: e.target.value })}/></label><label className="field"><span>{th ? 'เลขอ้างอิง / ผู้ชำระ' : 'Reference / payer'}</span><input value={paymentDraft.reference} onChange={(e) => setPaymentDraft({ ...paymentDraft, reference: e.target.value })}/></label><label className="field payment-note"><span>{th ? 'หมายเหตุ' : 'Note'}</span><input value={paymentDraft.note} onChange={(e) => setPaymentDraft({ ...paymentDraft, note: e.target.value })}/></label><button className="primary-button payment-add-button" type="button" disabled={paymentDraft.amount <= 0} onClick={addPayment}><Plus/>{th ? 'บันทึกรับชำระ' : 'Record payment'}</button></div>
-        <div className="payment-ledger"><div className="payment-ledger-head"><span>{th ? 'วันที่' : 'Date'}</span><span>{th ? 'รายการ' : 'Type'}</span><span>{th ? 'อ้างอิง' : 'Reference'}</span><span>{th ? 'จำนวนเงิน' : 'Amount'}</span><span/></div>{payments.length ? payments.map((payment) => <div className="payment-ledger-row" key={payment.id}><span>{payment.paidAt ? formatDate(payment.paidAt, language) : '-'}</span><span>{paymentTypeLabel(payment.type, th)}</span><span>{payment.reference || payment.note || '-'}</span><strong className={payment.type === 'refund' ? 'negative' : ''}>{payment.type === 'refund' ? '-' : ''}{formatTHB(Math.abs(payment.amount), language)}</strong><button className="danger" onClick={() => window.confirm(th ? 'ลบรายการรับชำระนี้?' : 'Delete this payment?') && onDeletePayment(payment.id)}><Trash2/></button></div>) : <div className="payment-ledger-empty">{th ? 'ยังไม่มีประวัติรับชำระ' : 'No payment transactions yet'}</div>}<div className="payment-ledger-total"><span>{th ? 'รับชำระรวม' : 'Total received'}</span><strong>{formatTHB(totalPaid, language)}</strong><span>{th ? 'ยอดคงเหลือ' : 'Balance'}</span><strong>{formatTHB(Math.max(0, form.totalAmount - totalPaid), language)}</strong></div></div>
+      <WorkflowSection number="05" icon={<WalletCards/>} title={th ? 'ประวัติรับชำระเงิน' : 'Payment transactions'} subtitle={th ? 'บันทึกการรับชำระและแนบสลิปแยกตามแต่ละรายการ เพื่อใช้ตรวจสอบย้อนหลัง' : 'Record each payment and attach its slip for future verification.'}>
+        <div className="payment-entry-form payment-entry-form-with-slip">
+          <label className="field"><span>{th ? 'ประเภทรายการ' : 'Payment type'}</span><select value={paymentDraft.type} onChange={(e) => setPaymentDraft({ ...paymentDraft, type: e.target.value as PaymentTransactionType })}>{paymentTypes.map((x) => <option key={x} value={x}>{paymentTypeLabel(x, th)}</option>)}</select></label>
+          <MoneyField label={th ? 'จำนวนเงิน' : 'Amount'} value={paymentDraft.amount} onChange={(amount) => setPaymentDraft({ ...paymentDraft, amount })}/>
+          <label className="field"><span>{th ? 'วันที่รับชำระ' : 'Paid date'}</span><input type="date" value={paymentDraft.paidAt} onChange={(e) => setPaymentDraft({ ...paymentDraft, paidAt: e.target.value })}/></label>
+          <label className="field"><span>{th ? 'เลขอ้างอิง / ผู้ชำระ' : 'Reference / payer'}</span><input value={paymentDraft.reference} onChange={(e) => setPaymentDraft({ ...paymentDraft, reference: e.target.value })}/></label>
+          <label className="field payment-note"><span>{th ? 'หมายเหตุ' : 'Note'}</span><input value={paymentDraft.note} onChange={(e) => setPaymentDraft({ ...paymentDraft, note: e.target.value })}/></label>
+          <label className={`payment-slip-picker ${paymentDraft.slipFile ? 'selected' : ''}`}>
+            <input key={slipInputKey} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(e) => setPaymentDraft({ ...paymentDraft, slipFile: e.target.files?.[0] || null })}/>
+            <span><Paperclip/></span>
+            <div><b>{paymentDraft.slipFile ? paymentDraft.slipFile.name : (th ? 'แนบสลิปการโอน' : 'Attach payment slip')}</b><small>{paymentDraft.slipFile ? `${(paymentDraft.slipFile.size / 1024 / 1024).toFixed(2)} MB` : (th ? 'PNG, JPG, WEBP หรือ PDF ไม่เกิน 10 MB' : 'PNG, JPG, WEBP or PDF, max 10 MB')}</small></div>
+            <em>{paymentDraft.slipFile ? (th ? 'เปลี่ยนไฟล์' : 'Change') : (th ? 'เลือกไฟล์' : 'Choose')}</em>
+          </label>
+          <button className="primary-button payment-add-button" type="button" disabled={paymentDraft.amount <= 0 || Boolean(paymentBusy)} onClick={addPayment}>{paymentBusy ? <LoaderCircle className="spin"/> : <Plus/>}{th ? 'บันทึกรับชำระ' : 'Record payment'}</button>
+        </div>
+
+        <div className="payment-ledger">
+          <div className="payment-ledger-head payment-ledger-head-with-slip"><span>{th ? 'วันที่' : 'Date'}</span><span>{th ? 'รายการ' : 'Type'}</span><span>{th ? 'อ้างอิง' : 'Reference'}</span><span>{th ? 'จำนวนเงิน' : 'Amount'}</span><span>{th ? 'สลิป' : 'Slip'}</span><span/></div>
+          {payments.length ? payments.map((payment) => <div className="payment-ledger-row payment-ledger-row-with-slip" key={payment.id}>
+            <span>{payment.paidAt ? formatDate(payment.paidAt, language) : '-'}</span>
+            <span>{paymentTypeLabel(payment.type, th)}</span>
+            <span>{payment.reference || payment.note || '-'}</span>
+            <strong className={payment.type === 'refund' ? 'negative' : ''}>{payment.type === 'refund' ? '-' : ''}{formatTHB(Math.abs(payment.amount), language)}</strong>
+            <div className="payment-slip-actions">
+              {payment.slipPath ? <button type="button" className="slip-view-button" disabled={paymentBusy === payment.id} onClick={() => viewPaymentSlip(payment)}>{paymentBusy === payment.id ? <LoaderCircle className="spin"/> : <ExternalLink/>}<span>{th ? 'ดูสลิป' : 'View'}</span></button> : <span className="no-slip">{th ? 'ยังไม่มีสลิป' : 'No slip'}</span>}
+              <label className="slip-upload-mini" title={th ? 'แนบหรือเปลี่ยนสลิป' : 'Attach or replace slip'}><input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" disabled={Boolean(paymentBusy)} onChange={(e) => { const file = e.target.files?.[0]; if (file) void replacePaymentSlip(payment, file); e.currentTarget.value = ''; }}/><Upload/><span>{payment.slipPath ? (th ? 'เปลี่ยน' : 'Replace') : (th ? 'แนบ' : 'Attach')}</span></label>
+              {payment.slipFileName && <small title={payment.slipFileName}>{payment.slipFileName}</small>}
+            </div>
+            <button className="danger" disabled={Boolean(paymentBusy)} onClick={() => window.confirm(th ? 'ลบรายการรับชำระนี้และไฟล์สลิป?' : 'Delete this payment and its slip?') && onDeletePayment(payment.id)}><Trash2/></button>
+          </div>) : <div className="payment-ledger-empty">{th ? 'ยังไม่มีประวัติรับชำระ' : 'No payment transactions yet'}</div>}
+          <div className="payment-ledger-total"><span>{th ? 'รับชำระรวม' : 'Total received'}</span><strong>{formatTHB(totalPaid, language)}</strong><span>{th ? 'ยอดคงเหลือ' : 'Balance'}</span><strong>{formatTHB(Math.max(0, form.totalAmount - totalPaid), language)}</strong></div>
+        </div>
       </WorkflowSection>
 
       <WorkflowSection number="06" icon={<Landmark/>} title={th ? 'โอนชำระ LAND และคำนวณกำไรจริง' : 'Pay land supplier & calculate realized profit'} subtitle={th ? 'หลังรับชำระ Invoice 2 จากลูกค้า ให้ใส่อัตราแลกเปลี่ยน ณ วันโอน ระบบจะแปลง USD เป็นบาทและคำนวณกำไรจริง' : 'After receiving Payment 2, enter the transfer-day FX rate. The system converts USD to THB and calculates realized profit.'}>

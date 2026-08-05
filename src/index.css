@@ -1782,3 +1782,89 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .quote-scope-grid { grid-template-columns: minmax(0, 1.68fr) minmax(195px, .82fr) !important; }
   .quote-included ol { columns: 2 !important; }
 }
+
+/* =========================================================
+   v12.3.5 — reliable additional items + payment slip ledger
+   ========================================================= */
+.additional-add-panel {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid #b9d7c9;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(20, 76, 58, .08);
+}
+.additional-add-panel-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.additional-add-panel-head > div { display:grid; gap:3px; }
+.additional-add-panel-head b { color:#153d31; font-size:14px; }
+.additional-add-panel-head span { color:#74857c; font-size:10px; }
+.additional-add-grid { margin-top:14px; display:grid; grid-template-columns:minmax(220px,1.6fr) 150px 100px minmax(160px,1fr); gap:10px; }
+.additional-add-grid label { display:grid; gap:6px; color:#60736a; font-size:10px; font-weight:800; }
+.additional-add-grid input,
+.additional-add-grid select { width:100%; height:42px; padding:0 11px; border:1px solid #cfddd6; border-radius:10px; color:#213b31; background:#fff; font:inherit; font-size:12px; outline:none; }
+.additional-add-grid input:focus,
+.additional-add-grid select:focus { border-color:#4f9a7d; box-shadow:0 0 0 3px rgba(38,128,94,.1); }
+.additional-add-grid input:disabled { color:#6f7e77; background:#f3f6f4; }
+.additional-add-summary { margin-top:12px; padding:10px 12px; display:flex; align-items:center; justify-content:flex-end; gap:16px; border-radius:10px; color:#5e7469; background:#f1f7f4; font-size:11px; }
+.additional-add-summary strong { color:#0e6046; font-family:Inter,Arial,sans-serif; font-size:15px; font-variant-numeric:tabular-nums; }
+.additional-add-actions { margin-top:12px; display:flex; justify-content:flex-end; gap:8px; }
+.additional-add-actions button { min-height:40px; }
+
+.payment-entry-form-with-slip { grid-template-columns:1fr 1fr .9fr 1.1fr minmax(180px,1.1fr); }
+.payment-entry-form-with-slip .payment-slip-picker { grid-column:1 / -2; }
+.payment-entry-form-with-slip .payment-add-button { grid-column:-2 / -1; }
+.payment-slip-picker {
+  min-height:58px;
+  padding:10px 12px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border:1px dashed #b7cec3;
+  border-radius:12px;
+  color:#35594b;
+  background:#f8fbf9;
+  cursor:pointer;
+}
+.payment-slip-picker:hover { border-color:#5b9b82; background:#f0f8f4; }
+.payment-slip-picker.selected { border-style:solid; border-color:#83b8a2; background:#edf7f2; }
+.payment-slip-picker input,
+.slip-upload-mini input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.payment-slip-picker > span { width:34px; height:34px; flex:0 0 34px; display:grid; place-items:center; border-radius:10px; color:#0d674a; background:#ddf0e8; }
+.payment-slip-picker svg { width:17px; height:17px; }
+.payment-slip-picker > div { min-width:0; flex:1; display:grid; gap:3px; }
+.payment-slip-picker b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+.payment-slip-picker small { color:#7b8b83; font-size:9px; }
+.payment-slip-picker em { padding:6px 9px; border-radius:8px; color:#0f654a; background:#e0f0e8; font-style:normal; font-size:9px; font-weight:850; }
+
+.payment-ledger-head-with-slip,
+.payment-ledger-row-with-slip { grid-template-columns:125px 1fr 1.15fr 140px minmax(190px,1fr) 44px; }
+.payment-ledger-row-with-slip { min-height:68px; }
+.payment-slip-actions { min-width:0; padding:7px 8px; display:grid; grid-template-columns:auto auto; align-items:center; justify-content:start; gap:6px; }
+.payment-ledger-row .payment-slip-actions button,
+.payment-ledger-row .payment-slip-actions label { width:auto; height:30px; padding:0 8px; display:inline-flex; align-items:center; justify-content:center; gap:5px; border-radius:8px; font-size:9px; font-weight:800; cursor:pointer; }
+.payment-ledger-row .payment-slip-actions button svg,
+.payment-ledger-row .payment-slip-actions label svg { width:13px; height:13px; }
+.payment-ledger-row .slip-view-button { color:#0f6047; background:#e5f3ec; }
+.payment-ledger-row .slip-upload-mini { color:#4b6258; background:#eef2f0; }
+.payment-slip-actions small { grid-column:1 / -1; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#7a8982; font-size:8px; }
+.payment-slip-actions .no-slip { padding:0; color:#98a49e; font-size:9px; }
+.spin { animation:payment-spin .85s linear infinite; }
+@keyframes payment-spin { to { transform:rotate(360deg); } }
+
+@media (max-width:1220px) {
+  .additional-add-grid { grid-template-columns:1fr 1fr; }
+  .payment-entry-form-with-slip { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .payment-entry-form-with-slip .payment-slip-picker { grid-column:1 / -1; }
+  .payment-entry-form-with-slip .payment-add-button { grid-column:1 / -1; }
+}
+@media (max-width:860px) {
+  .payment-ledger-head-with-slip,
+  .payment-ledger-row-with-slip { min-width:940px; }
+}
+@media (max-width:620px) {
+  .additional-add-grid { grid-template-columns:1fr; }
+  .additional-add-actions { display:grid; grid-template-columns:1fr 1fr; }
+  .payment-entry-form-with-slip { grid-template-columns:1fr; }
+  .payment-entry-form-with-slip .payment-slip-picker,
+  .payment-entry-form-with-slip .payment-add-button { grid-column:auto; }
+}

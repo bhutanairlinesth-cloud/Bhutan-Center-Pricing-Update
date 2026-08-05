@@ -227,6 +227,10 @@ export interface PaymentTransaction {
   paidAt: string;
   reference: string;
   note: string;
+  slipPath: string;
+  slipFileName: string;
+  slipMimeType: string;
+  slipSize: number;
   createdAt: string;
   updatedAt: string;
 }

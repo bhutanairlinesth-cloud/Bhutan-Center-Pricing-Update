@@ -100,13 +100,53 @@ function normalizeTravelerAddition(draft: TravelerAddition): TravelerAddition {
   const packagePricePerPerson = Math.max(0, Number(draft.packagePricePerPerson || 0));
   const ticketPricePerPerson = Math.max(0, Number(draft.ticketPricePerPerson || 0));
   const airportTaxPerPerson = Math.max(0, Number(draft.airportTaxPerPerson || 0));
-  const landCostPerPerson = Math.max(0, Number(draft.landCostPerPerson || 0));
+  // LAND is settled later from the consolidated supplier invoice, so it is intentionally excluded here.
+  const landCostPerPerson = 0;
   const businessUpgradePerPerson = Math.max(0, Number(draft.businessUpgradePerPerson || 0));
   const singleSupplementPerPerson = Math.max(0, Number(draft.singleSupplementPerPerson || 0));
   const singleSupplementCostPerPerson = Math.max(0, Number(draft.singleSupplementCostPerPerson || 0));
   const customerChargeTotal = packagePricePerPerson * passengerCount + businessUpgradePerPerson * businessUpgradeCount + singleSupplementPerPerson * singleRoomCount + extraLines.reduce((sum, line) => sum + line.totalTHB, 0);
-  const internalCostTotal = (ticketPricePerPerson + airportTaxPerPerson + landCostPerPerson) * passengerCount + singleSupplementCostPerPerson * singleRoomCount + extraLines.reduce((sum, line) => sum + line.totalCostTHB, 0);
+  const internalCostTotal = (ticketPricePerPerson + airportTaxPerPerson) * passengerCount + singleSupplementCostPerPerson * singleRoomCount + extraLines.reduce((sum, line) => sum + line.totalCostTHB, 0);
   return { ...draft, passengerCount, businessUpgradeCount, singleRoomCount, packagePricePerPerson, ticketPricePerPerson, airportTaxPerPerson, landCostPerPerson, businessUpgradePerPerson, singleSupplementPerPerson, singleSupplementCostPerPerson, extraLines, customerChargeTotal, internalCostTotal };
+}
+
+interface TicketChangeDraft {
+  changedAt: string;
+  passengerCount: number;
+  passengerNames: string;
+  airline: string;
+  originalPnr: string;
+  newPnr: string;
+  originalTravelDate: string;
+  newTravelDate: string;
+  fareDifferencePerPerson: number;
+  airlineChangeFeePerPerson: number;
+  serviceFeePerPerson: number;
+  extraLines: SupplementalInvoiceLine[];
+  note: string;
+}
+function newTicketChangeDraft(tracking?: CustomerTracking | null): TicketChangeDraft {
+  return {
+    changedAt: isoToday(), passengerCount: Math.max(1, tracking?.passengerCount || 1), passengerNames: tracking?.passengerNames || '',
+    airline: tracking?.airline || 'Bhutan Airlines', originalPnr: tracking?.flightPnr || '', newPnr: '',
+    originalTravelDate: tracking?.travelStartDate || '', newTravelDate: '', fareDifferencePerPerson: 0,
+    airlineChangeFeePerPerson: 0, serviceFeePerPerson: 0, extraLines: [], note: '',
+  };
+}
+function normalizeTicketChangeDraft(draft: TicketChangeDraft) {
+  const passengerCount = Math.max(1, Math.round(Number(draft.passengerCount || 1)));
+  const fareDifferencePerPerson = Math.max(0, Number(draft.fareDifferencePerPerson || 0));
+  const airlineChangeFeePerPerson = Math.max(0, Number(draft.airlineChangeFeePerPerson || 0));
+  const serviceFeePerPerson = Math.max(0, Number(draft.serviceFeePerPerson || 0));
+  const extraLines = (draft.extraLines || []).map((line) => {
+    const quantity = Math.max(1, Number(line.quantity || 1));
+    const unitPriceTHB = Math.max(0, Number(line.unitPriceTHB || 0));
+    const costPerUnitTHB = Math.max(0, Number(line.costPerUnitTHB || 0));
+    return { ...line, description: line.description.trim(), quantity, unitPriceTHB, costPerUnitTHB, totalTHB: quantity * unitPriceTHB, totalCostTHB: quantity * costPerUnitTHB };
+  }).filter((line) => line.description && (line.totalTHB > 0 || line.totalCostTHB > 0));
+  const amount = passengerCount * (fareDifferencePerPerson + airlineChangeFeePerPerson + serviceFeePerPerson) + extraLines.reduce((sum, line) => sum + line.totalTHB, 0);
+  const costAmount = passengerCount * (fareDifferencePerPerson + airlineChangeFeePerPerson) + extraLines.reduce((sum, line) => sum + line.totalCostTHB, 0);
+  return { ...draft, passengerCount, fareDifferencePerPerson, airlineChangeFeePerPerson, serviceFeePerPerson, extraLines, amount, costAmount };
 }
 function addedPassengerCount(item: CustomerTracking) {
   return (item.travelerAdditions || []).filter((entry) => entry.status !== 'cancelled').reduce((sum, entry) => sum + Math.max(0, entry.passengerCount || 0), 0);
@@ -412,11 +452,15 @@ export function CustomerTrackingWorkspace(props: Props) {
       window.alert(th ? 'กรุณากรอกราคาขายแพ็กเกจต่อท่านสำหรับผู้เดินทางที่เพิ่ม' : 'Enter the package selling price per added traveller.');
       return;
     }
+    if (tracking.travelStartDate && draft.addedAt >= tracking.travelStartDate) {
+      window.alert(th ? 'ไม่สามารถเพิ่มผู้เดินทางในวันเริ่มเดินทางหรือหลังจากนั้นได้ กรุณาใช้เมนู “เลื่อนตั๋ว / เดินทางล่าช้า” แทน' : 'Travellers cannot be added on or after the trip start date. Use “Ticket change / delayed travel” instead.');
+      return;
+    }
     const existingExtras = supplementalInvoicesFor(tracking.id, props.invoices);
     const sequenceNumber = Math.max(2, ...existingExtras.map((x) => x.sequenceNumber || 2)) + 1;
     const now = new Date().toISOString();
     const lineItems: SupplementalInvoiceLine[] = [
-      { id: makeId('xline'), description: th ? `แพ็กเกจ ${tracking.packageName} — ผู้เดินทางเพิ่ม` : `${tracking.packageName} — added traveller package`, quantity: draft.passengerCount, unitPriceTHB: draft.packagePricePerPerson, totalTHB: draft.passengerCount * draft.packagePricePerPerson, costPerUnitTHB: draft.ticketPricePerPerson + draft.airportTaxPerPerson + draft.landCostPerPerson, totalCostTHB: draft.passengerCount * (draft.ticketPricePerPerson + draft.airportTaxPerPerson + draft.landCostPerPerson) },
+      { id: makeId('xline'), description: th ? `แพ็กเกจ ${tracking.packageName} — ผู้เดินทางเพิ่ม` : `${tracking.packageName} — added traveller package`, quantity: draft.passengerCount, unitPriceTHB: draft.packagePricePerPerson, totalTHB: draft.passengerCount * draft.packagePricePerPerson, costPerUnitTHB: draft.ticketPricePerPerson + draft.airportTaxPerPerson, totalCostTHB: draft.passengerCount * (draft.ticketPricePerPerson + draft.airportTaxPerPerson) },
     ];
     if (draft.businessUpgradeCount > 0 && draft.businessUpgradePerPerson > 0) lineItems.push({ id: makeId('xline'), description: 'Business Class Upgrade', quantity: draft.businessUpgradeCount, unitPriceTHB: draft.businessUpgradePerPerson, totalTHB: draft.businessUpgradeCount * draft.businessUpgradePerPerson, costPerUnitTHB: 0, totalCostTHB: 0 });
     if (draft.singleRoomCount > 0 && draft.singleSupplementPerPerson > 0) lineItems.push({ id: makeId('xline'), description: th ? 'ส่วนต่างห้องพักเดี่ยว' : 'Single-room supplement', quantity: draft.singleRoomCount, unitPriceTHB: draft.singleSupplementPerPerson, totalTHB: draft.singleRoomCount * draft.singleSupplementPerPerson, costPerUnitTHB: draft.singleSupplementCostPerPerson, totalCostTHB: draft.singleRoomCount * draft.singleSupplementCostPerPerson });
@@ -566,9 +610,13 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   const [travelerDueDate, setTravelerDueDate] = useState('');
   const [travelerBusy, setTravelerBusy] = useState(false);
   const [travelerPanelOpen, setTravelerPanelOpen] = useState(false);
+  const [ticketChangeDraft, setTicketChangeDraft] = useState<TicketChangeDraft>(newTicketChangeDraft(item));
+  const [ticketChangeDueDate, setTicketChangeDueDate] = useState('');
+  const [ticketChangeBusy, setTicketChangeBusy] = useState(false);
+  const [ticketChangePanelOpen, setTicketChangePanelOpen] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState<string>('');
   const [slipInputKey, setSlipInputKey] = useState(0);
-  React.useEffect(() => { setForm(item ? { ...item, travelerAdditions: item.travelerAdditions || [] } : item); setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); setTravelerPanelOpen(false); }, [item]);
+  React.useEffect(() => { setForm(item ? { ...item, travelerAdditions: item.travelerAdditions || [] } : item); setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); setTravelerPanelOpen(false); setTicketChangeDraft(newTicketChangeDraft(item)); setTicketChangeDueDate(''); setTicketChangePanelOpen(false); }, [item]);
   if (!form) return null;
   const currentForm = form;
   const set = <K extends keyof CustomerTracking>(key: K, value: CustomerTracking[K]) => setForm((current) => current ? ({ ...current, [key]: value }) : current);
@@ -637,6 +685,7 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   }
   const selectedPackage = packages.find((x) => x.id === currentForm.packageId);
   const currentStage = getJourneyStage(currentForm);
+  const travelHasStarted = !!currentForm.travelStartDate && isoToday() >= currentForm.travelStartDate;
 
   function updateLandFinancials(patch: Partial<Pick<CustomerTracking, 'landInvoiceAmountUSD' | 'landExchangeRate' | 'landTransferFeeTHB'>>) {
     setForm((current) => {
@@ -851,6 +900,47 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     }
   }
 
+  async function submitTicketChange() {
+    if (ticketChangeBusy) return;
+    const calculated = normalizeTicketChangeDraft(ticketChangeDraft);
+    const names = calculated.passengerNames.split(/\r?\n/).map((name) => name.trim()).filter(Boolean);
+    if (!calculated.originalPnr.trim()) { window.alert(th ? 'กรุณากรอก PNR เดิม' : 'Enter the original PNR.'); return; }
+    if (!calculated.newTravelDate) { window.alert(th ? 'กรุณาระบุวันเดินทางใหม่' : 'Enter the new travel date.'); return; }
+    if (calculated.amount <= 0) { window.alert(th ? 'กรุณากรอกค่าธรรมเนียมหรือส่วนต่างที่ต้องเรียกเก็บ' : 'Enter the fees or fare difference to charge.'); return; }
+    if (names.length && names.length !== calculated.passengerCount) {
+      const proceed = window.confirm(th ? `พบรายชื่อ ${names.length} รายชื่อ แต่ระบุผู้โดยสาร ${calculated.passengerCount} ท่าน\nต้องการดำเนินการต่อหรือไม่?` : `There are ${names.length} names but ${calculated.passengerCount} passengers.\nContinue?`);
+      if (!proceed) return;
+    }
+    setTicketChangeBusy(true);
+    try {
+      const normalized = normalizeBeforeSave();
+      await onSave(normalized);
+      const lines: SupplementalInvoiceLine[] = [];
+      if (calculated.fareDifferencePerPerson > 0) lines.push({ id: makeId('xline'), description: th ? 'ส่วนต่างค่าตั๋วเครื่องบิน' : 'Airfare difference', quantity: calculated.passengerCount, unitPriceTHB: calculated.fareDifferencePerPerson, totalTHB: calculated.passengerCount * calculated.fareDifferencePerPerson, costPerUnitTHB: calculated.fareDifferencePerPerson, totalCostTHB: calculated.passengerCount * calculated.fareDifferencePerPerson });
+      if (calculated.airlineChangeFeePerPerson > 0) lines.push({ id: makeId('xline'), description: th ? 'ค่าธรรมเนียมเปลี่ยนเที่ยวบิน / ออกตั๋วใหม่' : 'Flight change / reissue fee', quantity: calculated.passengerCount, unitPriceTHB: calculated.airlineChangeFeePerPerson, totalTHB: calculated.passengerCount * calculated.airlineChangeFeePerPerson, costPerUnitTHB: calculated.airlineChangeFeePerPerson, totalCostTHB: calculated.passengerCount * calculated.airlineChangeFeePerPerson });
+      if (calculated.serviceFeePerPerson > 0) lines.push({ id: makeId('xline'), description: th ? 'ค่าบริการดำเนินการเปลี่ยนตั๋ว' : 'Ticket-change service fee', quantity: calculated.passengerCount, unitPriceTHB: calculated.serviceFeePerPerson, totalTHB: calculated.passengerCount * calculated.serviceFeePerPerson, costPerUnitTHB: 0, totalCostTHB: 0 });
+      lines.push(...calculated.extraLines);
+      const note = [
+        `${th ? 'สายการบิน' : 'Airline'}: ${calculated.airline || '-'}`,
+        `${th ? 'PNR เดิม' : 'Original PNR'}: ${calculated.originalPnr}`,
+        calculated.newPnr ? `${th ? 'PNR ใหม่' : 'New PNR'}: ${calculated.newPnr}` : '',
+        `${th ? 'วันเดินทางเดิม' : 'Original travel date'}: ${calculated.originalTravelDate || '-'}`,
+        `${th ? 'วันเดินทางใหม่' : 'New travel date'}: ${calculated.newTravelDate}`,
+        names.length ? `${th ? 'ผู้โดยสาร' : 'Passengers'}: ${names.join(', ')}` : '',
+        calculated.note,
+      ].filter(Boolean).join('\n');
+      await onCreateSupplementalInvoice(normalized, {
+        title: th ? `เลื่อนตั๋ว / เดินทางล่าช้า (${calculated.passengerCount} ท่าน)` : `Ticket change / delayed travel (${calculated.passengerCount} pax)`,
+        dueDate: ticketChangeDueDate, note, lineItems: lines,
+      });
+      setTicketChangeDraft(newTicketChangeDraft(normalized));
+      setTicketChangeDueDate('');
+      setTicketChangePanelOpen(false);
+    } finally {
+      setTicketChangeBusy(false);
+    }
+  }
+
   const deposit = Math.max(0, form.ticketAmount) + Math.max(0, form.airportTaxAmount);
   const paidTicket = ticketPaidAmount(form, payments); const paidPackage = packagePaidAmount(form, payments); const totalPaid = sumPayments(payments);
   const supplementalRevenue = Math.max(form.supplementalInvoiceTotal || 0, invoices.filter((x) => x.status !== 'cancelled').reduce((sum, x) => sum + x.amount, 0));
@@ -894,13 +984,16 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
           <div className="traveler-addition-inline-copy">
             <span className="traveler-addition-inline-icon"><Users/></span>
             <div>
-              <b>{th ? 'มีผู้เดินทางเพิ่มภายหลัง?' : 'Travellers joining later?'}</b>
-              <small>{th ? 'กดเพิ่มเฉพาะเมื่อออกตั๋วชุดเดิมแล้ว และมีลูกค้าเพิ่มเข้ามาภายหลัง' : 'Use only after the original tickets were issued and more travellers join later.'}</small>
+              <b>{travelHasStarted ? (th ? 'หลังวันเริ่มเดินทาง' : 'After trip start') : (th ? 'มีผู้เดินทางเพิ่มภายหลัง?' : 'Travellers joining later?')}</b>
+              <small>{travelHasStarted
+                ? (th ? 'ปิดการเพิ่มผู้เดินทางแล้ว หากมีเหตุเดินทางช้ากว่าเดิมให้ใช้ปุ่มเลื่อนตั๋ว' : 'Adding travellers is closed. Use ticket change when someone must travel later.')
+                : (th ? 'เพิ่มได้ก่อนวันเริ่มเดินทางเท่านั้น และ LAND จะสรุปผู้เดินทางทั้งหมดใน Invoice ภายหลัง' : 'Available only before the trip starts. LAND will consolidate all travellers in its later invoice.')}</small>
             </div>
           </div>
           <div className="traveler-addition-inline-stats">
             {addedPassengerCount(form) > 0 && <span>{th ? `เพิ่มแล้ว ${addedPassengerCount(form)} ท่าน` : `${addedPassengerCount(form)} added`}</span>}
-            <button type="button" className="secondary-button traveler-addition-open-button" onClick={() => setTravelerPanelOpen(true)}><Plus/>{th ? 'เพิ่มผู้เดินทาง' : 'Add travellers'}</button>
+            <button type="button" className="secondary-button traveler-addition-open-button" disabled={travelHasStarted} onClick={() => setTravelerPanelOpen(true)}><Plus/>{th ? 'เพิ่มผู้เดินทาง' : 'Add travellers'}</button>
+            <button type="button" className="secondary-button traveler-addition-open-button" onClick={() => setTicketChangePanelOpen(true)}><CalendarClock/>{th ? 'เลื่อนตั๋ว / เดินทางล่าช้า' : 'Ticket change / delayed travel'}</button>
           </div>
         </div>
         <div className="tracking-form-grid money-grid journey-money-grid pricing-input-grid">
@@ -1061,6 +1154,19 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
           </div>
         </section>
       </div>}
+
+      {ticketChangePanelOpen && <div className="journey-submodal-layer" role="dialog" aria-modal="true" aria-label={th ? 'เลื่อนตั๋ว / เดินทางล่าช้า' : 'Ticket change / delayed travel'}>
+        <button type="button" className="journey-submodal-backdrop" onClick={() => setTicketChangePanelOpen(false)} aria-label={th ? 'ปิด' : 'Close'}/>
+        <section className="journey-submodal-card">
+          <header className="journey-submodal-header">
+            <div><span><CalendarClock/></span><div><h2>{th ? 'เลื่อนตั๋ว / เดินทางล่าช้า' : 'Ticket change / delayed travel'}</h2><p>{th ? 'ใช้เมื่อออกตั๋วแล้วและผู้โดยสารต้องเปลี่ยนวันเดินทาง ระบบจะออก Invoice เพิ่มเติมแยกจากแพ็กเกจเดิม' : 'Use after ticketing when passengers must change their travel date. A separate supplemental invoice will be issued.'}</p></div></div>
+            <button type="button" onClick={() => setTicketChangePanelOpen(false)} aria-label={th ? 'ปิด' : 'Close'}><X/></button>
+          </header>
+          <div className="journey-submodal-body">
+            <TicketChangeManager language={language} draft={ticketChangeDraft} setDraft={setTicketChangeDraft} dueDate={ticketChangeDueDate} setDueDate={setTicketChangeDueDate} busy={ticketChangeBusy} onCreate={submitTicketChange}/>
+          </div>
+        </section>
+      </div>}
     </div>
   </Modal>;
 }
@@ -1123,7 +1229,7 @@ function TravelerAdditionManager({ tracking, invoices, language, draft, setDraft
     <div className="traveler-addition-form traveler-addition-form-open">
       <div className="traveler-addition-form-title"><span><Plus/>{th ? 'ข้อมูลผู้เดินทางชุดใหม่' : 'New traveller details'}</span><small>{th ? 'กรอกเฉพาะครั้งที่มีผู้เดินทางเพิ่ม ระบบจะไม่เปลี่ยนข้อมูลผู้เดินทางชุดเดิม' : 'Complete only when new travellers join. Original traveller data remains unchanged.'}</small></div>
       <div className="tracking-form-grid traveler-identity-grid">
-        <label className="field"><span>{th ? 'วันที่เพิ่มผู้เดินทาง' : 'Added date'}</span><input type="date" value={draft.addedAt} onChange={(e) => update('addedAt', e.target.value)}/></label>
+        <label className="field"><span>{th ? 'วันที่เพิ่มผู้เดินทาง' : 'Added date'}</span><input type="date" max={tracking.travelStartDate ? addDays(tracking.travelStartDate, -1) : undefined} value={draft.addedAt} onChange={(e) => update('addedAt', e.target.value)}/><small>{tracking.travelStartDate ? (th ? `เพิ่มได้ไม่เกิน ${formatDate(addDays(tracking.travelStartDate, -1), language)}` : `Must be before ${formatDate(tracking.travelStartDate, language)}`) : ''}</small></label>
         <label className="field"><span>{th ? 'จำนวนผู้เดินทางเพิ่ม' : 'Added travellers'}</span><input type="number" min="1" step="1" value={draft.passengerCount} onChange={(e) => update('passengerCount', Math.max(1, Number(e.target.value)))}/></label>
         <label className="field"><span>{th ? 'สายการบิน' : 'Airline'}</span><input value={draft.airline} onChange={(e) => update('airline', e.target.value)}/></label>
         <label className="field"><span>PNR</span><input value={draft.pnr} onChange={(e) => update('pnr', e.target.value.toUpperCase())} placeholder="ABC123"/></label>
@@ -1133,7 +1239,6 @@ function TravelerAdditionManager({ tracking, invoices, language, draft, setDraft
         <MoneyField label={th ? 'ราคาขายแพ็กเกจ / ท่าน' : 'Package selling / pax'} value={draft.packagePricePerPerson} onChange={(v) => update('packagePricePerPerson', v)}/>
         <MoneyField label={th ? 'ราคาตั๋วจริงตาม PNR / ท่าน' : 'Actual PNR airfare / pax'} value={draft.ticketPricePerPerson} onChange={(v) => update('ticketPricePerPerson', v)}/>
         <MoneyField label={th ? 'ภาษีสนามบิน / ท่าน' : 'Airport tax / pax'} value={draft.airportTaxPerPerson} onChange={(v) => update('airportTaxPerPerson', v)}/>
-        <MoneyField label={th ? 'ต้นทุน LAND / ท่าน' : 'Land cost / pax'} value={draft.landCostPerPerson} onChange={(v) => update('landCostPerPerson', v)}/>
         <label className="field"><span>{th ? 'จำนวนอัปเกรด Business' : 'Business upgrades'}</span><input type="number" min="0" max={draft.passengerCount} value={draft.businessUpgradeCount} onChange={(e) => update('businessUpgradeCount', Math.min(draft.passengerCount, Math.max(0, Number(e.target.value))))}/></label>
         <MoneyField label={th ? 'ส่วนเพิ่ม Business / ท่าน' : 'Business surcharge / pax'} value={draft.businessUpgradePerPerson} onChange={(v) => update('businessUpgradePerPerson', v)}/>
         <label className="field"><span>{th ? 'จำนวนพักเดี่ยว' : 'Single rooms'}</span><input type="number" min="0" max={draft.passengerCount} value={draft.singleRoomCount} onChange={(e) => update('singleRoomCount', Math.min(draft.passengerCount, Math.max(0, Number(e.target.value))))}/></label>
@@ -1143,7 +1248,7 @@ function TravelerAdditionManager({ tracking, invoices, language, draft, setDraft
       <div className="traveler-extra-lines"><div className="mini-section-title"><b>{th ? 'บริการเพิ่มเฉพาะผู้เดินทางชุดนี้' : 'Extra services for these travellers'}</b><span>{th ? 'กรอกทั้งราคาขายและต้นทุนเพื่อใช้ทำรายงานกำไรภายหลัง' : 'Enter both selling price and cost for future margin reports.'}</span></div><SupplementalLineEditor compact lines={draft.extraLines.length ? draft.extraLines : [newSupplementalLine()]} onChange={(lines) => update('extraLines', lines)} language={language}/></div>
       <div className="traveler-addition-totals">
         <AutoTotal label={th ? 'ยอดเรียกเก็บลูกค้า' : 'Customer charge'} formula={th ? 'แพ็กเกจ + BC + พักเดี่ยว + บริการเพิ่ม' : 'Package + BC + single room + extras'} value={calculated.customerChargeTotal} language={language} featured/>
-        <AutoTotal label={th ? 'ต้นทุนรวมโดยประมาณ' : 'Estimated total cost'} formula={th ? 'ตั๋ว + ภาษี + LAND + ต้นทุนอื่น' : 'Airfare + tax + land + other costs'} value={calculated.internalCostTotal} language={language}/>
+        <AutoTotal label={th ? 'ต้นทุนรวมโดยประมาณ' : 'Estimated total cost'} formula={th ? 'ตั๋ว + ภาษี + ต้นทุนอื่น (LAND รวมภายหลัง)' : 'Airfare + tax + other costs (LAND consolidated later)'} value={calculated.internalCostTotal} language={language}/>
         <AutoTotal label={th ? 'กำไรขั้นต้นของรายการเพิ่ม' : 'Added-item gross profit'} formula={th ? 'ยอดเรียกเก็บ − ต้นทุน' : 'Revenue − cost'} value={calculated.customerChargeTotal - calculated.internalCostTotal} language={language}/>
       </div>
       <div className="tracking-form-grid traveler-invoice-meta">
@@ -1151,6 +1256,46 @@ function TravelerAdditionManager({ tracking, invoices, language, draft, setDraft
         <label className="field span-2"><span>{th ? 'หมายเหตุ' : 'Note'}</span><input value={draft.note} onChange={(e) => update('note', e.target.value)}/></label>
       </div>
       <div className="traveler-addition-actions"><button type="button" className="primary-button" disabled={busy || calculated.customerChargeTotal <= 0} onClick={() => void onCreate()}>{busy ? <LoaderCircle className="spin"/> : <ReceiptText/>}{th ? 'บันทึกและออก Invoice 3+' : 'Save and issue Invoice 3+'}</button></div>
+    </div>
+  </div>;
+}
+
+function TicketChangeManager({ language, draft, setDraft, dueDate, setDueDate, busy, onCreate }: {
+  language: 'th' | 'en'; draft: TicketChangeDraft; setDraft: React.Dispatch<React.SetStateAction<TicketChangeDraft>>;
+  dueDate: string; setDueDate: (value: string) => void; busy: boolean; onCreate: () => Promise<void>;
+}) {
+  const th = language === 'th';
+  const calculated = normalizeTicketChangeDraft(draft);
+  const update = <K extends keyof TicketChangeDraft>(key: K, value: TicketChangeDraft[K]) => setDraft((current) => ({ ...current, [key]: value }));
+  return <div className="traveler-addition-manager">
+    <div className="traveler-addition-form traveler-addition-form-open">
+      <div className="traveler-addition-form-title"><span><CalendarClock/>{th ? 'ข้อมูลการเปลี่ยนวันเดินทาง' : 'Travel-date change details'}</span><small>{th ? 'สำหรับผู้โดยสารที่ออกตั๋วแล้วและต้องเดินทางช้ากว่าเดิม ไม่ใช่การเพิ่มผู้เดินทางใหม่' : 'For already-ticketed passengers who must travel later; this is not for adding new travellers.'}</small></div>
+      <div className="tracking-form-grid traveler-identity-grid">
+        <label className="field"><span>{th ? 'วันที่แจ้งเปลี่ยน' : 'Change requested on'}</span><input type="date" value={draft.changedAt} onChange={(e) => update('changedAt', e.target.value)}/></label>
+        <label className="field"><span>{th ? 'จำนวนผู้โดยสารที่เปลี่ยน' : 'Passengers changing'}</span><input type="number" min="1" step="1" value={draft.passengerCount} onChange={(e) => update('passengerCount', Math.max(1, Number(e.target.value)))}/></label>
+        <label className="field"><span>{th ? 'สายการบิน' : 'Airline'}</span><input value={draft.airline} onChange={(e) => update('airline', e.target.value)}/></label>
+        <label className="field"><span>{th ? 'PNR เดิม' : 'Original PNR'}</span><input value={draft.originalPnr} onChange={(e) => update('originalPnr', e.target.value.toUpperCase())}/></label>
+        <label className="field"><span>{th ? 'PNR ใหม่ (ถ้ามี)' : 'New PNR (optional)'}</span><input value={draft.newPnr} onChange={(e) => update('newPnr', e.target.value.toUpperCase())}/></label>
+        <label className="field"><span>{th ? 'วันเดินทางเดิม' : 'Original travel date'}</span><input type="date" value={draft.originalTravelDate} onChange={(e) => update('originalTravelDate', e.target.value)}/></label>
+        <label className="field"><span>{th ? 'วันเดินทางใหม่' : 'New travel date'}</span><input type="date" value={draft.newTravelDate} onChange={(e) => update('newTravelDate', e.target.value)}/></label>
+        <label className="field span-2"><span>{th ? 'รายชื่อผู้โดยสารที่เปลี่ยน (1 คนต่อ 1 บรรทัด)' : 'Passenger names (one per line)'}</span><textarea rows={4} value={draft.passengerNames} onChange={(e) => update('passengerNames', e.target.value)} placeholder={'1. SURNAME/FIRSTNAME MR\n2. SURNAME/FIRSTNAME MS'}/></label>
+      </div>
+      <div className="tracking-form-grid money-grid traveler-pricing-grid">
+        <MoneyField label={th ? 'ส่วนต่างค่าตั๋ว / ท่าน' : 'Fare difference / pax'} value={draft.fareDifferencePerPerson} onChange={(v) => update('fareDifferencePerPerson', v)}/>
+        <MoneyField label={th ? 'ค่าธรรมเนียมสายการบิน / ท่าน' : 'Airline change fee / pax'} value={draft.airlineChangeFeePerPerson} onChange={(v) => update('airlineChangeFeePerPerson', v)}/>
+        <MoneyField label={th ? 'ค่าบริการของบริษัท / ท่าน' : 'Company service fee / pax'} value={draft.serviceFeePerPerson} onChange={(v) => update('serviceFeePerPerson', v)}/>
+      </div>
+      <div className="traveler-extra-lines"><div className="mini-section-title"><b>{th ? 'ค่าใช้จ่ายอื่นจากการเลื่อนตั๋ว' : 'Other ticket-change charges'}</b><span>{th ? 'เพิ่มได้ เช่น ค่าโรงแรมเพิ่ม รถรับส่ง หรือค่าใช้จ่ายที่เกิดจากการเดินทางล่าช้า' : 'Add hotel, transfer, or other costs caused by the delayed travel.'}</span></div><SupplementalLineEditor compact lines={draft.extraLines.length ? draft.extraLines : [newSupplementalLine()]} onChange={(lines) => update('extraLines', lines)} language={language}/></div>
+      <div className="traveler-addition-totals">
+        <AutoTotal label={th ? 'ยอด Invoice เพิ่มเติม' : 'Supplemental invoice total'} formula={th ? 'ส่วนต่างตั๋ว + ค่าธรรมเนียม + ค่าบริการ + รายการอื่น' : 'Fare difference + fees + service + extras'} value={calculated.amount} language={language} featured/>
+        <AutoTotal label={th ? 'ต้นทุนรวม' : 'Total internal cost'} formula={th ? 'ส่วนต่างตั๋ว + ค่าธรรมเนียมสายการบิน + ต้นทุนรายการอื่น' : 'Fare difference + airline fee + other costs'} value={calculated.costAmount} language={language}/>
+        <AutoTotal label={th ? 'กำไรขั้นต้น' : 'Gross profit'} formula={th ? 'ยอดเรียกเก็บ − ต้นทุน' : 'Revenue − cost'} value={calculated.amount - calculated.costAmount} language={language}/>
+      </div>
+      <div className="tracking-form-grid traveler-invoice-meta">
+        <label className="field"><span>{th ? 'กำหนดชำระ Invoice' : 'Invoice due date'}</span><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}/></label>
+        <label className="field span-2"><span>{th ? 'หมายเหตุ' : 'Note'}</span><input value={draft.note} onChange={(e) => update('note', e.target.value)}/></label>
+      </div>
+      <div className="traveler-addition-actions"><button type="button" className="primary-button" disabled={busy || calculated.amount <= 0} onClick={() => void onCreate()}>{busy ? <LoaderCircle className="spin"/> : <ReceiptText/>}{th ? 'บันทึกและออก Invoice เพิ่มเติม' : 'Save and issue supplemental invoice'}</button></div>
     </div>
   </div>;
 }

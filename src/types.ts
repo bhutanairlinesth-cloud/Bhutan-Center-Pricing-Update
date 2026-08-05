@@ -167,7 +167,8 @@ export interface TravelerAddition {
   /** Internal costs used for margin reporting and name-verification details. */
   ticketPricePerPerson: number;
   airportTaxPerPerson: number;
-  landCostPerPerson: number;
+  /** @deprecated LAND cost is consolidated later from the supplier invoice and is ignored for added travellers. */
+  landCostPerPerson?: number;
   businessUpgradeCount: number;
   businessUpgradePerPerson: number;
   singleRoomCount: number;

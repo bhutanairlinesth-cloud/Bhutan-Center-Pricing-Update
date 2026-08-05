@@ -123,6 +123,10 @@ export const mockDb = {
     singleRoomCount: item.singleRoomCount ?? 0,
     singleSupplementPerPerson: item.singleSupplementPerPerson ?? 0,
     singleSupplementTotal: item.singleSupplementTotal ?? 0,
+    supplementalInvoiceTotal: item.supplementalInvoiceTotal ?? 0,
+    supplementalCostTotal: item.supplementalCostTotal ?? 0,
+    grandTotalAmount: item.grandTotalAmount ?? ((item.totalAmount ?? 0) + (item.supplementalInvoiceTotal ?? 0)),
+    travelerAdditions: item.travelerAdditions ?? [],
     ticketPricePerPerson: item.ticketPricePerPerson ?? ((item.passengerCount || 0) > 0 ? (item.ticketAmount || 0) / item.passengerCount : 0),
     airportTaxPerPerson: item.airportTaxPerPerson ?? ((item.passengerCount || 0) > 0 ? (item.airportTaxAmount || 0) / item.passengerCount : 0),
     businessUpgradeCount: item.businessUpgradeCount ?? 0,
@@ -152,7 +156,13 @@ export const mockDb = {
     localStorage.setItem(KEYS.payments, JSON.stringify(this.getPaymentTransactions().filter((x) => x.trackingId !== id)));
   },
 
-  getInvoices: () => read<PaymentInvoice[]>(KEYS.invoices, []),
+  getInvoices: (): PaymentInvoice[] => read<PaymentInvoice[]>(KEYS.invoices, []).map((item) => ({
+    ...item,
+    sequenceNumber: item.sequenceNumber ?? (item.installment === 'deposit' ? 1 : item.installment === 'balance' ? 2 : 3),
+    title: item.title ?? '',
+    lineItems: item.lineItems ?? [],
+    costAmount: item.costAmount ?? 0,
+  })),
   saveInvoice(item: PaymentInvoice) {
     const list = this.getInvoices();
     const index = list.findIndex((x) => x.id === item.id);
@@ -161,7 +171,7 @@ export const mockDb = {
   },
   deleteInvoice(id: string) { localStorage.setItem(KEYS.invoices, JSON.stringify(this.getInvoices().filter((x) => x.id !== id))); },
 
-  getPaymentTransactions: () => read<PaymentTransaction[]>(KEYS.payments, []),
+  getPaymentTransactions: (): PaymentTransaction[] => read<PaymentTransaction[]>(KEYS.payments, []).map((item) => ({ ...item, invoiceId: item.invoiceId ?? '' })),
   savePaymentTransaction(item: PaymentTransaction) {
     const list = this.getPaymentTransactions();
     const index = list.findIndex((x) => x.id === item.id);

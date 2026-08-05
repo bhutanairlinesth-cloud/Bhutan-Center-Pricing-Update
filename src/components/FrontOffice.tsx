@@ -8,6 +8,7 @@ import { CustomerDetails, GlobalSettings, HotelCategory, PricingChannel, Pricing
 import { useI18n, LanguageSwitch } from '../i18n';
 import { calculatePrice, getPackageSingleSupplement } from '../utils/pricing';
 import { formatDate, formatNumber, formatTHB, formatUSD, makeQuotationNo } from '../utils/format';
+import { printElementAsA4 } from '../utils/printA4';
 import { Brand } from './Brand';
 import { Modal } from './Ui';
 import { AdditionalItemsEditor } from './AdditionalItemsEditor';

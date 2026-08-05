@@ -138,9 +138,48 @@ export interface CustomerDetails {
 export type LeadSource = 'LINE OA' | 'LINE' | 'Facebook' | 'Call in' | 'Referral' | 'Walk in' | 'Other';
 export type TrackingStatus = 'new' | 'following' | 'quote_sent' | 'won' | 'lost' | 'completed';
 export type JourneyStage = 'lead' | 'quotation_sent' | 'booking_confirmed' | 'flight_reserved' | 'invoice_1_sent' | 'first_payment_received' | 'ticket_sent' | 'documents_sent_to_land' | 'land_invoice_received' | 'invoice_2_ready' | 'visa_received' | 'visa_sent' | 'full_payment_received' | 'land_payment_pending' | 'land_paid' | 'itinerary_sent' | 'ready_to_travel' | 'traveling' | 'returned' | 'feedback_requested' | 'feedback_received' | 'closed' | 'cancelled';
-export type PaymentTransactionType = 'ticket_deposit' | 'package_balance' | 'refund' | 'other';
+export type PaymentTransactionType = 'ticket_deposit' | 'package_balance' | 'supplemental' | 'refund' | 'other';
 export type PaymentStageStatus = 'pending' | 'invoiced' | 'paid' | 'overdue' | 'cancelled';
-export type InvoiceInstallment = 'deposit' | 'balance';
+export type InvoiceInstallment = 'deposit' | 'balance' | 'supplemental';
+
+
+export interface SupplementalInvoiceLine {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPriceTHB: number;
+  totalTHB: number;
+  /** Internal cost, never shown on the customer invoice. */
+  costPerUnitTHB: number;
+  totalCostTHB: number;
+}
+
+
+export interface TravelerAddition {
+  id: string;
+  addedAt: string;
+  passengerCount: number;
+  passengerNames: string;
+  pnr: string;
+  airline: string;
+  /** Full package selling price per added traveller. This already includes the airfare/tax component. */
+  packagePricePerPerson: number;
+  /** Internal costs used for margin reporting and name-verification details. */
+  ticketPricePerPerson: number;
+  airportTaxPerPerson: number;
+  landCostPerPerson: number;
+  businessUpgradeCount: number;
+  businessUpgradePerPerson: number;
+  singleRoomCount: number;
+  singleSupplementPerPerson: number;
+  singleSupplementCostPerPerson: number;
+  extraLines: SupplementalInvoiceLine[];
+  customerChargeTotal: number;
+  internalCostTotal: number;
+  invoiceId: string;
+  note: string;
+  status: 'active' | 'cancelled';
+}
 
 export interface CustomerTracking {
   id: string;
@@ -162,7 +201,16 @@ export interface CustomerTracking {
   singleRoomCount: number;
   singleSupplementPerPerson: number;
   singleSupplementTotal: number;
+  /** Original package value used by Invoice 1 and Invoice 2. */
   totalAmount: number;
+  /** Sum of active Invoice 3+ documents. */
+  supplementalInvoiceTotal: number;
+  /** Internal costs of Invoice 3+ services. */
+  supplementalCostTotal: number;
+  /** Package total + active Invoice 3+ documents. */
+  grandTotalAmount: number;
+  /** Travellers added after the original ticketing flow, linked to Invoice 3+. */
+  travelerAdditions: TravelerAddition[];
   ticketPricePerPerson: number;
   ticketAmount: number;
   airportTaxPerPerson: number;
@@ -222,6 +270,8 @@ export interface CustomerTracking {
 export interface PaymentTransaction {
   id: string;
   trackingId: string;
+  /** Optional link to Invoice 3+ for separate payment tracking. */
+  invoiceId: string;
   type: PaymentTransactionType;
   amount: number;
   paidAt: string;
@@ -240,6 +290,12 @@ export interface PaymentInvoice {
   trackingId: string;
   invoiceNo: string;
   installment: InvoiceInstallment;
+  /** 1, 2, 3... shown to staff and customers. */
+  sequenceNumber: number;
+  title: string;
+  lineItems: SupplementalInvoiceLine[];
+  /** Internal cost used for future profit dashboards. */
+  costAmount: number;
   issueDate: string;
   dueDate: string;
   amount: number;

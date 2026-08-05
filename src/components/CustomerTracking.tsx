@@ -197,11 +197,47 @@ function travelerTicketInvoicesFor(item: CustomerTracking, invoices: PaymentInvo
   const ids = travelerAdditionInvoiceIds(item);
   return invoices.filter((invoice) => ids.has(invoice.id)).sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
 }
+function travelerAdditionPackageValue(entry: TravelerAddition, fallbackPackagePricePerPerson = 0) {
+  const passengerCount = Math.max(0, Number(entry.passengerCount || 0));
+  const packagePricePerPerson = Math.max(0, Number(entry.packagePricePerPerson || fallbackPackagePricePerPerson || 0));
+  return packagePricePerPerson * passengerCount
+    + travelerAdditionBusinessUpgradeValue(entry)
+    + travelerAdditionSingleSupplementValue(entry)
+    + travelerAdditionExtrasValue(entry);
+}
+function travelerAdditionBasePackageValue(entry: TravelerAddition, fallbackPackagePricePerPerson = 0) {
+  const passengerCount = Math.max(0, Number(entry.passengerCount || 0));
+  const packagePricePerPerson = Math.max(0, Number(entry.packagePricePerPerson || fallbackPackagePricePerPerson || 0));
+  return passengerCount * packagePricePerPerson;
+}
+function travelerAdditionBusinessUpgradeValue(entry: TravelerAddition) {
+  return Math.max(0, Number(entry.businessUpgradeCount || 0)) * Math.max(0, Number(entry.businessUpgradePerPerson || 0));
+}
+function travelerAdditionSingleSupplementValue(entry: TravelerAddition) {
+  return Math.max(0, Number(entry.singleRoomCount || 0)) * Math.max(0, Number(entry.singleSupplementPerPerson || 0));
+}
+function travelerAdditionExtrasValue(entry: TravelerAddition) {
+  return (entry.extraLines || []).reduce((sum, line) => {
+    const quantity = Math.max(0, Number(line.quantity || 0));
+    const unitPrice = Math.max(0, Number(line.unitPriceTHB || 0));
+    return sum + (Number(line.totalTHB) > 0 ? Number(line.totalTHB) : quantity * unitPrice);
+  }, 0);
+}
+function travelerAdditionInternalCostValue(entry: TravelerAddition) {
+  const ticketDeposit = travelerAdditionTicketDepositTotal(entry);
+  const singleRoomCost = Math.max(0, Number(entry.singleRoomCount || 0)) * Math.max(0, Number(entry.singleSupplementCostPerPerson || 0));
+  const extrasCost = (entry.extraLines || []).reduce((sum, line) => {
+    const quantity = Math.max(0, Number(line.quantity || 0));
+    const unitCost = Math.max(0, Number(line.costPerUnitTHB || 0));
+    return sum + (Number(line.totalCostTHB) > 0 ? Number(line.totalCostTHB) : quantity * unitCost);
+  }, 0);
+  return ticketDeposit + singleRoomCost + extrasCost;
+}
 function travelerAdditionPackageTotal(item: CustomerTracking) {
-  return activeTravelerAdditions(item).reduce((sum, entry) => sum + Math.max(0, entry.customerChargeTotal || 0), 0);
+  return activeTravelerAdditions(item).reduce((sum, entry) => sum + travelerAdditionPackageValue(entry, item.sellingPricePerPerson), 0);
 }
 function travelerAdditionInternalCostTotal(item: CustomerTracking) {
-  return activeTravelerAdditions(item).reduce((sum, entry) => sum + Math.max(0, entry.internalCostTotal || 0), 0);
+  return activeTravelerAdditions(item).reduce((sum, entry) => sum + travelerAdditionInternalCostValue(entry), 0);
 }
 function travelerAdditionTicketDepositTotal(entry: TravelerAddition) {
   return Math.max(0, entry.ticketDepositTotal ?? ((entry.ticketPricePerPerson + entry.airportTaxPerPerson) * entry.passengerCount));
@@ -313,8 +349,8 @@ function buildPackageSnapshotRows(item: CustomerTracking): InvoicePackageLineSna
     add({
       descriptionTh: item.packageName || `แพ็กเกจผู้เดินทางเพิ่ม ชุดที่ ${index + 1}`, descriptionEn: item.packageName || `Added-traveller package ${index + 1}`,
       detailTh: `${item.hotelCategory}`, detailEn: `${item.hotelCategory}`, ptc: 'ADT',
-      quantity: entry.passengerCount, unitPriceTHB: entry.packagePricePerPerson,
-      totalTHB: entry.passengerCount * entry.packagePricePerPerson,
+      quantity: entry.passengerCount, unitPriceTHB: entry.packagePricePerPerson > 0 ? entry.packagePricePerPerson : item.sellingPricePerPerson,
+      totalTHB: entry.passengerCount * (entry.packagePricePerPerson > 0 ? entry.packagePricePerPerson : item.sellingPricePerPerson),
     });
     if (entry.businessUpgradeCount > 0 && entry.businessUpgradePerPerson > 0) add({
       descriptionTh: 'อัปเกรด Business Class', descriptionEn: 'Business Class Upgrade', detailTh: 'ผู้เดินทางเพิ่ม', detailEn: 'Added travellers', ptc: 'BC',
@@ -883,6 +919,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     const additionalItems = normalizeAdditionalCharges(next.additionalItems || [], pax);
     const additionalItemsTotal = additionalItems.reduce((sum, item) => sum + item.totalTHB, 0);
     const sellingPricePerPerson = Math.max(0, Number(next.sellingPricePerPerson || 0));
+    const travelerAdditions = (next.travelerAdditions || []).map((entry) => normalizeTravelerAddition({
+      ...entry,
+      packagePricePerPerson: Math.max(0, Number(entry.packagePricePerPerson || sellingPricePerPerson || 0)),
+    }));
     const ticketPricePerPerson = Math.max(0, Number(next.ticketPricePerPerson || (next.ticketAmount && next.ticketAmount / pax) || 0));
     const airportTaxPerPerson = Math.max(0, Number(next.airportTaxPerPerson || (next.airportTaxAmount && next.airportTaxAmount / pax) || 0));
     const businessUpgradeCount = Math.min(pax, Math.max(0, Math.round(Number(next.businessUpgradeCount || 0))));
@@ -893,7 +933,7 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     const ticketAmount = ticketPricePerPerson * pax;
     const airportTaxAmount = airportTaxPerPerson * pax;
     const depositAmount = ticketAmount + airportTaxAmount;
-    const recalculatedTracking = { ...next, totalAmount, depositAmount } as CustomerTracking;
+    const recalculatedTracking = { ...next, travelerAdditions, totalAmount, depositAmount } as CustomerTracking;
     const paidTicket = totalTicketPaymentsReceived(recalculatedTracking, invoices, payments);
     const balanceAmount = Math.max(0, packageSalesTotal(recalculatedTracking) - paidTicket);
     const landPayment = Math.max(0, Number(next.landPayment || 0));
@@ -914,6 +954,7 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       additionalItems,
       additionalItemsTotal,
       totalAmount,
+      travelerAdditions,
       supplementalInvoiceTotal: supplementalInvoiceTotalValue,
       supplementalCostTotal: supplementalCostTotalValue,
       grandTotalAmount,
@@ -1240,10 +1281,19 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   const paidTicket = ticketPaidAmount(form, payments); const paidPackage = packagePaidAmount(form, payments); const totalPaid = sumPayments(payments);
   const supplementalRevenue = customerSupplementalSalesTotal(form, invoices);
   const supplementalCosts = customerSupplementalCostTotal(form, invoices);
+  const activeAdditions = activeTravelerAdditions(form);
   const addedPackageRevenue = travelerAdditionPackageTotal(form);
+  const addedBasePackageRevenue = activeAdditions.reduce((sum, entry) => sum + travelerAdditionBasePackageValue(entry, form.sellingPricePerPerson), 0);
+  const addedBusinessUpgradeRevenue = activeAdditions.reduce((sum, entry) => sum + travelerAdditionBusinessUpgradeValue(entry), 0);
+  const addedSingleSupplementRevenue = activeAdditions.reduce((sum, entry) => sum + travelerAdditionSingleSupplementValue(entry), 0);
+  const addedExtrasRevenue = activeAdditions.reduce((sum, entry) => sum + travelerAdditionExtrasValue(entry), 0);
   const generalSupplementalRevenue = generalSupplementalInvoices(form, invoices).reduce((sum, invoice) => sum + Math.max(0, invoice.amount || 0), 0);
   const combinedPackageTotal = packageSalesTotal(form);
   const combinedPassengerCount = totalPackagePassengerCount(form);
+  const combinedBasePackageTotal = Math.max(0, form.sellingPricePerPerson || 0) * Math.max(0, form.passengerCount || 0) + addedBasePackageRevenue;
+  const combinedBusinessUpgradeTotal = Math.max(0, form.businessUpgradeTotal || 0) + addedBusinessUpgradeRevenue;
+  const combinedSingleSupplementTotal = Math.max(0, form.singleSupplementTotal || 0) + addedSingleSupplementRevenue;
+  const combinedAdditionalItemsTotal = Math.max(0, form.additionalItemsTotal || 0) + addedExtrasRevenue;
   const combinedAirfareTotal = Math.max(0, form.ticketAmount || 0) + addedTravelerAirfareTotal(form);
   const combinedAirportTaxTotal = Math.max(0, form.airportTaxAmount || 0) + addedTravelerAirportTaxTotal(form);
   const combinedTicketAndTaxTotal = combinedAirfareTotal + combinedAirportTaxTotal;
@@ -1311,15 +1361,15 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         <div className="automatic-totals-panel">
           <div className="automatic-totals-head"><div><b>{th ? 'สรุปราคาอัตโนมัติ' : 'Automatic price summary'}</b><span>{th ? 'รวมผู้เดินทางชุดแรกและผู้เดินทางที่เพิ่มทุกชุดโดยอัตโนมัติ' : 'Automatically combines the original group and every added-traveller batch.'}</span></div><strong>{formatTHB(combinedPackageTotal, language)}</strong></div>
           <div className="automatic-totals-grid">
-            <AutoTotal label={th ? 'แพ็กเกจพื้นฐาน' : 'Base package'} formula={`${formatTHB(form.sellingPricePerPerson, language)} × ${form.passengerCount}`} value={form.sellingPricePerPerson * form.passengerCount} language={language}/>
-            {addedPassengerCount(form) > 0 && <AutoTotal label={th ? 'แพ็กเกจผู้เดินทางเพิ่ม' : 'Added-traveller packages'} formula={`${addedPassengerCount(form)} ${th ? 'ท่าน' : 'pax'}`} value={addedPackageRevenue} language={language}/>}
-            <AutoTotal label={th ? 'ส่วนเพิ่ม Business Class ในแพ็กเกจ' : 'Business Class package surcharge'} formula={`${form.businessUpgradeCount} × ${formatTHB(form.businessUpgradePerPerson, language)}`} value={form.businessUpgradeTotal} language={language}/>
-            <AutoTotal label={th ? 'พักเดี่ยวรวม' : 'Single supplement'} formula={`${form.singleRoomCount} × ${formatTHB(form.singleSupplementPerPerson, language)}`} value={form.singleSupplementTotal} language={language}/>
-            <AutoTotal label={th ? 'รายการเพิ่มเติมรวม' : 'Additional services'} formula={`${form.additionalItems?.length || 0} ${th ? 'รายการ' : 'items'}`} value={form.additionalItemsTotal} language={language}/>
+            <AutoTotal label={th ? `แพ็กเกจพื้นฐานรวม ${combinedPassengerCount} ท่าน` : `Base package — ${combinedPassengerCount} pax`} formula={addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม` : `${form.passengerCount} original + ${addedPassengerCount(form)} added`) : `${formatTHB(form.sellingPricePerPerson, language)} × ${form.passengerCount}`} value={combinedBasePackageTotal} language={language}/>
+            {addedPassengerCount(form) > 0 && <AutoTotal label={th ? 'มูลค่าแพ็กเกจของผู้เดินทางเพิ่ม' : 'Added-traveller package value'} formula={`${addedPassengerCount(form)} ${th ? 'ท่าน' : 'pax'}`} value={addedPackageRevenue} language={language}/>} 
+            <AutoTotal label={th ? 'ส่วนเพิ่ม Business Class รวมทุกชุด' : 'Business Class surcharge — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedBusinessUpgradeTotal} language={language}/>
+            <AutoTotal label={th ? 'พักเดี่ยวรวมทุกชุด' : 'Single supplements — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedSingleSupplementTotal} language={language}/>
+            <AutoTotal label={th ? 'รายการเพิ่มเติมรวมทุกชุด' : 'Additional services — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAdditionalItemsTotal} language={language}/>
             <AutoTotal featured label={th ? 'ยอดแพ็กเกจรวมผู้เดินทางทั้งหมด' : 'Combined package total'} formula={addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม = ${combinedPassengerCount} ท่าน` : `${form.passengerCount} original + ${addedPassengerCount(form)} added = ${combinedPassengerCount} pax`) : (th ? `${form.passengerCount} ท่าน` : `${form.passengerCount} pax`)} value={combinedPackageTotal} language={language}/>
-            <AutoTotal label={th ? 'ค่าตั๋วเครื่องบินทั้งหมด' : 'Total airfare'} formula={`${formatTHB(form.ticketPricePerPerson, language)} × ${form.passengerCount}`} value={form.ticketAmount} language={language}/>
-            <AutoTotal label={th ? 'ภาษีสนามบินทั้งหมด' : 'Total airport tax'} formula={`${formatTHB(form.airportTaxPerPerson, language)} × ${form.passengerCount}`} value={form.airportTaxAmount} language={language}/>
-            <AutoTotal featured label={th ? 'ยอด Invoice 1' : 'Invoice 1 total'} formula={th ? 'ค่าตั๋วตาม PNR + ภาษีสนามบิน (ไม่รวมส่วนเพิ่ม BC)' : 'PNR airfare + airport tax (excludes BC selling surcharge)'} value={deposit} language={language}/>
+            <AutoTotal label={th ? 'ค่าตั๋วเครื่องบินรวมทุกชุด' : 'Total airfare — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAirfareTotal} language={language}/>
+            <AutoTotal label={th ? 'ภาษีสนามบินรวมทุกชุด' : 'Total airport tax — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAirportTaxTotal} language={language}/>
+            <AutoTotal featured label={th ? 'ยอด Invoice 1 รวมทุกชุด' : 'Invoice 1 total — all groups'} formula={th ? 'ค่าตั๋วตาม PNR + ภาษีสนามบินของผู้เดินทางทุกชุด' : 'PNR airfare + airport tax for every traveller group'} value={combinedTicketAndTaxTotal} language={language}/>
             <div className="calculated-money land-cost-pending"><span>{th ? 'ต้นทุน LAND จริง' : 'Actual land cost'}</span><strong>{form.landPayment > 0 ? formatTHB(form.landPayment, language) : (th ? 'รอ Land Invoice' : 'Awaiting land invoice')}</strong><small>{th ? 'บันทึกยอด USD และอัตราแลกเปลี่ยนใน Step 4–6' : 'Record the USD invoice and actual exchange rate in Steps 4–6.'}</small></div>
             <div className={`calculated-money ${profit !== null && profit < 0 ? 'negative' : ''}`}><span>{th ? 'กำไรจริงจากการขาย' : 'Realized sales profit'}</span><strong>{profit === null ? (th ? 'รอชำระ LAND' : 'Pending land payment') : formatTHB(profit, language)}</strong><small>{th ? 'ยอดขาย − ค่าตั๋วจริง − ภาษี − LAND ที่โอนจริง (ส่วนเพิ่ม BC เป็นรายได้)' : 'Sales − actual airfare − tax − actual land transfer (BC surcharge is revenue)'}</small></div>
           </div>
@@ -1534,7 +1584,7 @@ function TravelerAdditionManager({ tracking, invoices, language, draft, setDraft
         return <article key={entry.id} className={`traveler-addition-card ${entry.status === 'cancelled' || invoice?.status === 'cancelled' ? 'cancelled' : ''}`}>
           <div><span>{entry.addedAt ? formatDate(entry.addedAt, language) : '-'}</span><strong>{th ? `เพิ่ม ${entry.passengerCount} ท่าน` : `Added ${entry.passengerCount} pax`}</strong><small>PNR {entry.pnr || '-'} · {entry.airline || '-'}</small></div>
           <div><span>{th ? 'รายชื่อ' : 'Names'}</span><strong>{names.join(', ') || '-'}</strong><small>{invoice ? `${invoice.invoiceNo} · ${paymentStatusLabel(invoice.status, th)}` : (th ? 'ไม่พบ Invoice' : 'Invoice not found')}</small></div>
-          <div><span>{th ? 'แพ็กเกจเพิ่ม / Invoice 1 ค่าตั๋ว' : 'Added package / Invoice 1 ticket'}</span><strong>{formatTHB(entry.customerChargeTotal, language)}</strong><small>{th ? `Invoice 1 ค่าตั๋ว ${formatTHB(travelerAdditionTicketDepositTotal(entry), language)}` : `Invoice 1 ticket ${formatTHB(travelerAdditionTicketDepositTotal(entry), language)}`}</small></div>
+          <div><span>{th ? 'แพ็กเกจเพิ่ม / Invoice 1 ค่าตั๋ว' : 'Added package / Invoice 1 ticket'}</span><strong>{formatTHB(travelerAdditionPackageValue(entry, tracking.sellingPricePerPerson), language)}</strong><small>{th ? `Invoice 1 ค่าตั๋ว ${formatTHB(travelerAdditionTicketDepositTotal(entry), language)}` : `Invoice 1 ticket ${formatTHB(travelerAdditionTicketDepositTotal(entry), language)}`}</small></div>
           {invoice && <button type="button" className="secondary-button" onClick={() => onOpen(invoice)}><FileText/>{th ? `เปิด Invoice ${invoice.sequenceNumber}` : `Open Invoice ${invoice.sequenceNumber}`}</button>}
         </article>;
       })}
@@ -1706,8 +1756,8 @@ function InvoicePreview({ value, language, payments, invoices, onClose, onSaveIn
     if (isSupplemental) {
       const wasActive = previousStatus !== 'cancelled';
       const willBeActive = next !== 'cancelled';
-      const revenueValue = travelerAddition ? travelerAddition.customerChargeTotal : invoice.amount;
-      const costValue = travelerAddition ? travelerAddition.internalCostTotal : invoice.costAmount;
+      const revenueValue = travelerAddition ? travelerAdditionPackageValue(travelerAddition, tracking.sellingPricePerPerson) : invoice.amount;
+      const costValue = travelerAddition ? travelerAdditionInternalCostValue(travelerAddition) : invoice.costAmount;
       const revenueDelta = (willBeActive ? revenueValue : 0) - (wasActive ? revenueValue : 0);
       const costDelta = (willBeActive ? costValue : 0) - (wasActive ? costValue : 0);
       const supplementalInvoiceTotal = Math.max(0, (tracking.supplementalInvoiceTotal || 0) + revenueDelta);

@@ -2210,3 +2210,52 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .traveler-addition-inline-stats { flex-wrap: wrap; justify-content: flex-start; }
   .visa-readiness-alert { padding: 12px; }
 }
+
+/* v12.4.5 — Added travellers remain inside Invoice 1; package balance rolls into Invoice 2 */
+.invoice1-added-groups {
+  margin-top: 16px;
+  border: 1px solid #cfe4dc;
+  border-radius: 18px;
+  background: #f8fcfa;
+  overflow: hidden;
+}
+.invoice1-added-groups-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  background: #edf8f3;
+  border-bottom: 1px solid #d8e9e2;
+}
+.invoice1-added-groups-head > div { display: grid; gap: 3px; }
+.invoice1-added-groups-head b { color: #103f34; font-size: 15px; }
+.invoice1-added-groups-head small { color: #6c7e77; font-size: 12px; }
+.invoice1-added-groups-head > span {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #dff2ea;
+  color: #14614f;
+  font-weight: 800;
+  font-size: 12px;
+}
+.invoice1-added-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(190px, .75fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 15px 18px;
+  border-bottom: 1px solid #e4eee9;
+}
+.invoice1-added-row:last-child { border-bottom: 0; }
+.invoice1-added-row > div { display: grid; gap: 3px; min-width: 0; }
+.invoice1-added-row span { color: #718079; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.invoice1-added-row strong { color: #173b32; font-size: 14px; overflow-wrap: anywhere; }
+.invoice1-added-row small { color: #7b8984; font-size: 12px; }
+.invoice1-added-row .secondary-button { white-space: nowrap; }
+@media (max-width: 760px) {
+  .invoice1-added-groups-head { align-items: flex-start; }
+  .invoice1-added-row { grid-template-columns: 1fr; }
+  .invoice1-added-row .secondary-button { width: 100%; justify-content: center; }
+}

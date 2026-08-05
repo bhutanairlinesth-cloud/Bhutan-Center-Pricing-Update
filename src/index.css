@@ -2036,3 +2036,137 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .supplemental-grand-summary { margin-top: 6px !important; }
   .supplemental-flight-cost-note { margin-top: 5px !important; margin-bottom: 6px !important; }
 }
+
+/* =========================================================
+   v12.4.2 — Compact added-traveller workflow
+   ========================================================= */
+.traveler-addition-inline-action {
+  margin: 14px 0 4px;
+  padding: 14px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid #cfe1d8;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f7fbf9 0%, #eef7f3 100%);
+}
+.traveler-addition-inline-copy { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.traveler-addition-inline-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: #0d6a4c;
+  background: #dff1e9;
+}
+.traveler-addition-inline-icon svg { width: 20px; height: 20px; }
+.traveler-addition-inline-copy > div { min-width: 0; display: grid; gap: 3px; }
+.traveler-addition-inline-copy b { color: #173d31; font-size: 13px; }
+.traveler-addition-inline-copy small { color: #71837a; font-size: 10px; line-height: 1.45; }
+.traveler-addition-inline-stats { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.traveler-addition-inline-stats > span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: #0a6648;
+  background: #dff1e9;
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.traveler-addition-open-button { min-height: 42px; padding-inline: 16px; white-space: nowrap; }
+
+.journey-submodal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+}
+.journey-submodal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(7, 27, 20, .58);
+  backdrop-filter: blur(4px);
+}
+.journey-submodal-card {
+  width: min(1180px, calc(100vw - 44px));
+  max-height: calc(100vh - 44px);
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.45);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 32px 110px rgba(5, 29, 21, .34);
+}
+.journey-submodal-header {
+  min-height: 76px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #dce7e1;
+  background: #f8fbf9;
+}
+.journey-submodal-header > div { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.journey-submodal-header > div > span {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: #fff;
+  background: #0d674b;
+}
+.journey-submodal-header > div > span svg { width: 20px; height: 20px; }
+.journey-submodal-header h2 { margin: 0; color: #173b30; font-size: 18px; }
+.journey-submodal-header p { margin: 3px 0 0; color: #718179; font-size: 10px; line-height: 1.45; }
+.journey-submodal-header > button {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 11px;
+  color: #596b62;
+  background: #eef3f0;
+}
+.journey-submodal-header > button svg { width: 18px; height: 18px; }
+.journey-submodal-body { padding: 16px; overflow: auto; overscroll-behavior: contain; }
+.traveler-addition-manager { display: grid; gap: 14px; }
+.traveler-addition-form-open { overflow: visible; }
+.traveler-addition-form-title {
+  min-height: 62px;
+  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #d6e5dd;
+  background: #eff7f3;
+}
+.traveler-addition-form-title span { display: inline-flex; align-items: center; gap: 8px; color: #0e5f46; font-size: 13px; font-weight: 900; }
+.traveler-addition-form-title span svg { width: 17px; height: 17px; }
+.traveler-addition-form-title small { max-width: 54%; color: #6d8177; font-size: 9px; text-align: right; }
+
+@media (max-width: 760px) {
+  .traveler-addition-inline-action { align-items: stretch; flex-direction: column; }
+  .traveler-addition-inline-stats { justify-content: space-between; }
+  .traveler-addition-open-button { flex: 1; }
+  .journey-submodal-layer { padding: 8px; }
+  .journey-submodal-card { width: calc(100vw - 16px); max-height: calc(100vh - 16px); border-radius: 17px; }
+  .journey-submodal-header { align-items: flex-start; }
+  .journey-submodal-header p { max-width: 62vw; }
+  .traveler-addition-form-title { align-items: flex-start; flex-direction: column; }
+  .traveler-addition-form-title small { max-width: none; text-align: left; }
+}

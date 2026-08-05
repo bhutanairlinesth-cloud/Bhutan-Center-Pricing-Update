@@ -3,7 +3,7 @@ import {
   ArrowLeft, BadgeCheck, CalendarClock, Check, ChevronDown, CircleDollarSign, ClipboardCheck,
   ClipboardList, Download, Edit3, FileCheck2, FileText, Filter, Flag, Hourglass, Landmark,
   LogOut, MessageSquareText, Plane, Plus, ReceiptText, Search, Send, Settings2, ShieldCheck,
-  Sparkles, Trash2, UserRoundCheck, Users, WalletCards, Paperclip, ExternalLink, LoaderCircle, Upload,
+  Sparkles, Trash2, UserRoundCheck, Users, WalletCards, Paperclip, ExternalLink, LoaderCircle, Upload, X,
 } from 'lucide-react';
 import {
   CustomerTracking, GlobalSettings, HotelCategory, InvoiceInstallment, JourneyStage, LeadSource,
@@ -565,9 +565,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   const [travelerDraft, setTravelerDraft] = useState<TravelerAddition>(newTravelerAdditionDraft(item));
   const [travelerDueDate, setTravelerDueDate] = useState('');
   const [travelerBusy, setTravelerBusy] = useState(false);
+  const [travelerPanelOpen, setTravelerPanelOpen] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState<string>('');
   const [slipInputKey, setSlipInputKey] = useState(0);
-  React.useEffect(() => { setForm(item ? { ...item, travelerAdditions: item.travelerAdditions || [] } : item); setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); }, [item]);
+  React.useEffect(() => { setForm(item ? { ...item, travelerAdditions: item.travelerAdditions || [] } : item); setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); setTravelerPanelOpen(false); }, [item]);
   if (!form) return null;
   const currentForm = form;
   const set = <K extends keyof CustomerTracking>(key: K, value: CustomerTracking[K]) => setForm((current) => current ? ({ ...current, [key]: value }) : current);
@@ -844,6 +845,7 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       await onCreateTravelerAddition(normalized, travelerDraft, travelerDueDate);
       setTravelerDraft(newTravelerAdditionDraft(normalized));
       setTravelerDueDate('');
+      setTravelerPanelOpen(false);
     } finally {
       setTravelerBusy(false);
     }
@@ -887,6 +889,19 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
           <label className="field"><span>{th ? 'จำนวนผู้เดินทาง' : 'No. of pax'}</span><input type="number" min="1" value={form.passengerCount} onChange={(e) => updatePricingFields({ passengerCount: Math.max(1, Number(e.target.value)) })}/></label>
           <label className="field"><span>{th ? 'จำนวนผู้พักเดี่ยว' : 'Single-room travellers'}</span><input type="number" min="0" max={Math.max(1, form.passengerCount)} value={form.singleRoomCount} onChange={(e) => updateSingleRoomDetails(Number(e.target.value), form.singleSupplementPerPerson)}/></label>
           <div className="tracking-calc-action"><button className="secondary-button" type="button" onClick={calculateFromPricing}><CircleDollarSign/>{th ? 'ดึงราคามาตรฐานจากระบบ' : 'Load standard pricing'}</button></div>
+        </div>
+        <div className="traveler-addition-inline-action">
+          <div className="traveler-addition-inline-copy">
+            <span className="traveler-addition-inline-icon"><Users/></span>
+            <div>
+              <b>{th ? 'มีผู้เดินทางเพิ่มภายหลัง?' : 'Travellers joining later?'}</b>
+              <small>{th ? 'กดเพิ่มเฉพาะเมื่อออกตั๋วชุดเดิมแล้ว และมีลูกค้าเพิ่มเข้ามาภายหลัง' : 'Use only after the original tickets were issued and more travellers join later.'}</small>
+            </div>
+          </div>
+          <div className="traveler-addition-inline-stats">
+            {addedPassengerCount(form) > 0 && <span>{th ? `เพิ่มแล้ว ${addedPassengerCount(form)} ท่าน` : `${addedPassengerCount(form)} added`}</span>}
+            <button type="button" className="secondary-button traveler-addition-open-button" onClick={() => setTravelerPanelOpen(true)}><Plus/>{th ? 'เพิ่มผู้เดินทาง' : 'Add travellers'}</button>
+          </div>
         </div>
         <div className="tracking-form-grid money-grid journey-money-grid pricing-input-grid">
           <MoneyField label={th ? 'ราคาขายแพ็กเกจ / ท่าน' : 'Package selling price / pax'} value={form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ sellingPricePerPerson: v })}/>
@@ -977,19 +992,6 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         </div>
       </WorkflowSection>
 
-      <TravelerAdditionManager
-        tracking={form}
-        invoices={invoices}
-        language={language}
-        draft={travelerDraft}
-        setDraft={setTravelerDraft}
-        dueDate={travelerDueDate}
-        setDueDate={setTravelerDueDate}
-        busy={travelerBusy}
-        onCreate={submitTravelerAddition}
-        onOpen={(invoice) => onOpenInvoice(form, invoice)}
-      />
-
       <SupplementalInvoiceManager
         tracking={form}
         invoices={invoices}
@@ -1035,6 +1037,30 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       </WorkflowSection>
 
       <div className="modal-actions tracking-modal-actions"><button className="ghost-button" onClick={onClose}>{th ? 'ปิด' : 'Close'}</button><button className="primary-button" disabled={!form.opportunityName.trim() || !form.customerName.trim()} onClick={saveAndStay}><BadgeCheck/>{th ? 'บันทึก Customer Journey' : 'Save customer journey'}</button></div>
+
+      {travelerPanelOpen && <div className="journey-submodal-layer" role="dialog" aria-modal="true" aria-label={th ? 'เพิ่มผู้เดินทาง' : 'Add travellers'}>
+        <button type="button" className="journey-submodal-backdrop" onClick={() => setTravelerPanelOpen(false)} aria-label={th ? 'ปิด' : 'Close'}/>
+        <section className="journey-submodal-card">
+          <header className="journey-submodal-header">
+            <div><span><Users/></span><div><h2>{th ? 'เพิ่มผู้เดินทางภายหลัง' : 'Add travellers after ticketing'}</h2><p>{th ? 'กรอก PNR รายชื่อ และราคาของผู้เดินทางชุดใหม่ ระบบจะออก Invoice 3+ แยกจากชุดเดิม' : 'Enter the new PNR, passenger names and pricing. The system issues a separate Invoice 3+.'}</p></div></div>
+            <button type="button" onClick={() => setTravelerPanelOpen(false)} aria-label={th ? 'ปิด' : 'Close'}><X/></button>
+          </header>
+          <div className="journey-submodal-body">
+            <TravelerAdditionManager
+              tracking={form}
+              invoices={invoices}
+              language={language}
+              draft={travelerDraft}
+              setDraft={setTravelerDraft}
+              dueDate={travelerDueDate}
+              setDueDate={setTravelerDueDate}
+              busy={travelerBusy}
+              onCreate={submitTravelerAddition}
+              onOpen={(invoice) => onOpenInvoice(form, invoice)}
+            />
+          </div>
+        </section>
+      </div>}
     </div>
   </Modal>;
 }
@@ -1075,7 +1101,7 @@ function TravelerAdditionManager({ tracking, invoices, language, draft, setDraft
   const invoiceMap = new Map(invoices.map((invoice) => [invoice.id, invoice]));
   const activeAdded = additions.filter((entry) => entry.status !== 'cancelled').reduce((sum, entry) => sum + entry.passengerCount, 0);
   const update = <K extends keyof TravelerAddition>(key: K, value: TravelerAddition[K]) => setDraft((current) => ({ ...current, [key]: value }));
-  return <WorkflowSection number="06A" icon={<Users/>} title={th ? 'ผู้เดินทางเพิ่มหลังออกตั๋ว' : 'Travellers added after ticketing'} subtitle={th ? 'บันทึก PNR และรายชื่อชุดใหม่ แล้วออก Invoice 3+ โดยไม่กระทบ Invoice 1–2 เดิม' : 'Record the new PNR and names, then issue Invoice 3+ without changing the original invoices.'}>
+  return <div className="traveler-addition-manager">
     <div className="traveler-addition-summary">
       <div><span>{th ? 'ผู้เดินทางเดิม' : 'Original travellers'}</span><strong>{tracking.passengerCount}</strong></div>
       <div><span>{th ? 'เพิ่มภายหลัง' : 'Added later'}</span><strong>{activeAdded}</strong></div>
@@ -1094,8 +1120,8 @@ function TravelerAdditionManager({ tracking, invoices, language, draft, setDraft
         </article>;
       })}
     </div>}
-    <details className="traveler-addition-form" open={!additions.length}>
-      <summary><span><Plus/>{th ? 'เพิ่มผู้เดินทางและออก Invoice ใหม่' : 'Add travellers and issue a new invoice'}</span><small>{th ? 'ใช้เมื่อออกตั๋วชุดเดิมแล้ว แต่มีผู้เดินทางเพิ่มภายหลัง' : 'Use when the original tickets were issued and more travellers join later.'}</small></summary>
+    <div className="traveler-addition-form traveler-addition-form-open">
+      <div className="traveler-addition-form-title"><span><Plus/>{th ? 'ข้อมูลผู้เดินทางชุดใหม่' : 'New traveller details'}</span><small>{th ? 'กรอกเฉพาะครั้งที่มีผู้เดินทางเพิ่ม ระบบจะไม่เปลี่ยนข้อมูลผู้เดินทางชุดเดิม' : 'Complete only when new travellers join. Original traveller data remains unchanged.'}</small></div>
       <div className="tracking-form-grid traveler-identity-grid">
         <label className="field"><span>{th ? 'วันที่เพิ่มผู้เดินทาง' : 'Added date'}</span><input type="date" value={draft.addedAt} onChange={(e) => update('addedAt', e.target.value)}/></label>
         <label className="field"><span>{th ? 'จำนวนผู้เดินทางเพิ่ม' : 'Added travellers'}</span><input type="number" min="1" step="1" value={draft.passengerCount} onChange={(e) => update('passengerCount', Math.max(1, Number(e.target.value)))}/></label>
@@ -1125,8 +1151,8 @@ function TravelerAdditionManager({ tracking, invoices, language, draft, setDraft
         <label className="field span-2"><span>{th ? 'หมายเหตุ' : 'Note'}</span><input value={draft.note} onChange={(e) => update('note', e.target.value)}/></label>
       </div>
       <div className="traveler-addition-actions"><button type="button" className="primary-button" disabled={busy || calculated.customerChargeTotal <= 0} onClick={() => void onCreate()}>{busy ? <LoaderCircle className="spin"/> : <ReceiptText/>}{th ? 'บันทึกและออก Invoice 3+' : 'Save and issue Invoice 3+'}</button></div>
-    </details>
-  </WorkflowSection>;
+    </div>
+  </div>;
 }
 
 function SupplementalInvoiceManager({ tracking, invoices, payments, language, draft, setDraft, busy, onCreate, onOpen, onDelete }: {
@@ -1154,7 +1180,7 @@ function SupplementalInvoiceManager({ tracking, invoices, payments, language, dr
         <div className="supplemental-invoice-actions"><button type="button" className="secondary-button" onClick={() => onOpen(invoice)}><FileText/>{th ? 'เปิดเอกสาร' : 'Open'}</button><button type="button" className="danger" disabled={invoice.status === 'paid'} onClick={() => onDelete(invoice)}><Trash2/></button></div>
       </article>;
     })}</div>}
-    <details className="supplemental-create-form" open={!active.length}>
+    <details className="supplemental-create-form">
       <summary><span><Plus/>{th ? 'สร้าง Invoice เพิ่มเติมทั่วไป' : 'Create a general supplemental invoice'}</span><small>{th ? 'เช่น อัปเกรดโรงแรม ระบำหน้ากาก รถขนกระเป๋า หรือบริการอื่น' : 'Hotel upgrade, mask dance, baggage vehicle, or any later service.'}</small></summary>
       <div className="tracking-form-grid">
         <label className="field span-2"><span>{th ? 'ชื่อ Invoice / เหตุผลที่เรียกเก็บเพิ่ม' : 'Invoice title / reason'}</span><input value={draft.title} onChange={(e) => setDraft((current) => ({ ...current, title: e.target.value }))} placeholder={th ? 'เช่น บริการเพิ่มเติมตามคำขอลูกค้า' : 'e.g. Additional services requested by customer'}/></label>

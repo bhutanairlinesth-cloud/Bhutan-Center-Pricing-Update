@@ -4,22 +4,27 @@ import {
   Gauge, Hotel as HotelIcon, LayoutDashboard, LogOut, Menu, PackageOpen, Pencil,
   Plane, Plus, RefreshCw, Save, Settings2, ShieldCheck, Trash2, Users, X,
 } from 'lucide-react';
-import { GlobalSettings, Hotel, HotelCategory, TourPackage, User } from '../types';
+import { CustomerTracking, GlobalSettings, Hotel, HotelCategory, PaymentInvoice, PaymentTransaction, TourPackage, User } from '../types';
 import { useI18n, LanguageSwitch } from '../i18n';
 import { formatNumber, formatTHB, makeId } from '../utils/format';
 import { Brand } from './Brand';
 import { EmptyState, Modal } from './Ui';
+import { SalesDashboard } from './SalesDashboard';
 
-type AdminPage = 'overview' | 'packages' | 'hotels' | 'settings' | 'users';
+type AdminPage = 'dashboard' | 'overview' | 'packages' | 'hotels' | 'settings' | 'users';
 
 interface AdminProps {
   settings: GlobalSettings;
   hotels: Hotel[];
   packages: TourPackage[];
   users: User[];
+  trackings: CustomerTracking[];
+  invoices: PaymentInvoice[];
+  payments: PaymentTransaction[];
   currentUser: User;
   mode: 'supabase' | 'local';
   onBack: () => void;
+  onOpenTracking: () => void;
   onLogout: () => void;
   onRefresh: () => Promise<void>;
   onSaveSettings: (settings: GlobalSettings) => Promise<void>;
@@ -33,12 +38,13 @@ interface AdminProps {
   onDeleteUser: (id: string) => Promise<void>;
 }
 
-export function Admin({ settings, hotels, packages, users, currentUser, mode, onBack, onLogout, onRefresh, onSaveSettings, onUploadLogo, onResetLogo, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onSaveUser, onDeleteUser }: AdminProps) {
+export function Admin({ settings, hotels, packages, users, trackings, invoices, payments, currentUser, mode, onBack, onOpenTracking, onLogout, onRefresh, onSaveSettings, onUploadLogo, onResetLogo, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onSaveUser, onDeleteUser }: AdminProps) {
   const { t, language } = useI18n();
-  const [page, setPage] = useState<AdminPage>('overview');
+  const [page, setPage] = useState<AdminPage>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const nav = [
-    { id: 'overview' as const, label: t('adminOverview'), icon: LayoutDashboard },
+    { id: 'dashboard' as const, label: language === 'th' ? 'Dashboard รายงาน' : 'Sales dashboard', icon: LayoutDashboard },
+    { id: 'overview' as const, label: language === 'th' ? 'ข้อมูลราคาและระบบ' : 'Pricing & system data', icon: Database },
     { id: 'packages' as const, label: t('packages'), icon: PackageOpen },
     { id: 'hotels' as const, label: t('hotels'), icon: HotelIcon },
     { id: 'settings' as const, label: t('pricingSettings'), icon: Settings2 },
@@ -60,6 +66,7 @@ export function Admin({ settings, hotels, packages, users, currentUser, mode, on
         <div className="admin-header-actions"><LanguageSwitch compact/><button className="ghost-button" onClick={onRefresh}><RefreshCw/>{t('syncNow')}</button><span className="admin-user"><i>{currentUser.name?.[0]?.toUpperCase()}</i><b>{currentUser.name}</b></span></div>
       </header>
       <div className="admin-content">
+        {page === 'dashboard' && <SalesDashboard trackings={trackings} invoices={invoices} payments={payments} onOpenTracking={onOpenTracking}/>} 
         {page === 'overview' && <AdminOverview settings={settings} hotels={hotels} packages={packages} users={users} language={language} onOpen={setPage}/>} 
         {page === 'packages' && <PackagesManager items={packages} onSave={onSavePackage} onDelete={onDeletePackage}/>} 
         {page === 'hotels' && <HotelsManager items={hotels} onSave={onSaveHotel} onDelete={onDeleteHotel}/>} 

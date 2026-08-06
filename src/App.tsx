@@ -166,8 +166,8 @@ export default function App() {
     {currentUser && settings && workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onOpenTracking={() => setWorkspace('tracking')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
     {currentUser && settings && workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} onBack={() => setWorkspace('front')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment} onUploadPaymentSlip={uploadPaymentSlip} onGetPaymentSlipUrl={getPaymentSlipUrl} onDeletePaymentSlip={deletePaymentSlip}/>} 
     {currentUser && settings && workspace === 'admin' && currentUser.role === 'admin' && <Admin
-      settings={settings} hotels={hotels} packages={packages} users={users} currentUser={currentUser} mode={database.mode}
-      onBack={() => setWorkspace('front')} onLogout={logout} onRefresh={refresh}
+      settings={settings} hotels={hotels} packages={packages} users={users} trackings={trackings} invoices={invoices} payments={payments} currentUser={currentUser} mode={database.mode}
+      onBack={() => setWorkspace('front')} onOpenTracking={() => setWorkspace('tracking')} onLogout={logout} onRefresh={refresh}
       onSaveSettings={saveSettings} onUploadLogo={uploadLogo} onResetLogo={resetLogo} onSaveHotel={saveHotel} onDeleteHotel={deleteHotel}
       onSavePackage={savePackage} onDeletePackage={deletePackage} onSaveUser={saveUser} onDeleteUser={deleteUser}
     />}

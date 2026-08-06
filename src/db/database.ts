@@ -1,4 +1,4 @@
-import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, TourPackage, User } from '../types';
+import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, TourPackage, User } from '../types';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { mockDb } from './mockDb';
 
@@ -6,6 +6,22 @@ const SETTINGS_ID = '00000000-0000-0000-0000-000000000001';
 const BRAND_BUCKET = 'branding';
 const BRAND_LOGO_PATH = 'company-logo';
 const PAYMENT_SLIP_BUCKET = 'payment-slips';
+
+async function adminUserRequest<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.access_token) throw new Error('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
+  const response = await fetch('/api/admin-users', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${data.session.access_token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error || 'จัดการผู้ใช้งานไม่สำเร็จ');
+  return payload as T;
+}
 
 function fail(error: any, fallback: string): never {
   throw new Error(error?.message || fallback);
@@ -440,6 +456,21 @@ export const database = {
     if (error) fail(error, 'โหลดผู้ใช้งานไม่สำเร็จ');
     return (data || []).map(mapUser);
   },
+  async createUser(input: CreateSystemUserInput): Promise<User> {
+    if (!isSupabaseConfigured) {
+      const user: User = {
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `usr_${Date.now()}`,
+        name: input.name.trim(),
+        email: input.email.trim().toLowerCase(),
+        role: input.role,
+        createdAt: new Date().toISOString(),
+      };
+      mockDb.saveUser(user);
+      return user;
+    }
+    const payload = await adminUserRequest<{ user: any }>({ action: 'create', ...input });
+    return mapUser(payload.user);
+  },
   async saveUser(user: User): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.saveUser(user);
     const { error } = await supabase.from('profiles').upsert({
@@ -454,8 +485,7 @@ export const database = {
   },
   async deleteUser(id: string): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.deleteUser(id);
-    const { error } = await supabase.from('profiles').delete().eq('id', id);
-    if (error) fail(error, 'ลบผู้ใช้งานไม่สำเร็จ');
+    await adminUserRequest({ action: 'delete', userId: id });
   },
 
   async getTrackings(): Promise<CustomerTracking[]> {

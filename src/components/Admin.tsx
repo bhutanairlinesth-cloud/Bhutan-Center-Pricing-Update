@@ -1,10 +1,10 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft, BadgePercent, Building2, ChevronRight, CircleDollarSign, Database,
-  Gauge, Hotel as HotelIcon, LayoutDashboard, LogOut, Menu, PackageOpen, Pencil,
-  Plane, Plus, RefreshCw, Save, Settings2, ShieldCheck, Trash2, Users, X,
+  ArrowLeft, BadgePercent, Building2, CheckCircle2, ChevronRight, CircleDollarSign, Copy, Database,
+  Eye, EyeOff, Gauge, Hotel as HotelIcon, KeyRound, LayoutDashboard, LogOut, Mail, Menu, PackageOpen, Pencil,
+  Plane, Plus, RefreshCw, Save, Settings2, ShieldCheck, Trash2, UserPlus, Users, WandSparkles, X,
 } from 'lucide-react';
-import { CustomerTracking, GlobalSettings, Hotel, HotelCategory, PaymentInvoice, PaymentTransaction, TourPackage, User } from '../types';
+import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, HotelCategory, PaymentInvoice, PaymentTransaction, TourPackage, User } from '../types';
 import { useI18n, LanguageSwitch } from '../i18n';
 import { formatNumber, formatTHB, makeId } from '../utils/format';
 import { Brand } from './Brand';
@@ -34,11 +34,12 @@ interface AdminProps {
   onDeleteHotel: (id: string) => Promise<void>;
   onSavePackage: (pkg: TourPackage) => Promise<void>;
   onDeletePackage: (id: string) => Promise<void>;
+  onCreateUser: (input: CreateSystemUserInput) => Promise<User>;
   onSaveUser: (user: User) => Promise<void>;
   onDeleteUser: (id: string) => Promise<void>;
 }
 
-export function Admin({ settings, hotels, packages, users, trackings, invoices, payments, currentUser, mode, onBack, onOpenTracking, onLogout, onRefresh, onSaveSettings, onUploadLogo, onResetLogo, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onSaveUser, onDeleteUser }: AdminProps) {
+export function Admin({ settings, hotels, packages, users, trackings, invoices, payments, currentUser, mode, onBack, onOpenTracking, onLogout, onRefresh, onSaveSettings, onUploadLogo, onResetLogo, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onCreateUser, onSaveUser, onDeleteUser }: AdminProps) {
   const { t, language } = useI18n();
   const [page, setPage] = useState<AdminPage>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -71,7 +72,7 @@ export function Admin({ settings, hotels, packages, users, trackings, invoices, 
         {page === 'packages' && <PackagesManager items={packages} onSave={onSavePackage} onDelete={onDeletePackage}/>} 
         {page === 'hotels' && <HotelsManager items={hotels} onSave={onSaveHotel} onDelete={onDeleteHotel}/>} 
         {page === 'settings' && <SettingsManager initial={settings} onSave={onSaveSettings} onUploadLogo={onUploadLogo} onResetLogo={onResetLogo}/>} 
-        {page === 'users' && <UsersManager items={users} currentUser={currentUser} onSave={onSaveUser} onDelete={onDeleteUser}/>} 
+        {page === 'users' && <UsersManager items={users} currentUser={currentUser} mode={mode} onCreate={onCreateUser} onSave={onSaveUser} onDelete={onDeleteUser}/>} 
       </div>
     </main>
   </div>;
@@ -248,10 +249,122 @@ function NumberField({ label, value, onChange, step = '1', suffix = 'THB', min =
   return <label className="field number-field"><span>{label}</span><div><input type="number" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))}/><em>{suffix}</em></div></label>;
 }
 
-function UsersManager({ items, currentUser, onSave, onDelete }: { items: User[]; currentUser: User; onSave: (user: User) => Promise<void>; onDelete: (id: string) => Promise<void> }) {
-  const { t } = useI18n();
-  async function remove(item: User) { if (item.id !== currentUser.id && window.confirm(t('confirmDelete'))) await onDelete(item.id); }
-  return <div className="admin-stack"><PageAction title={t('users')} detail={`${items.length} accounts`}/><div className="info-banner"><ShieldCheck/><span>{t('userNote')}</span></div><section className="panel-card no-padding">{items.map((user) => <div className="user-row" key={user.id}><span className="user-avatar-lg">{user.name?.[0]?.toUpperCase()}</span><span className="data-main"><b>{user.name}</b><small>{user.email}</small></span><select value={user.role} disabled={user.id === currentUser.id} onChange={(event) => onSave({ ...user, role: event.target.value as User['role'] })}><option value="admin">{t('admin')}</option><option value="sales">{t('sales')}</option></select><button className="icon-button danger" disabled={user.id === currentUser.id} onClick={() => remove(user)}><Trash2/></button></div>)}</section></div>;
+function generateTemporaryPassword(): string {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghijkmnopqrstuvwxyz';
+  const digits = '23456789';
+  const symbols = '!@#$%';
+  const pick = (value: string) => value[Math.floor(Math.random() * value.length)];
+  const chars = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+  const pool = upper + lower + digits + symbols;
+  while (chars.length < 12) chars.push(pick(pool));
+  return chars.sort(() => Math.random() - 0.5).join('');
+}
+
+function UsersManager({ items, currentUser, mode, onCreate, onSave, onDelete }: {
+  items: User[];
+  currentUser: User;
+  mode: 'supabase' | 'local';
+  onCreate: (input: CreateSystemUserInput) => Promise<User>;
+  onSave: (user: User) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const { t, language } = useI18n();
+  const [creating, setCreating] = useState(false);
+  async function remove(item: User) {
+    if (item.id !== currentUser.id && window.confirm(language === 'th' ? `ลบบัญชี ${item.email} ออกจากระบบใช่หรือไม่` : `Delete ${item.email} from the system?`)) await onDelete(item.id);
+  }
+  return <div className="admin-stack">
+    <PageAction
+      title={t('users')}
+      detail={language === 'th' ? `${items.length} บัญชี · สร้างบัญชีพร้อมรหัสผ่านชั่วคราว` : `${items.length} accounts · Create accounts with a temporary password`}
+      action={language === 'th' ? 'เพิ่มผู้ใช้งาน' : 'Add user'}
+      onAction={() => setCreating(true)}
+    />
+    <div className="info-banner"><ShieldCheck/><span>{language === 'th' ? 'Admin สามารถเพิ่มบัญชีใหม่ กำหนดสิทธิ์ และลบบัญชีได้ ผู้ใช้งานใหม่เข้าสู่ระบบได้ทันทีด้วยอีเมลและรหัสผ่านชั่วคราว' : 'Admins can create accounts, assign roles and remove users. New users can sign in immediately with the temporary password.'}</span></div>
+    {mode === 'supabase' && <div className="user-security-note"><KeyRound/><span>{language === 'th' ? 'รหัสผ่านจะแสดงเพียงครั้งเดียวหลังสร้างบัญชี กรุณาคัดลอกและส่งให้พนักงานผ่านช่องทางที่ปลอดภัย' : 'The password is shown once after account creation. Copy it and share it securely.'}</span></div>}
+    <section className="panel-card no-padding">
+      {items.length ? items.map((user) => <div className="user-row" key={user.id}>
+        <span className="user-avatar-lg">{user.name?.[0]?.toUpperCase()}</span>
+        <span className="data-main"><b>{user.name}</b><small>{user.email}</small></span>
+        <span className={`user-role-badge ${user.role}`}>{user.role === 'admin' ? t('admin') : t('sales')}</span>
+        <select value={user.role} disabled={user.id === currentUser.id} onChange={(event) => onSave({ ...user, role: event.target.value as User['role'] })}>
+          <option value="admin">{t('admin')}</option><option value="sales">{t('sales')}</option>
+        </select>
+        <button className="icon-button danger" disabled={user.id === currentUser.id} onClick={() => remove(user)} title={language === 'th' ? 'ลบบัญชี' : 'Delete account'}><Trash2/></button>
+      </div>) : <EmptyState title={language === 'th' ? 'ยังไม่มีผู้ใช้งาน' : 'No users yet'} detail={language === 'th' ? 'กดเพิ่มผู้ใช้งานเพื่อสร้างบัญชีแรก' : 'Add the first user account.'}/>} 
+    </section>
+    <CreateUserModal open={creating} existingEmails={items.map((item) => item.email)} onClose={() => setCreating(false)} onCreate={onCreate}/>
+  </div>;
+}
+
+function CreateUserModal({ open, existingEmails, onClose, onCreate }: {
+  open: boolean;
+  existingEmails: string[];
+  onClose: () => void;
+  onCreate: (input: CreateSystemUserInput) => Promise<User>;
+}) {
+  const { language } = useI18n();
+  const initialPassword = () => generateTemporaryPassword();
+  const [form, setForm] = useState<CreateSystemUserInput>({ name: '', email: '', password: initialPassword(), role: 'sales' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [created, setCreated] = useState<{ user: User; password: string } | null>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setForm({ name: '', email: '', password: initialPassword(), role: 'sales' });
+    setShowPassword(false);
+    setBusy(false);
+    setError('');
+    setCreated(null);
+  }, [open]);
+
+  const close = () => { if (!busy) onClose(); };
+  const copy = async (text: string) => {
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const area = document.createElement('textarea'); area.value = text; document.body.appendChild(area); area.select(); document.execCommand('copy'); area.remove();
+    }
+  };
+  const credentials = created ? `Bhutan Center Pricing\nEmail: ${created.user.email}\nPassword: ${created.password}` : '';
+
+  async function submit() {
+    setError('');
+    const email = form.email.trim().toLowerCase();
+    if (!form.name.trim()) return setError(language === 'th' ? 'กรุณากรอกชื่อผู้ใช้งาน' : 'Enter the user name.');
+    if (!/^\S+@\S+\.\S+$/.test(email)) return setError(language === 'th' ? 'รูปแบบอีเมลไม่ถูกต้อง' : 'Invalid email address.');
+    if (existingEmails.some((item) => item.toLowerCase() === email)) return setError(language === 'th' ? 'อีเมลนี้มีอยู่ในระบบแล้ว' : 'This email already exists.');
+    if (form.password.length < 8) return setError(language === 'th' ? 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร' : 'Password must contain at least 8 characters.');
+    setBusy(true);
+    try {
+      const password = form.password;
+      const user = await onCreate({ ...form, name: form.name.trim(), email });
+      setCreated({ user, password });
+    } catch (err: any) {
+      setError(err?.message || (language === 'th' ? 'สร้างบัญชีไม่สำเร็จ' : 'Could not create the account.'));
+    } finally { setBusy(false); }
+  }
+
+  return <Modal open={open} title={created ? (language === 'th' ? 'สร้างบัญชีเรียบร้อยแล้ว' : 'Account created') : (language === 'th' ? 'เพิ่มผู้ใช้งานระบบ' : 'Add system user')} onClose={close}>
+    {created ? <div className="user-created-panel">
+      <span className="user-created-icon"><CheckCircle2/></span>
+      <h3>{language === 'th' ? 'บัญชีพร้อมใช้งานทันที' : 'The account is ready'}</h3>
+      <p>{language === 'th' ? 'คัดลอกข้อมูลด้านล่างและส่งให้ผู้ใช้งาน รหัสผ่านนี้จะไม่สามารถเรียกดูย้อนหลังจากระบบได้' : 'Copy the credentials below and share them securely. The password cannot be viewed again.'}</p>
+      <div className="credential-box"><span><Mail/><small>Email</small><b>{created.user.email}</b></span><span><KeyRound/><small>{language === 'th' ? 'รหัสผ่านชั่วคราว' : 'Temporary password'}</small><b>{created.password}</b></span></div>
+      <button className="primary-button full-width" onClick={() => copy(credentials)}><Copy/>{language === 'th' ? 'คัดลอกข้อมูลเข้าสู่ระบบ' : 'Copy login details'}</button>
+      <button className="ghost-button full-width" onClick={onClose}>{language === 'th' ? 'เสร็จสิ้น' : 'Done'}</button>
+    </div> : <div className="user-create-form">
+      <div className="user-create-intro"><span><UserPlus/></span><div><h3>{language === 'th' ? 'สร้างบัญชีพนักงานใหม่' : 'Create a staff account'}</h3><p>{language === 'th' ? 'กำหนดชื่อ อีเมล สิทธิ์ และรหัสผ่านชั่วคราว ผู้ใช้งานสามารถเข้าสู่ระบบได้ทันที' : 'Set the name, email, role and temporary password.'}</p></div></div>
+      {error && <div className="form-error">{error}</div>}
+      <label className="field"><span>{language === 'th' ? 'ชื่อผู้ใช้งาน' : 'Name'}</span><input autoFocus value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder={language === 'th' ? 'เช่น Nattanachai' : 'e.g. Nattanachai'}/></label>
+      <label className="field"><span>Email</span><input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="name@company.com"/></label>
+      <label className="field"><span>{language === 'th' ? 'สิทธิ์การใช้งาน' : 'Role'}</span><select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as User['role'] }))}><option value="sales">Sales — {language === 'th' ? 'คำนวณราคาและติดตามลูกค้า' : 'Pricing and customer tracking'}</option><option value="admin">Admin — {language === 'th' ? 'จัดการข้อมูลและผู้ใช้งานทั้งหมด' : 'Full system management'}</option></select></label>
+      <label className="field"><span>{language === 'th' ? 'รหัสผ่านชั่วคราว' : 'Temporary password'}</span><div className="password-create-field"><input type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}/><button type="button" onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff/> : <Eye/>}</button><button type="button" onClick={() => setForm((current) => ({ ...current, password: generateTemporaryPassword() }))}><WandSparkles/></button><button type="button" onClick={() => copy(form.password)}><Copy/></button></div><small className="field-help">{language === 'th' ? 'อย่างน้อย 8 ตัวอักษร ปุ่มประกายดาวใช้สร้างรหัสใหม่' : 'At least 8 characters. Use the sparkle button to generate a new password.'}</small></label>
+      <div className="modal-actions"><button className="ghost-button" disabled={busy} onClick={close}>{language === 'th' ? 'ยกเลิก' : 'Cancel'}</button><button className="primary-button" disabled={busy} onClick={submit}><UserPlus/>{busy ? (language === 'th' ? 'กำลังสร้างบัญชี...' : 'Creating...') : (language === 'th' ? 'สร้างบัญชี' : 'Create account')}</button></div>
+    </div>}
+  </Modal>;
 }
 
 function PageAction({ title, detail, action, onAction }: { title: string; detail?: string; action?: string; onAction?: () => void }) {

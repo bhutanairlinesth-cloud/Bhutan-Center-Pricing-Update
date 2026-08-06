@@ -2395,3 +2395,77 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 .dashboard-kpi.purple .dashboard-kpi-icon { background: #eee9fb; color: #7653a6; }
 .dashboard-kpi.coral .dashboard-kpi-icon { background: #fdebe5; color: #bd6042; }
 @media (min-width: 1181px) { .dashboard-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* v12.6 — System user creation */
+.user-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 16px;
+  border: 1px solid #ead9a8;
+  border-radius: 14px;
+  background: #fffaf0;
+  color: #705b23;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.user-security-note svg { width: 19px; height: 19px; flex: 0 0 auto; margin-top: 1px; color: #a87c13; }
+.user-role-badge {
+  min-width: 74px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+.user-role-badge.admin { color: #6a4b00; background: #fff4cc; }
+.user-role-badge.sales { color: #0c664e; background: #e9f7f1; }
+.user-create-form { display: grid; gap: 16px; }
+.user-create-intro { display: flex; align-items: flex-start; gap: 13px; padding: 15px; border-radius: 15px; background: #f1f8f5; border: 1px solid #d9ebe4; }
+.user-create-intro > span { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 12px; color: #0a7053; background: #dff1e9; }
+.user-create-intro > span svg { width: 21px; height: 21px; }
+.user-create-intro h3 { margin: 1px 0 4px; color: #163d31; font-size: 17px; }
+.user-create-intro p { margin: 0; color: #738079; font-size: 12px; line-height: 1.55; }
+.user-create-form .field { display: grid; gap: 7px; }
+.user-create-form .field > span { color: #43574f; font-size: 13px; font-weight: 750; }
+.user-create-form .field > input,
+.user-create-form .field > select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid #d6e0dc;
+  border-radius: 12px;
+  background: #fff;
+  color: #172d26;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.user-create-form .field > input:focus,
+.user-create-form .field > select:focus,
+.password-create-field:focus-within { border-color: #2d8b6e; box-shadow: 0 0 0 3px rgba(45,139,110,.12); }
+.password-create-field { display: flex; align-items: center; min-height: 48px; overflow: hidden; border: 1px solid #d6e0dc; border-radius: 12px; background: #fff; }
+.password-create-field input { min-width: 0; flex: 1; height: 46px; padding: 0 13px; border: 0; outline: 0; font: 700 14px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .02em; }
+.password-create-field button { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; color: #5f736b; border-left: 1px solid #edf0ee; background: transparent; }
+.password-create-field button:hover { color: #0a7053; background: #eff8f4; }
+.password-create-field button svg { width: 17px; height: 17px; }
+.field-help { color: #849089; font-size: 11px; line-height: 1.5; }
+.form-error { padding: 11px 13px; border-radius: 11px; color: #a12626; background: #fff0f0; border: 1px solid #f4caca; font-size: 13px; font-weight: 650; }
+.user-created-panel { display: grid; gap: 13px; text-align: center; }
+.user-created-icon { width: 58px; height: 58px; display: grid; place-items: center; margin: 0 auto; border-radius: 18px; color: #087054; background: #e4f6ef; }
+.user-created-icon svg { width: 30px; height: 30px; }
+.user-created-panel h3 { margin: 0; color: #173b30; font-size: 20px; }
+.user-created-panel > p { margin: 0 auto 3px; max-width: 440px; color: #738079; font-size: 12px; line-height: 1.65; }
+.credential-box { display: grid; gap: 9px; padding: 13px; border-radius: 15px; background: #f6f8f7; border: 1px solid #e0e7e3; text-align: left; }
+.credential-box > span { display: grid; grid-template-columns: 28px 1fr; grid-template-rows: auto auto; column-gap: 9px; padding: 10px; border-radius: 11px; background: #fff; border: 1px solid #e7ece9; }
+.credential-box svg { grid-row: 1 / span 2; align-self: center; width: 19px; height: 19px; color: #0b7456; }
+.credential-box small { color: #829087; font-size: 10px; }
+.credential-box b { overflow-wrap: anywhere; color: #193c31; font-size: 14px; }
+.full-width { width: 100%; justify-content: center; }
+
+@media (max-width: 700px) {
+  .user-role-badge { order: 3; }
+  .user-row select { order: 4; }
+  .user-row .icon-button { order: 5; }
+}

@@ -21,6 +21,13 @@ export interface User {
   createdAt: string;
 }
 
+export interface CreateSystemUserInput {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+}
+
 export interface RateByPax {
   pax1USD: number;
   pax2USD: number;

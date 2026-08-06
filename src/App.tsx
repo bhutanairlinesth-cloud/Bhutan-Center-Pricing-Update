@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { database } from './db/database';
 import { fetchProfile, isSupabaseConfigured, supabaseAuth } from './lib/supabase';
-import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, TourPackage, User } from './types';
+import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, TourPackage, User } from './types';
 import { Login } from './components/Login';
 import { FrontOffice } from './components/FrontOffice';
 import { Admin } from './components/Admin';
@@ -136,6 +136,11 @@ export default function App() {
   const deleteHotel = async (id: string) => run(async () => { await database.deleteHotel(id); setHotels(await database.getHotels()); }, t('deleted'));
   const savePackage = async (value: TourPackage) => run(async () => { await database.savePackage(value); setPackages(await database.getPackages()); });
   const deletePackage = async (id: string) => run(async () => { await database.deletePackage(id); setPackages(await database.getPackages()); }, t('deleted'));
+  const createUser = async (value: CreateSystemUserInput): Promise<User> => {
+    let created!: User;
+    await run(async () => { created = await database.createUser(value); setUsers(await database.getUsers()); }, 'เพิ่มผู้ใช้งานเรียบร้อยแล้ว');
+    return created;
+  };
   const saveUser = async (value: User) => run(async () => { await database.saveUser(value); setUsers(await database.getUsers()); });
   const deleteUser = async (id: string) => run(async () => { await database.deleteUser(id); setUsers(await database.getUsers()); }, t('deleted'));
   const saveTracking = async (value: CustomerTracking) => run(async () => { await database.saveTracking(value); setTrackings(await database.getTrackings()); });
@@ -169,7 +174,7 @@ export default function App() {
       settings={settings} hotels={hotels} packages={packages} users={users} trackings={trackings} invoices={invoices} payments={payments} currentUser={currentUser} mode={database.mode}
       onBack={() => setWorkspace('front')} onOpenTracking={() => setWorkspace('tracking')} onLogout={logout} onRefresh={refresh}
       onSaveSettings={saveSettings} onUploadLogo={uploadLogo} onResetLogo={resetLogo} onSaveHotel={saveHotel} onDeleteHotel={deleteHotel}
-      onSavePackage={savePackage} onDeletePackage={deletePackage} onSaveUser={saveUser} onDeleteUser={deleteUser}
+      onSavePackage={savePackage} onDeletePackage={deletePackage} onCreateUser={createUser} onSaveUser={saveUser} onDeleteUser={deleteUser}
     />}
     <ToastStack items={toasts} onDismiss={(id) => setToasts((list) => list.filter((item) => item.id !== id))}/>
   </>;

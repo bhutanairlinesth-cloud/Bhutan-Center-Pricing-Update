@@ -2634,3 +2634,55 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 .group-tl-note svg { width:17px; height:17px; flex:0 0 auto; margin-top:1px; color:#0d7659; }
 @media (max-width:900px){ .group-tl-money-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.group-tl-count-grid{grid-template-columns:1fr 1fr;} }
 @media (max-width:620px){ .group-tl-head{align-items:flex-start;flex-direction:column}.group-tl-count-grid,.group-tl-money-grid{grid-template-columns:1fr}.group-tl-badge{align-self:flex-start} }
+
+/* v12.7.1 — Mixed Economy / Business fare lines for TL groups */
+.ticket-fare-lines {
+  display: grid;
+  margin: 8px 0 4px;
+  border: 1px solid #cfdad5;
+  border-radius: 8px;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+.ticket-fare-head,
+.ticket-fare-row {
+  display: grid;
+  grid-template-columns: 1.45fr .52fr .82fr .72fr .9fr .95fr;
+  align-items: center;
+  gap: 0;
+}
+.ticket-fare-head {
+  background: #edf4f1;
+  color: #31564a;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+.ticket-fare-head span,
+.ticket-fare-row > span {
+  padding: 8px 9px;
+  border-right: 1px solid #dbe4e0;
+  text-align: right;
+}
+.ticket-fare-head span:first-child,
+.ticket-fare-row > span:first-child { text-align: left; }
+.ticket-fare-head span:last-child,
+.ticket-fare-row > span:last-child { border-right: 0; }
+.ticket-fare-row {
+  background: #fff;
+  color: #1b3029;
+  font-size: 11px;
+  border-top: 1px solid #dbe4e0;
+}
+.ticket-fare-row b { display: block; font-size: 11px; }
+.ticket-fare-row small { display: block; margin-top: 2px; color: #70847c; font-size: 8.5px; }
+.ticket-fare-row > span:not(:first-child) { font-weight: 700; }
+
+@media print {
+  .ticket-fare-lines { break-inside: avoid; border-color: #777; border-radius: 0; }
+  .ticket-fare-head { background: #f2f2f2 !important; color: #111 !important; }
+  .ticket-fare-head span,
+  .ticket-fare-row > span { padding: 5px 6px; border-color: #aaa; }
+  .ticket-fare-row { color: #111; border-color: #aaa; }
+}

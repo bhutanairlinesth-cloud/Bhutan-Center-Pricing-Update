@@ -354,18 +354,18 @@ function buildPackageSnapshotRows(item: CustomerTracking): InvoicePackageLineSna
     quantity: billedPax, unitPriceTHB: Math.max(0, item.sellingPricePerPerson || 0),
     totalTHB: billedPax * Math.max(0, item.sellingPricePerPerson || 0),
   });
-  if (!isGroupTL && item.businessUpgradeCount > 0 && item.businessUpgradePerPerson > 0) add({
+  if (item.businessUpgradeCount > 0 && item.businessUpgradePerPerson > 0) add({
     descriptionTh: 'อัปเกรด Business Class', descriptionEn: 'Business Class Upgrade',
-    detailTh: 'ส่วนเพิ่มราคาขายรวมในแพ็กเกจ', detailEn: 'Selling surcharge included in package', ptc: 'BC',
+    detailTh: isGroupTL ? `${item.businessUpgradeCount} ท่าน จากผู้เดินทางจริง ${item.passengerCount} ท่าน` : 'ส่วนเพิ่มราคาขายของผู้โดยสารที่อัปเกรด', detailEn: isGroupTL ? `${item.businessUpgradeCount} of ${item.passengerCount} actual travellers` : 'Selling surcharge for upgraded passengers', ptc: 'ADT',
     quantity: item.businessUpgradeCount, unitPriceTHB: item.businessUpgradePerPerson,
     totalTHB: item.businessUpgradeCount * item.businessUpgradePerPerson,
   });
-  if (!isGroupTL && item.singleRoomCount > 0 && item.singleSupplementPerPerson > 0) add({
+  if (item.singleRoomCount > 0 && item.singleSupplementPerPerson > 0) add({
     descriptionTh: 'พักเดี่ยว', descriptionEn: 'Single-room supplement', detailTh: item.hotelCategory, detailEn: item.hotelCategory, ptc: 'SGL',
     quantity: item.singleRoomCount, unitPriceTHB: item.singleSupplementPerPerson,
     totalTHB: item.singleRoomCount * item.singleSupplementPerPerson,
   });
-  if (!isGroupTL) for (const extra of item.additionalItems || []) add({
+  for (const extra of item.additionalItems || []) add({
     descriptionTh: extra.description || 'รายการเพิ่มเติม', descriptionEn: extra.description || 'Additional service',
     detailTh: extra.basis === 'per_person' ? 'ต่อท่าน' : extra.basis === 'per_group' ? 'เหมาทั้งกลุ่ม' : 'จำนวนกำหนดเอง',
     detailEn: extra.basis === 'per_person' ? 'Per person' : extra.basis === 'per_group' ? 'Per group' : 'Custom quantity', ptc: 'SRV',
@@ -406,12 +406,29 @@ function buildPackageSnapshotRows(item: CustomerTracking): InvoicePackageLineSna
 
 function buildOriginalTicketSnapshot(item: CustomerTracking): InvoiceTicketBatchSnapshot {
   const names = (item.passengerNames || '').split(/\r?\n/).map((name) => name.trim()).filter(Boolean);
-  const cabinClass = item.businessUpgradeCount >= item.passengerCount && item.passengerCount > 0 ? 'Business' : item.businessUpgradeCount > 0 ? 'Mixed Economy / Business' : 'Economy';
+  const pax = Math.max(1, Math.round(Number(item.passengerCount || 1)));
+  const businessCount = Math.min(pax, Math.max(0, Math.round(Number(item.businessUpgradeCount || 0))));
+  const economyCount = Math.max(0, pax - businessCount);
+  const economyFare = Math.max(0, Number(item.ticketPricePerPerson || 0));
+  const businessFare = economyFare + Math.max(0, Number(item.businessUpgradePerPerson || 0));
+  const tax = Math.max(0, Number(item.airportTaxPerPerson || 0));
+  const fareLines = item.pricingMode === 'group_tl' && businessCount > 0
+    ? [
+        ...(economyCount > 0 ? [{ cabinClass: 'Economy' as const, passengerCount: economyCount, farePerPersonTHB: economyFare, airportTaxPerPersonTHB: tax, totalPerPersonTHB: economyFare + tax, totalTHB: economyCount * (economyFare + tax) }] : []),
+        { cabinClass: 'Business' as const, passengerCount: businessCount, farePerPersonTHB: businessFare, airportTaxPerPersonTHB: tax, totalPerPersonTHB: businessFare + tax, totalTHB: businessCount * (businessFare + tax) },
+      ]
+    : undefined;
+  const cabinClass = businessCount >= pax ? 'Business' : businessCount > 0 ? 'Mixed Economy / Business' : 'Economy';
+  const fareTotalTHB = fareLines
+    ? fareLines.reduce((sum, line) => sum + line.farePerPersonTHB * line.passengerCount, 0)
+    : Math.max(0, Number(item.ticketAmount || 0));
+  const airportTaxTotalTHB = tax * pax;
   return {
-    batchLabelTh: 'ผู้เดินทางชุดแรก', batchLabelEn: 'Original traveller group', passengerCount: item.passengerCount,
+    batchLabelTh: 'ผู้เดินทางชุดแรก', batchLabelEn: 'Original traveller group', passengerCount: pax,
     passengerNames: names, pnr: item.flightPnr || '', airline: item.airline || '', cabinClass,
-    farePerPersonTHB: item.ticketPricePerPerson, airportTaxPerPersonTHB: item.airportTaxPerPerson,
-    fareTotalTHB: item.ticketAmount, airportTaxTotalTHB: item.airportTaxAmount, totalDueTHB: item.depositAmount,
+    farePerPersonTHB: economyFare, airportTaxPerPersonTHB: tax,
+    fareTotalTHB, airportTaxTotalTHB, totalDueTHB: fareTotalTHB + airportTaxTotalTHB,
+    fareLines,
   };
 }
 
@@ -983,7 +1000,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         additionalItemsTotal,
       });
       sellingPricePerPerson = groupSellingPriceOverridePerPerson > 0 ? groupSellingPriceOverridePerPerson : group.sellingPricePerChargeablePerson;
-      totalAmount = sellingPricePerPerson * chargeablePassengerCount;
+      totalAmount = sellingPricePerPerson * chargeablePassengerCount
+        + businessUpgradeTotal
+        + singleSupplementTotal
+        + additionalItemsTotal;
       groupPricingCostTotal = group.totalBeforeAverage;
     } else {
       totalAmount = sellingPricePerPerson * pax + singleSupplementTotal + businessUpgradeTotal + additionalItemsTotal;
@@ -993,7 +1013,9 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       ...entry,
       packagePricePerPerson: Math.max(0, Number(entry.packagePricePerPerson || sellingPricePerPerson || 0)),
     }));
-    const ticketAmount = ticketPricePerPerson * pax;
+    const baseTicketAmount = ticketPricePerPerson * pax;
+    const businessFareDifferenceTotal = pricingMode === 'group_tl' ? businessUpgradeTotal : 0;
+    const ticketAmount = baseTicketAmount + businessFareDifferenceTotal;
     const airportTaxAmount = airportTaxPerPerson * pax;
     const depositAmount = ticketAmount + airportTaxAmount;
     const recalculatedTracking = {
@@ -1392,9 +1414,9 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   const combinedPassengerCount = totalPackagePassengerCount(form);
   const originalBilledPax = originalChargeablePassengerCount(form);
   const combinedBasePackageTotal = (form.pricingMode === 'group_tl' ? Math.max(0, form.totalAmount || 0) : Math.max(0, form.sellingPricePerPerson || 0) * Math.max(0, form.passengerCount || 0)) + addedBasePackageRevenue;
-  const combinedBusinessUpgradeTotal = (form.pricingMode === 'group_tl' ? 0 : Math.max(0, form.businessUpgradeTotal || 0)) + addedBusinessUpgradeRevenue;
-  const combinedSingleSupplementTotal = (form.pricingMode === 'group_tl' ? 0 : Math.max(0, form.singleSupplementTotal || 0)) + addedSingleSupplementRevenue;
-  const combinedAdditionalItemsTotal = (form.pricingMode === 'group_tl' ? 0 : Math.max(0, form.additionalItemsTotal || 0)) + addedExtrasRevenue;
+  const combinedBusinessUpgradeTotal = Math.max(0, form.businessUpgradeTotal || 0) + addedBusinessUpgradeRevenue;
+  const combinedSingleSupplementTotal = Math.max(0, form.singleSupplementTotal || 0) + addedSingleSupplementRevenue;
+  const combinedAdditionalItemsTotal = Math.max(0, form.additionalItemsTotal || 0) + addedExtrasRevenue;
   const combinedAirfareTotal = Math.max(0, form.ticketAmount || 0) + addedTravelerAirfareTotal(form);
   const combinedAirportTaxTotal = Math.max(0, form.airportTaxAmount || 0) + addedTravelerAirportTaxTotal(form);
   const combinedTicketAndTaxTotal = combinedAirfareTotal + combinedAirportTaxTotal;
@@ -1472,7 +1494,7 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
           <div className="tracking-form-grid money-grid group-tl-cost-inputs">
             <MoneyField label={th ? 'LAND ผู้เดินทางปกติ / ท่าน' : 'Regular LAND / traveller'} value={form.regularLandCostPerPerson} onChange={(v) => updatePricingFields({ regularLandCostPerPerson: v })}/>
             <MoneyField label={th ? 'LAND สำหรับ TL / ท่าน' : 'TL LAND / traveller'} value={form.tourLeaderLandCostPerPerson} onChange={(v) => updatePricingFields({ tourLeaderLandCostPerPerson: v })}/>
-            <MoneyField label={th ? 'ตั๋วเครื่องบิน / ผู้เดินทางจริง' : 'Airfare / actual traveller'} value={form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ ticketPricePerPerson: v })}/>
+            <MoneyField label={th ? 'ค่าโดยสาร Economy (ไม่รวมภาษี) / ผู้เดินทางจริง' : 'Economy fare excl. tax / actual traveller'} value={form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ ticketPricePerPerson: v })}/>
             <MoneyField label={th ? 'ภาษีสนามบิน / ผู้เดินทางจริง' : 'Airport tax / actual traveller'} value={form.airportTaxPerPerson} onChange={(v) => updatePricingFields({ airportTaxPerPerson: v })}/>
             <MoneyField label={th ? 'Margin / ผู้เดินทางจริง' : 'Margin / actual traveller'} value={form.groupMarginPerTraveler} onChange={(v) => updatePricingFields({ groupMarginPerTraveler: v })}/>
             <MoneyField label={th ? 'ราคาขายจริง / ผู้ชำระ (แก้ได้)' : 'Final selling / paying pax (editable)'} value={form.groupSellingPriceOverridePerPerson || form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ groupSellingPriceOverridePerPerson: v })}/>
@@ -1486,14 +1508,18 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
             <div className="featured"><span>{th ? 'รวมก่อนหาร' : 'Total before average'}</span><b>{formatTHB(groupTLBreakdown.totalBeforeAverage, language)}</b></div>
             <div className="featured"><span>{th ? `หาร ${originalBilledPax} ท่าน` : `Divide by ${originalBilledPax}`}</span><b>{formatTHB(groupTLBreakdown.averageBeforeRounding, language)}</b></div>
           </div>
-          <p className="group-tl-pricing-note">{th ? 'TL ฟรีเฉพาะค่าที่พักเท่านั้น กรุณากรอก LAND ของ TL เป็นยอดที่ยังรวม SDF, Visa และบริการภาคพื้นดินที่ต้องจ่ายจริง ส่วนตั๋วและภาษีจะคูณตามผู้เดินทางจริงทุกคน' : 'The TL receives complimentary accommodation only. Enter TL LAND with payable SDF, visa and ground services; airfare and airport tax are charged for every actual traveller.'}</p>
+          <p className="group-tl-pricing-note">{th
+            ? `TL ฟรีเฉพาะค่าที่พักเท่านั้น ค่าโดยสาร Economy และภาษีคิดครบผู้เดินทางจริง ${form.passengerCount} ท่าน ส่วนผู้โดยสาร Business Class ${form.businessUpgradeCount} ท่านเป็นส่วนหนึ่งของผู้เดินทางกลุ่มนี้และคิดส่วนต่างเพิ่มเฉพาะผู้ที่อัปเกรด`
+            : `The TL receives complimentary accommodation only. Economy fare and tax apply to all ${form.passengerCount} actual travellers. The ${form.businessUpgradeCount} Business Class passengers are included within this group and only their fare difference is added.`}</p>
         </section>}
         <div className="tracking-form-grid money-grid journey-money-grid pricing-input-grid">
           {form.pricingMode === 'standard' && <MoneyField label={th ? 'ราคาขายแพ็กเกจ / ท่าน' : 'Package selling price / pax'} value={form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ sellingPricePerPerson: v })}/>} 
           {form.pricingMode === 'standard' && <MoneyField label={th ? 'ราคาตั๋วเครื่องบิน / ท่าน' : 'Airfare / pax'} value={form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ ticketPricePerPerson: v })}/>} 
           {form.pricingMode === 'standard' && <MoneyField label={th ? 'ภาษีสนามบิน / ท่าน' : 'Airport tax / pax'} value={form.airportTaxPerPerson} onChange={(v) => updatePricingFields({ airportTaxPerPerson: v })}/>} 
-          <MoneyField label={th ? 'ส่วนเพิ่มราคาขาย Business Class / ท่าน' : 'Business Class selling surcharge / pax'} value={form.businessUpgradePerPerson} onChange={(v) => updatePricingFields({ businessUpgradePerPerson: v })}/>
-          <label className="field"><span>{th ? 'จำนวนผู้โดยสาร Business Class' : 'Business Class passengers'}</span><input type="number" min="0" max={form.passengerCount} value={form.businessUpgradeCount} onChange={(e) => updatePricingFields({ businessUpgradeCount: Math.min(form.passengerCount, Math.max(0, Number(e.target.value))) })}/></label>
+          <MoneyField label={form.pricingMode === 'group_tl' ? (th ? 'ส่วนต่างค่าโดยสาร Business Class / ท่าน' : 'Business Class fare difference / pax') : (th ? 'ส่วนเพิ่มราคาขาย Business Class / ท่าน' : 'Business Class selling surcharge / pax')} value={form.businessUpgradePerPerson} onChange={(v) => updatePricingFields({ businessUpgradePerPerson: v })}/>
+          <label className="field"><span>{form.pricingMode === 'group_tl'
+            ? (th ? `จำนวน Business Class (จากผู้เดินทางจริง ${form.passengerCount} ท่าน)` : `Business Class pax (of ${form.passengerCount} actual travellers)`)
+            : (th ? 'จำนวนผู้โดยสาร Business Class' : 'Business Class passengers')}</span><input type="number" min="0" max={form.passengerCount} value={form.businessUpgradeCount} onChange={(e) => updatePricingFields({ businessUpgradeCount: Math.min(form.passengerCount, Math.max(0, Number(e.target.value))) })}/></label>
           <MoneyField label={th ? 'ส่วนต่างพักเดี่ยว / ท่าน' : 'Single supplement / pax'} value={form.singleSupplementPerPerson} onChange={(v) => updateSingleRoomDetails(form.singleRoomCount, v)}/>
         </div>
         <AdditionalItemsEditor compact items={form.additionalItems || []} passengerCount={form.passengerCount} language={language} onChange={(items) => updatePricingFields({ additionalItems: items })}/>
@@ -1502,9 +1528,9 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
           <div className="automatic-totals-grid">
             <AutoTotal label={form.pricingMode === 'group_tl' ? (th ? `ราคาเฉลี่ยกรุ๊ป ${form.passengerCount} ท่าน (${originalBilledPax}+${form.tourLeaderCount} TL)` : `Averaged group price — ${form.passengerCount} travellers (${originalBilledPax}+${form.tourLeaderCount} TL)`) : (th ? `แพ็กเกจพื้นฐานรวม ${combinedPassengerCount} ท่าน` : `Base package — ${combinedPassengerCount} pax`)} formula={form.pricingMode === 'group_tl' ? `${formatTHB(form.sellingPricePerPerson, language)} × ${originalBilledPax}` : (addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม` : `${form.passengerCount} original + ${addedPassengerCount(form)} added`) : `${formatTHB(form.sellingPricePerPerson, language)} × ${form.passengerCount}`)} value={combinedBasePackageTotal} language={language}/>
             {addedPassengerCount(form) > 0 && <AutoTotal label={th ? 'มูลค่าแพ็กเกจของผู้เดินทางเพิ่ม' : 'Added-traveller package value'} formula={`${addedPassengerCount(form)} ${th ? 'ท่าน' : 'pax'}`} value={addedPackageRevenue} language={language}/>} 
-            {form.pricingMode !== 'group_tl' && <AutoTotal label={th ? 'ส่วนเพิ่ม Business Class รวมทุกชุด' : 'Business Class surcharge — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedBusinessUpgradeTotal} language={language}/>} 
-            {form.pricingMode !== 'group_tl' && <AutoTotal label={th ? 'พักเดี่ยวรวมทุกชุด' : 'Single supplements — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedSingleSupplementTotal} language={language}/>} 
-            {form.pricingMode !== 'group_tl' && <AutoTotal label={th ? 'รายการเพิ่มเติมรวมทุกชุด' : 'Additional services — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAdditionalItemsTotal} language={language}/>} 
+            {combinedBusinessUpgradeTotal > 0 && <AutoTotal label={form.pricingMode === 'group_tl' ? (th ? `Business Class ${form.businessUpgradeCount} จากผู้เดินทางจริง ${form.passengerCount} ท่าน` : `Business Class ${form.businessUpgradeCount} of ${form.passengerCount} actual travellers`) : (th ? 'ส่วนเพิ่ม Business Class รวมทุกชุด' : 'Business Class surcharge — all groups')} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedBusinessUpgradeTotal} language={language}/>} 
+            {combinedSingleSupplementTotal > 0 && <AutoTotal label={th ? 'พักเดี่ยวรวมทุกชุด' : 'Single supplements — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedSingleSupplementTotal} language={language}/>} 
+            {combinedAdditionalItemsTotal > 0 && <AutoTotal label={th ? 'รายการเพิ่มเติมรวมทุกชุด' : 'Additional services — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAdditionalItemsTotal} language={language}/>} 
             <AutoTotal featured label={th ? 'ยอดแพ็กเกจรวมผู้เดินทางทั้งหมด' : 'Combined package total'} formula={addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม = ${combinedPassengerCount} ท่าน` : `${form.passengerCount} original + ${addedPassengerCount(form)} added = ${combinedPassengerCount} pax`) : (th ? `${form.passengerCount} ท่าน` : `${form.passengerCount} pax`)} value={combinedPackageTotal} language={language}/>
             <AutoTotal label={th ? 'ค่าตั๋วเครื่องบินรวมทุกชุด' : 'Total airfare — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAirfareTotal} language={language}/>
             <AutoTotal label={th ? 'ภาษีสนามบินรวมทุกชุด' : 'Total airport tax — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAirportTaxTotal} language={language}/>
@@ -1962,11 +1988,23 @@ function InvoicePreview({ value, language, payments, invoices, onClose, onSaveIn
 
         {isInvoice1 && ticketBatch && <section className="journey-payment-breakdown invoice-ticket-reference">
           <h3>{th ? 'การชำระงวดที่ 1 — ค่าตั๋วเครื่องบิน' : 'Payment 1 — airfare'}</h3>
-          <div><span>{th ? `ชั้นโดยสาร ${ticketBatch.cabinClass}` : `${ticketBatch.cabinClass} Class`}</span><b>{ticketBatch.passengerCount} {th ? 'ท่าน' : 'pax'}</b></div>
-          <div><span>{th ? 'ราคาตั๋วเครื่องบิน / ท่าน' : 'Airfare / pax'}</span><b>{formatNumber(ticketBatch.farePerPersonTHB, 2)}</b></div>
-          <div><span>{th ? 'ภาษีสนามบิน / ท่าน' : 'Airport tax / pax'}</span><b>{formatNumber(ticketBatch.airportTaxPerPersonTHB, 2)}</b></div>
-          <div><span>{th ? 'รวมค่าตั๋วและภาษี / ท่าน' : 'Airfare and tax / pax'}</span><b>{formatNumber(ticketBatch.farePerPersonTHB + ticketBatch.airportTaxPerPersonTHB, 2)}</b></div>
-          <div className="journey-payment-due"><span>{th ? 'Total Ticket Due (THB)' : 'Total Ticket Due (THB)'}</span><strong>{formatNumber(ticketBatch.totalDueTHB, 2)}</strong></div>
+          {ticketBatch.fareLines?.length ? <div className="ticket-fare-lines">
+            <div className="ticket-fare-head"><span>{th ? 'ชั้นโดยสาร' : 'Cabin'}</span><span>QTY</span><span>{th ? 'ค่าโดยสาร' : 'Fare'}</span><span>{th ? 'ภาษี' : 'Tax'}</span><span>{th ? 'รวม/ท่าน' : 'Total/pax'}</span><span>{th ? 'รวม' : 'Total'}</span></div>
+            {ticketBatch.fareLines.map((line) => <div className="ticket-fare-row" key={line.cabinClass}>
+              <span><b>{line.cabinClass}</b><small>{line.cabinClass === 'Business' && th ? 'ผู้โดยสารที่อัปเกรดภายในกรุ๊ป' : ''}</small></span>
+              <span>{line.passengerCount}</span>
+              <span>{formatNumber(line.farePerPersonTHB, 2)}</span>
+              <span>{formatNumber(line.airportTaxPerPersonTHB, 2)}</span>
+              <span>{formatNumber(line.totalPerPersonTHB, 2)}</span>
+              <span>{formatNumber(line.totalTHB, 2)}</span>
+            </div>)}
+          </div> : <>
+            <div><span>{th ? `ชั้นโดยสาร ${ticketBatch.cabinClass}` : `${ticketBatch.cabinClass} Class`}</span><b>{ticketBatch.passengerCount} {th ? 'ท่าน' : 'pax'}</b></div>
+            <div><span>{th ? 'ราคาตั๋วเครื่องบิน / ท่าน' : 'Airfare / pax'}</span><b>{formatNumber(ticketBatch.farePerPersonTHB, 2)}</b></div>
+            <div><span>{th ? 'ภาษีสนามบิน / ท่าน' : 'Airport tax / pax'}</span><b>{formatNumber(ticketBatch.airportTaxPerPersonTHB, 2)}</b></div>
+            <div><span>{th ? 'รวมค่าตั๋วและภาษี / ท่าน' : 'Airfare and tax / pax'}</span><b>{formatNumber(ticketBatch.farePerPersonTHB + ticketBatch.airportTaxPerPersonTHB, 2)}</b></div>
+          </>}
+          <div className="journey-payment-due"><span>Total Ticket Due (THB)</span><strong>{formatNumber(ticketBatch.totalDueTHB, 2)}</strong></div>
         </section>}
 
         {isBalance && <section className="journey-payment-breakdown invoice-balance-reference">

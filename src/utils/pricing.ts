@@ -102,18 +102,24 @@ export function calculateGroupTLBreakdown(input: GroupTLBreakdownInput): GroupTL
   const flightTotal = Math.max(0, Number(input.ticketPerTraveler || 0)) * actualPassengerCount;
   const airportTaxTotal = Math.max(0, Number(input.airportTaxPerTraveler || 0)) * actualPassengerCount;
   const marginTotal = Math.max(0, Number(input.marginPerTraveler || 0)) * actualPassengerCount;
+  // Base group price is averaged across paying travellers. Business Class,
+  // single-room supplements and other optional services belong to travellers
+  // inside the actual headcount and are added as separate customer line items.
+  // Keeping them outside the average prevents a BC upgrade for 6 of 32
+  // travellers from being spread across all 30 paying travellers.
   const operatingCostTotal = regularLandTotal
     + tourLeaderLandTotal
     + flightTotal
-    + airportTaxTotal
-    + Math.max(0, Number(input.businessUpgradeTotal || 0))
-    + Math.max(0, Number(input.singleSupplementTotal || 0))
-    + Math.max(0, Number(input.additionalItemsTotal || 0));
+    + airportTaxTotal;
   const totalBeforeAverage = operatingCostTotal + marginTotal;
   const averageBeforeRounding = totalBeforeAverage / chargeablePassengerCount;
   const sellingPricePerChargeablePerson = roundUpToStep(averageBeforeRounding, 500);
-  const customerTotal = sellingPricePerChargeablePerson * chargeablePassengerCount;
-  const roundingAdjustment = customerTotal - totalBeforeAverage;
+  const optionalSalesTotal = Math.max(0, Number(input.businessUpgradeTotal || 0))
+    + Math.max(0, Number(input.singleSupplementTotal || 0))
+    + Math.max(0, Number(input.additionalItemsTotal || 0));
+  const baseCustomerTotal = sellingPricePerChargeablePerson * chargeablePassengerCount;
+  const customerTotal = baseCustomerTotal + optionalSalesTotal;
+  const roundingAdjustment = baseCustomerTotal - totalBeforeAverage;
   const groupProfit = customerTotal - operatingCostTotal;
   return {
     actualPassengerCount,
@@ -211,7 +217,8 @@ export function calculatePrice(
     });
     const recommendedSelling = breakdown.sellingPricePerChargeablePerson;
     const selling = numberOr(input.groupSellingPriceOverrideTHB, recommendedSelling);
-    const customerTotal = selling * chargeablePassengerCount;
+    const baseCustomerTotal = selling * chargeablePassengerCount;
+    const customerTotal = baseCustomerTotal + businessUpgradeTotal + singleSupplementTotal + additionalItemsTotal;
     const groupProfit = customerTotal - breakdown.operatingCostTotal;
     return {
       channel: input.channel,
@@ -238,7 +245,7 @@ export function calculatePrice(
       profitPerPerson: groupProfit / chargeablePassengerCount,
       businessUpgradeCount: upgradeCount,
       businessUpgradePerPerson,
-      groupSubtotal: customerTotal,
+      groupSubtotal: baseCustomerTotal,
       businessUpgradeTotal,
       singleRoomCount,
       singleSupplementPerPerson,
@@ -260,7 +267,7 @@ export function calculatePrice(
       operatingCostTotal: breakdown.operatingCostTotal,
       totalBeforeAverage: breakdown.totalBeforeAverage,
       averageBeforeRounding: breakdown.averageBeforeRounding,
-      roundingAdjustment: customerTotal - breakdown.totalBeforeAverage,
+      roundingAdjustment: baseCustomerTotal - breakdown.totalBeforeAverage,
     };
   }
 

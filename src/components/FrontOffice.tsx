@@ -170,12 +170,12 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
               <div className="group-tl-money-grid">
                 <label className="field money-input"><span>{language === 'th' ? 'LAND ผู้ชำระ / ท่าน' : 'Regular LAND / pax'}</span><div><input type="number" min="0" step="1" value={effectiveRegularLand} onChange={(event) => update('regularLandCostPerPersonOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{language === 'th' ? 'รวมที่พัก SDF วีซ่า และบริการภาคพื้น' : 'Hotel, SDF, visa and ground services'}</small></label>
                 <label className="field money-input"><span>{language === 'th' ? 'LAND ของ TL / ท่าน' : 'TL LAND / pax'}</span><div><input type="number" min="0" step="1" value={effectiveTlLand} onChange={(event) => update('tourLeaderLandCostPerPersonTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{language === 'th' ? 'กรอกหลังหักค่าที่พักฟรี แต่ยังรวม SDF/วีซ่า' : 'After free hotel; still includes SDF/visa'}</small></label>
-                <label className="field money-input"><span>{language === 'th' ? 'ตั๋วเครื่องบิน / ผู้เดินทางจริง' : 'Airfare / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTicket} onChange={(event) => update('groupTicketPriceOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
+                <label className="field money-input"><span>{language === 'th' ? 'ค่าโดยสาร Economy (ไม่รวมภาษี) / ผู้เดินทางจริง' : 'Economy fare excl. tax / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTicket} onChange={(event) => update('groupTicketPriceOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
                 <label className="field money-input"><span>{language === 'th' ? 'ภาษีสนามบิน / ผู้เดินทางจริง' : 'Airport tax / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTax} onChange={(event) => update('groupAirportTaxOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
                 <label className="field money-input"><span>{language === 'th' ? 'Margin / ผู้เดินทางจริง' : 'Margin / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupMargin} onChange={(event) => update('groupMarginPerTravelerOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
                 <label className="field money-input"><span>{language === 'th' ? 'ราคาขายจริง / ผู้ชำระ (แก้ได้)' : 'Final selling / paying pax (editable)'}</span><div><input type="number" min="0" step="500" value={input.groupSellingPriceOverrideTHB ?? 0} onChange={(event) => update('groupSellingPriceOverrideTHB', Number(event.target.value) > 0 ? Number(event.target.value) : null)}/><em>THB</em></div><small>{language === 'th' ? 'ใส่ 0 เพื่อใช้ราคาแนะนำอัตโนมัติ' : 'Enter 0 to use the recommended price'}</small></label>
               </div>
-              <div className="group-tl-note"><ShieldCheck/><span>{language === 'th' ? `ระบบจะคิดตั๋วและภาษีครบ ${input.passengerCount} ท่าน รวม LAND ผู้ชำระ ${chargeablePax} ท่าน และ LAND ของ TL ${tourLeaderCount} ท่าน แล้วเฉลี่ยหาร ${chargeablePax} ท่าน` : `Airfare and taxes are charged for all ${input.passengerCount}; regular LAND for ${chargeablePax} and TL LAND for ${tourLeaderCount}; the total is averaged across ${chargeablePax} paying travellers.`}</span></div>
+              <div className="group-tl-note"><ShieldCheck/><span>{language === 'th' ? `ระบบคิดค่าโดยสาร Economy และภาษีครบ ${input.passengerCount} ท่าน รวม LAND ผู้ชำระ ${chargeablePax} ท่าน และ LAND ของ TL ${tourLeaderCount} ท่าน แล้วเฉลี่ยหาร ${chargeablePax} ท่าน ส่วน Business Class คิดเพิ่มเฉพาะ ${input.businessUpgradeCount} ท่านที่อัปเกรดภายในผู้เดินทางจริง` : `Economy fare and tax apply to all ${input.passengerCount}; regular LAND applies to ${chargeablePax} and TL LAND to ${tourLeaderCount}, averaged across ${chargeablePax} payers. Business Class is added only for the ${input.businessUpgradeCount} upgraded travellers within the actual group.`}</span></div>
             </div>}
           </div>
 
@@ -196,16 +196,22 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
 
           <div className="upgrade-row business-upgrade-row">
             <div className="upgrade-icon"><BriefcaseBusiness/></div>
-            <div className="upgrade-copy"><b>{t('businessUpgrade')}</b><span>{t('businessUpgradeHint')}</span></div>
+            <div className="upgrade-copy"><b>{t('businessUpgrade')}</b><span>{isGroupTL
+              ? (language === 'th'
+                ? `ผู้โดยสาร BC เป็นส่วนหนึ่งของผู้เดินทางจริง ${input.passengerCount} ท่าน และคิดส่วนเพิ่มเฉพาะจำนวนที่อัปเกรด`
+                : `BC passengers are included within the ${input.passengerCount} actual travellers; the surcharge applies only to those upgraded.`)
+              : t('businessUpgradeHint')}</span></div>
             <div className="business-upgrade-controls">
               <div className="business-upgrade-price">
-                <label>{language === 'th' ? 'ส่วนเพิ่ม / ท่าน' : 'Upgrade / pax'}</label>
+                <label>{isGroupTL ? (language === 'th' ? 'ส่วนต่างค่าโดยสาร BC / ท่าน' : 'BC fare difference / pax') : (language === 'th' ? 'ส่วนเพิ่ม / ท่าน' : 'Upgrade / pax')}</label>
                 <div><input type="number" min="0" step="100" value={effectiveBusinessUpgrade} onChange={(event) => update('businessUpgradePriceOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div>
                 {input.businessUpgradePriceOverrideTHB !== null && input.businessUpgradePriceOverrideTHB !== undefined
                   ? <button type="button" onClick={() => update('businessUpgradePriceOverrideTHB', null)}><RotateCcw/>{t('resetDefault')}</button>
                   : <small>{language === 'th' ? 'ราคาตั้งต้นจากหลังบ้าน' : 'Default from back office'}</small>}
               </div>
-              <div className="business-upgrade-count"><label>{language === 'th' ? 'จำนวนผู้โดยสาร' : 'Passengers'}</label><div className="stepper"><button type="button" onClick={() => update('businessUpgradeCount', Math.max(0, input.businessUpgradeCount - 1))}>−</button><strong>{input.businessUpgradeCount}</strong><button type="button" onClick={() => update('businessUpgradeCount', Math.min(input.passengerCount, input.businessUpgradeCount + 1))}>+</button></div></div>
+              <div className="business-upgrade-count"><label>{isGroupTL
+                ? (language === 'th' ? `จำนวน BC (จาก ${input.passengerCount} ท่าน)` : `BC pax (of ${input.passengerCount})`)
+                : (language === 'th' ? 'จำนวนผู้โดยสาร' : 'Passengers')}</label><div className="stepper"><button type="button" onClick={() => update('businessUpgradeCount', Math.max(0, input.businessUpgradeCount - 1))}>−</button><strong>{input.businessUpgradeCount}</strong><button type="button" onClick={() => update('businessUpgradeCount', Math.min(input.passengerCount, input.businessUpgradeCount + 1))}>+</button></div></div>
             </div>
           </div>
 
@@ -237,7 +243,11 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
             <PriceLine icon={<WalletCards/>} label={language === 'th' ? 'ภาษีสนามบินรวม' : 'Total airport tax'} value={formatTHB(result?.airportTaxTotal || 0, language)} note={`${formatTHB(result?.airportTaxPerPerson || 0, language)} × ${input.passengerCount}`}/>
             {!isGroupTL && <PriceLine icon={<HotelIcon/>} label={t('ground')} value={formatTHB(result?.groundCostTHBPerPerson || 0, language)} note={`${formatUSD(result?.groundRateUSDPerPersonPerNight || 0)} / night / pax`}/>}
             {isGroupTL && <PriceLine icon={<CircleDollarSign/>} label={language === 'th' ? 'Margin รวมทั้งกรุ๊ป' : 'Group margin target'} value={formatTHB(result?.groupMarginTotal || 0, language)} note={`${formatTHB(result?.groupMarginPerTraveler || 0, language)} × ${input.passengerCount}`}/>}
-            {(result?.businessUpgradeTotal || 0) > 0 && <PriceLine icon={<BriefcaseBusiness/>} label="Business Class" value={formatTHB(result?.businessUpgradeTotal || 0, language)} note={`${result?.businessUpgradeCount || 0} × ${formatTHB(result?.businessUpgradePerPerson || 0, language)}`}/>}
+            {(result?.businessUpgradeTotal || 0) > 0 && <PriceLine icon={<BriefcaseBusiness/>} label="Business Class" value={formatTHB(result?.businessUpgradeTotal || 0, language)} note={isGroupTL
+              ? (language === 'th'
+                ? `${result?.businessUpgradeCount || 0} จากผู้เดินทางจริง ${input.passengerCount} ท่าน × ${formatTHB(result?.businessUpgradePerPerson || 0, language)}`
+                : `${result?.businessUpgradeCount || 0} of ${input.passengerCount} actual travellers × ${formatTHB(result?.businessUpgradePerPerson || 0, language)}`)
+              : `${result?.businessUpgradeCount || 0} × ${formatTHB(result?.businessUpgradePerPerson || 0, language)}`}/>}
             {(result?.singleRoomCount || 0) > 0 && <PriceLine icon={<BedDouble/>} label={t('singleRoom')} value={formatTHB(result?.singleSupplementTotal || 0, language)} note={`${result?.singleRoomCount || 0} ${t('people')} × ${formatTHB(result?.singleSupplementPerPerson || 0, language)}`}/>}
             {(result?.additionalItemsTotal || 0) > 0 && <PriceLine icon={<Sparkles/>} label={language === 'th' ? 'รายการเพิ่มเติมรวม' : 'Additional services'} value={formatTHB(result?.additionalItemsTotal || 0, language)} note={`${result?.additionalItems.length || 0} ${language === 'th' ? 'รายการ' : 'items'}`}/>}
             {!isGroupTL && <PriceLine icon={<ShieldCheck/>} label={t('visa')} value={formatTHB(result?.visaTHBPerPerson || 0, language)} note={formatUSD(result?.visaUSDPerPerson || 0)}/>}
@@ -250,12 +260,16 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
             </div>
             <div className="profit-strip"><div><span>{language === 'th' ? 'ต้นทุนดำเนินการรวม' : 'Operating cost total'}</span><b>{formatTHB(result?.operatingCostTotal || 0, language)}</b></div><div><span>{language === 'th' ? 'กำไรหลังปัดราคา' : 'Profit after rounding'}</span><b>{formatTHB(result?.groupProfit || 0, language)}</b></div></div>
           </> : <div className="profit-strip"><div><span>{language === 'th' ? 'ต้นทุนต่อท่าน' : 'Cost / pax'}</span><b>{formatTHB(result?.baseCostPerPerson || 0, language)}</b></div><div><span>{language === 'th' ? 'กำไรต่อท่าน' : 'Profit / pax'}</span><b>{formatTHB(result?.profitPerPerson || 0, language)}</b></div></div>}
-          {!isGroupTL && <div className="auto-total-breakdown">
-            <div><span>{language === 'th' ? 'แพ็กเกจพื้นฐาน' : 'Base package'}</span><b>{formatTHB(result?.groupSubtotal || 0, language)}</b></div>
+          <div className="auto-total-breakdown">
+            <div><span>{isGroupTL
+              ? (language === 'th' ? `แพ็กเกจพื้นฐาน × ผู้ชำระ ${chargeablePax} ท่าน` : `Base package × ${chargeablePax} paying travellers`)
+              : (language === 'th' ? 'แพ็กเกจพื้นฐาน' : 'Base package')}</span><b>{formatTHB(result?.groupSubtotal || 0, language)}</b></div>
+            {(result?.businessUpgradeTotal || 0) > 0 && <div><span>{isGroupTL
+              ? (language === 'th' ? `Business Class ${result?.businessUpgradeCount || 0} จาก ${input.passengerCount} ท่าน` : `Business Class ${result?.businessUpgradeCount || 0} of ${input.passengerCount}`)
+              : 'Business Class'}</span><b>+ {formatTHB(result?.businessUpgradeTotal || 0, language)}</b></div>}
             {(result?.singleSupplementTotal || 0) > 0 && <div><span>{t('singleRoom')}</span><b>+ {formatTHB(result?.singleSupplementTotal || 0, language)}</b></div>}
-            {(result?.businessUpgradeTotal || 0) > 0 && <div><span>Business Class</span><b>+ {formatTHB(result?.businessUpgradeTotal || 0, language)}</b></div>}
             {(result?.additionalItemsTotal || 0) > 0 && <div><span>{language === 'th' ? 'รายการเพิ่มเติม' : 'Additional services'}</span><b>+ {formatTHB(result?.additionalItemsTotal || 0, language)}</b></div>}
-          </div>}
+          </div>
           <div className="group-total"><span>{language === 'th' ? 'ยอดรวมทั้งหมด ก่อนออกเอกสาร' : 'Grand total before document'}</span><strong>{formatTHB(result?.groupTotal || 0, language)}</strong><small>{isGroupTL ? (language === 'th' ? `เรียกเก็บ ${chargeablePax} ท่าน จากผู้เดินทางจริง ${input.passengerCount} ท่าน` : `${chargeablePax} billed from ${input.passengerCount} actual travellers`) : (language === 'th' ? 'ระบบคำนวณจากจำนวนผู้เดินทางและรายการทั้งหมดอัตโนมัติ' : 'Automatically calculated from all travellers and services')}</small></div>
           <button className="primary-button quote-button" disabled={!result} onClick={() => setCustomerOpen(true)}><FileText/><span>{t('createQuote')}</span><ArrowRight/></button>
           <div className="summary-foot"><CircleDollarSign/><span>1 USD = {formatNumber(settings.exchangeRateUSD, 2)} THB · Rounded up / 500 THB</span></div>
@@ -393,19 +407,21 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
           <span className="quote-number-cell"><b>—</b></span>
           <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.groupSubtotal, 2)}</b></span>
         </div>
-        {result.pricingMode !== 'group_tl' && result.businessUpgradeCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row">
-          <span className="quote-service-cell"><strong>Business Class Upgrade</strong><small>{language === 'th' ? 'อัปเกรดชั้นโดยสาร' : 'Cabin upgrade'}</small></span>
+        {result.businessUpgradeCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row">
+          <span className="quote-service-cell"><strong>Business Class Upgrade</strong><small>{result.pricingMode === 'group_tl'
+            ? (language === 'th' ? `${result.businessUpgradeCount} ท่าน จากผู้เดินทางจริง ${result.passengerCount} ท่าน` : `${result.businessUpgradeCount} of ${result.passengerCount} actual travellers`)
+            : (language === 'th' ? 'อัปเกรดชั้นโดยสาร' : 'Cabin upgrade')}</small></span>
           <span className="quote-center-cell"><b>ADT</b></span><span className="quote-center-cell"><b>{result.businessUpgradeCount}</b></span>
           <span className="quote-number-cell"><b>{formatNumber(result.businessUpgradePerPerson, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
           <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.businessUpgradeTotal, 2)}</b></span>
         </div>}
-        {result.pricingMode !== 'group_tl' && result.additionalItems.map((item) => <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row" key={item.id}>
+        {result.additionalItems.map((item) => <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row" key={item.id}>
           <span className="quote-service-cell"><strong>{item.description || (language === 'th' ? 'รายการเพิ่มเติม' : 'Additional service')}</strong><small>{item.basis === 'per_person' ? (language === 'th' ? 'คิดต่อท่าน' : 'Per person') : item.basis === 'per_group' ? (language === 'th' ? 'เหมาทั้งกลุ่ม' : 'Per group') : (language === 'th' ? 'จำนวนกำหนดเอง' : 'Custom quantity')}</small></span>
           <span className="quote-center-cell"><b>SRV</b></span><span className="quote-center-cell"><b>{formatNumber(item.quantity, 0)}</b></span>
           <span className="quote-number-cell"><b>{formatNumber(item.unitPriceTHB, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
           <span className="quote-number-cell quote-line-total"><b>{formatNumber(item.totalTHB, 2)}</b></span>
         </div>)}
-        {result.pricingMode !== 'group_tl' && result.singleRoomCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-single-room-row">
+        {result.singleRoomCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-single-room-row">
           <span className="quote-service-cell"><strong>{language === 'th' ? 'ส่วนต่างห้องพักเดี่ยว' : 'Single-room supplement'}</strong><small>{result.hotelCategory} · {result.nights} {t('nights')}</small></span>
           <span className="quote-center-cell"><b>ADT</b></span>
           <span className="quote-center-cell"><b>{result.singleRoomCount}</b></span>
@@ -423,7 +439,7 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
         <span>{language === 'th'
           ? `เดินทางจริง ${result.passengerCount} ท่าน เรียกเก็บราคาเฉลี่ย ${result.chargeablePassengerCount} ท่าน โดย Tour Leader ${result.tourLeaderCount} ท่านได้รับยกเว้นเฉพาะค่าที่พัก ส่วนตั๋วเครื่องบิน ภาษี SDF วีซ่า และค่าใช้จ่ายที่เกี่ยวข้องยังรวมครบตามจำนวนผู้เดินทางจริง`
           : `${result.passengerCount} actual travellers; pricing is averaged across ${result.chargeablePassengerCount} paying travellers. ${result.tourLeaderCount} tour leader(s) receive complimentary hotel only; airfare, airport tax, SDF, visa and related costs remain included for every actual traveller.`}</span>
-        {(result.businessUpgradeTotal > 0 || result.singleSupplementTotal > 0 || result.additionalItemsTotal > 0) && <small>{language === 'th' ? 'ราคาเฉลี่ยข้างต้นรวม Business Class พักเดี่ยว และรายการเพิ่มเติมที่เลือกไว้แล้ว' : 'The averaged price already includes selected Business Class, single-room and additional-service charges.'}</small>}
+        {(result.businessUpgradeTotal > 0 || result.singleSupplementTotal > 0 || result.additionalItemsTotal > 0) && <small>{language === 'th' ? 'ราคาแพ็กเกจพื้นฐานคิดเฉพาะผู้ชำระ ส่วน Business Class พักเดี่ยว และรายการเพิ่มเติมแสดงแยกตามจำนวนผู้ใช้บริการจริงภายในผู้เดินทางทั้งหมด' : 'The base package is billed to paying travellers; Business Class, single-room and other services are shown separately for the actual travellers who use them.'}</small>}
       </section>}
       <section className="quote-scope-grid">
         <div className="quote-scope-card quote-included">

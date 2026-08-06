@@ -352,6 +352,15 @@ export interface InvoicePackageLineSnapshot {
   totalTHB: number;
 }
 
+export interface InvoiceTicketFareLineSnapshot {
+  cabinClass: 'Economy' | 'Business';
+  passengerCount: number;
+  farePerPersonTHB: number;
+  airportTaxPerPersonTHB: number;
+  totalPerPersonTHB: number;
+  totalTHB: number;
+}
+
 export interface InvoiceTicketBatchSnapshot {
   batchLabelTh: string;
   batchLabelEn: string;
@@ -365,6 +374,8 @@ export interface InvoiceTicketBatchSnapshot {
   fareTotalTHB: number;
   airportTaxTotalTHB: number;
   totalDueTHB: number;
+  /** Optional split for mixed Economy / Business groups. */
+  fareLines?: InvoiceTicketFareLineSnapshot[];
 }
 
 export interface InvoiceDeductionSnapshot {

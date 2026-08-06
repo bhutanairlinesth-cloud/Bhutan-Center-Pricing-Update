@@ -2498,3 +2498,139 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .user-create-banner { align-items: stretch; flex-direction: column; }
   .user-create-banner > button { width: 100%; }
 }
+
+/* v12.7 — Large group 15+1 TL pricing and optional billing address */
+.pricing-mode-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.pricing-mode-card {
+  min-height: 96px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid #dce6e1;
+  border-radius: 16px;
+  background: #fff;
+  color: #243b33;
+  text-align: left;
+  transition: .18s ease;
+}
+.pricing-mode-card:hover { border-color: #8ab8a8; transform: translateY(-1px); }
+.pricing-mode-card.active { border-color: #177257; background: #f0f8f5; box-shadow: 0 0 0 2px rgba(23,114,87,.08); }
+.pricing-mode-card > span:first-child { width: 31px; height: 31px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #cddbd5; border-radius: 50%; color: transparent; background: #fff; }
+.pricing-mode-card.active > span:first-child { color: #fff; border-color: #177257; background: #177257; }
+.pricing-mode-card b { display: block; margin: 1px 0 5px; font-size: 16px; }
+.pricing-mode-card small { display: block; color: #7b8882; font-size: 12px; line-height: 1.55; }
+
+.group-tl-pricing-panel {
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid #cde2da;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #f7fbf9 0%, #eef7f3 100%);
+}
+.group-tl-pricing-head {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.group-tl-pricing-head > div:first-child > span { color: #168065; font-size: 11px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.group-tl-pricing-head h4 { margin: 5px 0 3px; color: #123b30; font-size: 25px; letter-spacing: -.035em; }
+.group-tl-pricing-head p { margin: 0; color: #73827c; font-size: 13px; line-height: 1.55; }
+.group-tl-average-box {
+  min-width: 245px;
+  padding: 15px 17px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  border-radius: 15px;
+  color: #fff;
+  background: linear-gradient(135deg, #0d5c47, #168365);
+  box-shadow: 0 12px 25px rgba(12,94,71,.15);
+}
+.group-tl-average-box small { color: rgba(255,255,255,.74); font-size: 11px; }
+.group-tl-average-box strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.group-tl-average-box span { color: #cceade; font-size: 11px; }
+.group-tl-cost-inputs { margin-bottom: 14px; }
+.group-tl-cost-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+.group-tl-cost-summary > div {
+  min-height: 74px;
+  padding: 12px 13px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  border: 1px solid #d9e5e0;
+  border-radius: 13px;
+  background: rgba(255,255,255,.86);
+}
+.group-tl-cost-summary span { color: #718079; font-size: 11px; font-weight: 700; }
+.group-tl-cost-summary b { color: #163a30; font-size: 16px; font-variant-numeric: tabular-nums; }
+.group-tl-cost-summary .featured { border-color: #a6d1c1; background: #eaf7f2; }
+.group-tl-cost-summary .featured b { color: #07694f; }
+.group-tl-pricing-note {
+  margin: 13px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid #d3a735;
+  border-radius: 0 10px 10px 0;
+  color: #6d623e;
+  background: #fffaf0;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.tracking-group-tl-stat {
+  min-height: 70px;
+  padding: 10px 14px;
+  display: grid;
+  align-content: center;
+  border: 1px solid #d8e6e0;
+  border-radius: 13px;
+  background: #f4faf7;
+}
+.tracking-group-tl-stat span, .tracking-group-tl-stat small { color: #75837d; font-size: 11px; }
+.tracking-group-tl-stat strong { color: #12664f; font-size: 24px; line-height: 1.05; }
+.quote-group-tl-note { margin-top: 13px; padding: 12px 14px; border-radius: 10px; background: #f1f8f5; border: 1px solid #d5e9e1; }
+.quote-group-tl-note strong { display: block; color: #0b654d; font-size: 12px; }
+.quote-group-tl-note span { display: block; margin-top: 4px; color: #66756f; font-size: 10.5px; line-height: 1.55; }
+.quote-address, .invoice-billing-address { white-space: pre-line; overflow-wrap: anywhere; line-height: 1.45 !important; }
+.invoice-billing-address { margin-top: 5px; padding-top: 5px; border-top: 1px dashed #d5ddd9; }
+
+@media (max-width: 920px) {
+  .group-tl-cost-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .pricing-mode-switch { grid-template-columns: 1fr; }
+  .group-tl-pricing-panel { padding: 15px; }
+  .group-tl-pricing-head { flex-direction: column; }
+  .group-tl-average-box { min-width: 0; }
+  .group-tl-cost-summary { grid-template-columns: 1fr; }
+}
+
+@media print {
+  .quote-group-tl-note { break-inside: avoid; }
+  .invoice-billing-address { max-width: 120mm; }
+}
+
+/* Front-office large-group controls */
+.group-tl-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.group-tl-head > div:first-child { display:flex; align-items:flex-start; gap:11px; }
+.group-tl-head svg { width:22px; height:22px; color:#0c7357; }
+.group-tl-head b { display:block; color:#153d31; font-size:16px; }
+.group-tl-head small { display:block; margin-top:3px; color:#74827c; font-size:12px; line-height:1.5; }
+.group-tl-badge { padding:9px 13px; border-radius:999px; color:#fff; background:#11694f; font-size:13px; font-weight:850; white-space:nowrap; }
+.group-tl-count-grid { display:grid; grid-template-columns:2fr 1fr 1fr; gap:12px; margin-bottom:13px; }
+.group-tl-money-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.group-tl-money-grid .field { min-width:0; }
+.group-tl-money-grid .field small { color:#819089; font-size:10.5px; line-height:1.45; }
+.group-tl-note { margin-top:13px; padding:12px 14px; display:flex; gap:10px; align-items:flex-start; border-radius:12px; color:#5f6f68; background:#fff; border:1px solid #dbe7e2; font-size:11px; line-height:1.6; }
+.group-tl-note svg { width:17px; height:17px; flex:0 0 auto; margin-top:1px; color:#0d7659; }
+@media (max-width:900px){ .group-tl-money-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.group-tl-count-grid{grid-template-columns:1fr 1fr;} }
+@media (max-width:620px){ .group-tl-head{align-items:flex-start;flex-direction:column}.group-tl-count-grid,.group-tl-money-grid{grid-template-columns:1fr}.group-tl-badge{align-self:flex-start} }

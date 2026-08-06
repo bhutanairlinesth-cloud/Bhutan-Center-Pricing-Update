@@ -1,5 +1,6 @@
 export type UserRole = 'admin' | 'sales';
 export type PricingChannel = 'retail' | 'agent';
+export type PricingMode = 'standard' | 'group_tl';
 export type HotelCategory = '3 Stars' | '4 Stars' | '5 Stars';
 export type Language = 'th' | 'en';
 export type AdditionalChargeBasis = 'per_person' | 'per_group' | 'custom';
@@ -84,8 +85,12 @@ export interface GlobalSettings {
 
 export interface PricingInput {
   channel: PricingChannel;
+  pricingMode: PricingMode;
   packageId: string;
+  /** Actual travellers, including tour leaders. */
   passengerCount: number;
+  /** Travellers who are billed. Equals passengerCount for standard pricing. */
+  chargeablePassengerCount: number;
   hotelCategory: HotelCategory;
   travelDate: string;
   businessUpgradeCount: number;
@@ -97,13 +102,26 @@ export interface PricingInput {
   singleSupplementOverrideTHB?: number | null;
   /** Flexible extra services such as hotel upgrades, mask dance, baggage vehicle, etc. */
   additionalItems: AdditionalCharge[];
+  /** Large-group / TL pricing inputs. All values are THB per traveller. */
+  regularLandCostPerPersonOverrideTHB?: number | null;
+  tourLeaderLandCostPerPersonTHB?: number | null;
+  groupTicketPriceOverrideTHB?: number | null;
+  groupAirportTaxOverrideTHB?: number | null;
+  groupMarginPerTravelerOverrideTHB?: number | null;
+  /** Optional final selling price per paying traveller after averaging. */
+  groupSellingPriceOverrideTHB?: number | null;
 }
 
 export interface PricingResult {
   channel: PricingChannel;
+  pricingMode: PricingMode;
   packageName: string;
   nights: number;
+  /** Actual travellers, including TL. */
   passengerCount: number;
+  /** Travellers who are billed. */
+  chargeablePassengerCount: number;
+  tourLeaderCount: number;
   hotelCategory: HotelCategory;
   travelDate: string;
   exchangeRate: number;
@@ -117,6 +135,7 @@ export interface PricingResult {
   baseCostPerPerson: number;
   marginPerPerson: number;
   sellingPricePerPerson: number;
+  recommendedSellingPricePerPerson: number;
   profitPerPerson: number;
   businessUpgradeCount: number;
   businessUpgradePerPerson: number;
@@ -133,12 +152,24 @@ export interface PricingResult {
   groupProfit: number;
   hasGroupFlightDiscount: boolean;
   groupDiscountPercentApplied: number;
+  regularLandCostPerPerson: number;
+  tourLeaderLandCostPerPerson: number;
+  regularLandTotal: number;
+  tourLeaderLandTotal: number;
+  groupMarginPerTraveler: number;
+  groupMarginTotal: number;
+  operatingCostTotal: number;
+  totalBeforeAverage: number;
+  averageBeforeRounding: number;
+  roundingAdjustment: number;
 }
 
 export interface CustomerDetails {
   name: string;
   phone: string;
   email: string;
+  /** Optional billing / invoice address. */
+  invoiceAddress: string;
   note: string;
 }
 
@@ -198,6 +229,8 @@ export interface CustomerTracking {
   customerName: string;
   phone: string;
   email: string;
+  /** Optional billing / invoice address. */
+  invoiceAddress: string;
   leadSource: LeadSource;
   landSupplier: string;
   airline: string;
@@ -206,9 +239,19 @@ export interface CustomerTracking {
   packageId: string;
   packageName: string;
   hotelCategory: HotelCategory;
+  /** Actual travellers, including tour leaders. */
   passengerCount: number;
+  /** Travellers billed on the quotation / package invoice. */
+  chargeablePassengerCount: number;
+  tourLeaderCount: number;
+  pricingMode: PricingMode;
   channel: PricingChannel;
   sellingPricePerPerson: number;
+  regularLandCostPerPerson: number;
+  tourLeaderLandCostPerPerson: number;
+  groupMarginPerTraveler: number;
+  groupSellingPriceOverridePerPerson: number;
+  groupPricingCostTotal: number;
   singleRoomCount: number;
   singleSupplementPerPerson: number;
   singleSupplementTotal: number;

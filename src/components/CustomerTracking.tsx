@@ -12,7 +12,7 @@ import {
   SupplementalInvoiceLine, TourPackage, TrackingStatus, TravelerAddition, User,
 } from '../types';
 import { LanguageSwitch, useI18n } from '../i18n';
-import { calculatePrice, normalizeAdditionalCharges } from '../utils/pricing';
+import { calculateGroupTLBreakdown, calculatePrice, normalizeAdditionalCharges } from '../utils/pricing';
 import { formatDate, formatNumber, formatTHB, makeId } from '../utils/format';
 import { printElementAsA4 } from '../utils/printA4';
 import { Brand } from './Brand';
@@ -255,6 +255,11 @@ function customerSupplementalCostTotal(item: CustomerTracking, invoices: Payment
 function packageSalesTotal(item: CustomerTracking) {
   return Math.max(0, item.totalAmount || 0) + travelerAdditionPackageTotal(item);
 }
+function originalChargeablePassengerCount(item: CustomerTracking) {
+  const actual = Math.max(1, Math.round(Number(item.passengerCount || 1)));
+  if (item.pricingMode !== 'group_tl') return actual;
+  return Math.min(actual, Math.max(1, Math.round(Number(item.chargeablePassengerCount || actual))));
+}
 function totalPackagePassengerCount(item: CustomerTracking) {
   return Math.max(0, item.passengerCount || 0) + addedPassengerCount(item);
 }
@@ -338,24 +343,29 @@ function mergeInvoicePackageLines(lines: InvoicePackageLineSnapshot[]) {
 function buildPackageSnapshotRows(item: CustomerTracking): InvoicePackageLineSnapshot[] {
   const rows: InvoicePackageLineSnapshot[] = [];
   const add = (line: Omit<InvoicePackageLineSnapshot, 'id'>) => rows.push({ id: makeId('pkgrow'), ...line });
+  const isGroupTL = item.pricingMode === 'group_tl';
+  const billedPax = originalChargeablePassengerCount(item);
+  const tlCount = Math.max(0, Math.max(1, item.passengerCount || 1) - billedPax);
   add({
     descriptionTh: item.packageName || 'แพ็กเกจทัวร์', descriptionEn: item.packageName || 'Tour package',
-    detailTh: `${item.hotelCategory}`, detailEn: `${item.hotelCategory}`, ptc: 'ADT',
-    quantity: Math.max(0, item.passengerCount || 0), unitPriceTHB: Math.max(0, item.sellingPricePerPerson || 0),
-    totalTHB: Math.max(0, item.passengerCount || 0) * Math.max(0, item.sellingPricePerPerson || 0),
+    detailTh: isGroupTL ? `${item.hotelCategory} · เดินทางจริง ${item.passengerCount} ท่าน · เรียกเก็บ ${billedPax}+${tlCount} TL` : `${item.hotelCategory}`,
+    detailEn: isGroupTL ? `${item.hotelCategory} · ${item.passengerCount} actual travellers · billed ${billedPax}+${tlCount} TL` : `${item.hotelCategory}`,
+    ptc: 'ADT',
+    quantity: billedPax, unitPriceTHB: Math.max(0, item.sellingPricePerPerson || 0),
+    totalTHB: billedPax * Math.max(0, item.sellingPricePerPerson || 0),
   });
-  if (item.businessUpgradeCount > 0 && item.businessUpgradePerPerson > 0) add({
+  if (!isGroupTL && item.businessUpgradeCount > 0 && item.businessUpgradePerPerson > 0) add({
     descriptionTh: 'อัปเกรด Business Class', descriptionEn: 'Business Class Upgrade',
     detailTh: 'ส่วนเพิ่มราคาขายรวมในแพ็กเกจ', detailEn: 'Selling surcharge included in package', ptc: 'BC',
     quantity: item.businessUpgradeCount, unitPriceTHB: item.businessUpgradePerPerson,
     totalTHB: item.businessUpgradeCount * item.businessUpgradePerPerson,
   });
-  if (item.singleRoomCount > 0 && item.singleSupplementPerPerson > 0) add({
+  if (!isGroupTL && item.singleRoomCount > 0 && item.singleSupplementPerPerson > 0) add({
     descriptionTh: 'พักเดี่ยว', descriptionEn: 'Single-room supplement', detailTh: item.hotelCategory, detailEn: item.hotelCategory, ptc: 'SGL',
     quantity: item.singleRoomCount, unitPriceTHB: item.singleSupplementPerPerson,
     totalTHB: item.singleRoomCount * item.singleSupplementPerPerson,
   });
-  for (const extra of item.additionalItems || []) add({
+  if (!isGroupTL) for (const extra of item.additionalItems || []) add({
     descriptionTh: extra.description || 'รายการเพิ่มเติม', descriptionEn: extra.description || 'Additional service',
     detailTh: extra.basis === 'per_person' ? 'ต่อท่าน' : extra.basis === 'per_group' ? 'เหมาทั้งกลุ่ม' : 'จำนวนกำหนดเอง',
     detailEn: extra.basis === 'per_person' ? 'Per person' : extra.basis === 'per_group' ? 'Per group' : 'Custom quantity', ptc: 'SRV',
@@ -574,9 +584,11 @@ export function CustomerTrackingWorkspace(props: Props) {
     const first = props.packages[0];
     const now = new Date().toISOString();
     return {
-      id: makeId('crm'), opportunityName: '', customerName: '', phone: '', email: '', leadSource: 'LINE OA', landSupplier: '', airline: 'Bhutan Airlines',
+      id: makeId('crm'), opportunityName: '', customerName: '', phone: '', email: '', invoiceAddress: '', leadSource: 'LINE OA', landSupplier: '', airline: 'Bhutan Airlines',
       travelStartDate: '', travelEndDate: '', packageId: first?.id || '', packageName: first?.name || '', hotelCategory: '3 Stars', passengerCount: 2,
-      channel: 'retail', sellingPricePerPerson: 0, singleRoomCount: 0, singleSupplementPerPerson: 0, singleSupplementTotal: 0, totalAmount: 0, supplementalInvoiceTotal: 0, supplementalCostTotal: 0, grandTotalAmount: 0, travelerAdditions: [],
+      chargeablePassengerCount: 2, tourLeaderCount: 0, pricingMode: 'standard', channel: 'retail', sellingPricePerPerson: 0,
+      regularLandCostPerPerson: 0, tourLeaderLandCostPerPerson: 0, groupMarginPerTraveler: props.settings.marginTHB, groupSellingPriceOverridePerPerson: 0, groupPricingCostTotal: 0,
+      singleRoomCount: 0, singleSupplementPerPerson: 0, singleSupplementTotal: 0, totalAmount: 0, supplementalInvoiceTotal: 0, supplementalCostTotal: 0, grandTotalAmount: 0, travelerAdditions: [],
       ticketPricePerPerson: props.settings.ticketPriceTHB, ticketAmount: props.settings.ticketPriceTHB * 2,
       airportTaxPerPerson: props.settings.airportTaxTHB, airportTaxAmount: props.settings.airportTaxTHB * 2,
       businessUpgradeCount: 0, businessUpgradePerPerson: props.settings.businessUpgradeTHB ?? 15000, businessUpgradeTotal: 0,
@@ -933,27 +945,73 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   function recalculateFinancials(current: CustomerTracking, patch: Partial<CustomerTracking> = {}): CustomerTracking {
     const next = { ...current, ...patch };
     const pax = Math.max(1, Math.round(Number(next.passengerCount || 1)));
+    const pricingMode = next.pricingMode === 'group_tl' ? 'group_tl' : 'standard';
+    const chargeablePassengerCount = pricingMode === 'group_tl'
+      ? Math.min(pax, Math.max(1, Math.round(Number(next.chargeablePassengerCount || pax))))
+      : pax;
+    const tourLeaderCount = pricingMode === 'group_tl' ? Math.max(0, pax - chargeablePassengerCount) : 0;
     const singleRoomCount = Math.min(pax, Math.max(0, Math.round(Number(next.singleRoomCount || 0))));
     const singleSupplementPerPerson = Math.max(0, Number(next.singleSupplementPerPerson || 0));
     const singleSupplementTotal = singleRoomCount * singleSupplementPerPerson;
     const additionalItems = normalizeAdditionalCharges(next.additionalItems || [], pax);
     const additionalItemsTotal = additionalItems.reduce((sum, item) => sum + item.totalTHB, 0);
-    const sellingPricePerPerson = Math.max(0, Number(next.sellingPricePerPerson || 0));
-    const travelerAdditions = (next.travelerAdditions || []).map((entry) => normalizeTravelerAddition({
-      ...entry,
-      packagePricePerPerson: Math.max(0, Number(entry.packagePricePerPerson || sellingPricePerPerson || 0)),
-    }));
     const ticketPricePerPerson = Math.max(0, Number(next.ticketPricePerPerson || (next.ticketAmount && next.ticketAmount / pax) || 0));
     const airportTaxPerPerson = Math.max(0, Number(next.airportTaxPerPerson || (next.airportTaxAmount && next.airportTaxAmount / pax) || 0));
     const businessUpgradeCount = Math.min(pax, Math.max(0, Math.round(Number(next.businessUpgradeCount || 0))));
     const businessUpgradePerPerson = Math.max(0, Number(next.businessUpgradePerPerson || 0));
     const businessUpgradeTotal = businessUpgradeCount * businessUpgradePerPerson;
-    const packageBaseTotal = sellingPricePerPerson * pax;
-    const totalAmount = packageBaseTotal + singleSupplementTotal + businessUpgradeTotal + additionalItemsTotal;
+    const regularLandCostPerPerson = Math.max(0, Number(next.regularLandCostPerPerson || 0));
+    const tourLeaderLandCostPerPerson = Math.max(0, Number(next.tourLeaderLandCostPerPerson || 0));
+    const groupMarginPerTraveler = Math.max(0, Number(next.groupMarginPerTraveler || 0));
+    const groupSellingPriceOverridePerPerson = Math.max(0, Number(next.groupSellingPriceOverridePerPerson || 0));
+
+    let sellingPricePerPerson = Math.max(0, Number(next.sellingPricePerPerson || 0));
+    let totalAmount = 0;
+    let groupPricingCostTotal = Math.max(0, Number(next.groupPricingCostTotal || 0));
+
+    if (pricingMode === 'group_tl') {
+      const group = calculateGroupTLBreakdown({
+        actualPassengerCount: pax,
+        chargeablePassengerCount,
+        regularLandCostPerPerson,
+        tourLeaderLandCostPerPerson,
+        ticketPerTraveler: ticketPricePerPerson,
+        airportTaxPerTraveler: airportTaxPerPerson,
+        marginPerTraveler: groupMarginPerTraveler,
+        businessUpgradeTotal,
+        singleSupplementTotal,
+        additionalItemsTotal,
+      });
+      sellingPricePerPerson = groupSellingPriceOverridePerPerson > 0 ? groupSellingPriceOverridePerPerson : group.sellingPricePerChargeablePerson;
+      totalAmount = sellingPricePerPerson * chargeablePassengerCount;
+      groupPricingCostTotal = group.totalBeforeAverage;
+    } else {
+      totalAmount = sellingPricePerPerson * pax + singleSupplementTotal + businessUpgradeTotal + additionalItemsTotal;
+    }
+
+    const travelerAdditions = (next.travelerAdditions || []).map((entry) => normalizeTravelerAddition({
+      ...entry,
+      packagePricePerPerson: Math.max(0, Number(entry.packagePricePerPerson || sellingPricePerPerson || 0)),
+    }));
     const ticketAmount = ticketPricePerPerson * pax;
     const airportTaxAmount = airportTaxPerPerson * pax;
     const depositAmount = ticketAmount + airportTaxAmount;
-    const recalculatedTracking = { ...next, travelerAdditions, totalAmount, depositAmount } as CustomerTracking;
+    const recalculatedTracking = {
+      ...next,
+      pricingMode,
+      passengerCount: pax,
+      chargeablePassengerCount,
+      tourLeaderCount,
+      sellingPricePerPerson,
+      regularLandCostPerPerson,
+      tourLeaderLandCostPerPerson,
+      groupMarginPerTraveler,
+      groupSellingPriceOverridePerPerson,
+      groupPricingCostTotal,
+      travelerAdditions,
+      totalAmount,
+      depositAmount,
+    } as CustomerTracking;
     const paidTicket = totalTicketPaymentsReceived(recalculatedTracking, invoices, payments);
     const balanceAmount = Math.max(0, packageSalesTotal(recalculatedTracking) - paidTicket);
     const landPayment = Math.max(0, Number(next.landPayment || 0));
@@ -965,8 +1023,16 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       : 0;
     return {
       ...next,
+      pricingMode,
       passengerCount: pax,
+      chargeablePassengerCount,
+      tourLeaderCount,
       sellingPricePerPerson,
+      regularLandCostPerPerson,
+      tourLeaderLandCostPerPerson,
+      groupMarginPerTraveler,
+      groupSellingPriceOverridePerPerson,
+      groupPricingCostTotal,
       singleRoomCount,
       singleSupplementPerPerson,
       singleSupplementTotal,
@@ -1040,8 +1106,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     if (!currentForm.packageId) return;
     const result = calculatePrice({
       channel: currentForm.channel,
+      pricingMode: currentForm.pricingMode || 'standard',
       packageId: currentForm.packageId,
       passengerCount: Math.max(1, currentForm.passengerCount),
+      chargeablePassengerCount: Math.min(Math.max(1, currentForm.chargeablePassengerCount || currentForm.passengerCount), Math.max(1, currentForm.passengerCount)),
       hotelCategory: currentForm.hotelCategory,
       travelDate: currentForm.travelStartDate,
       businessUpgradeCount: currentForm.businessUpgradeCount || 0,
@@ -1049,11 +1117,25 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       singleRoomCount: Math.min(Math.max(0, currentForm.singleRoomCount || 0), Math.max(1, currentForm.passengerCount)),
       singleSupplementOverrideTHB: currentForm.singleSupplementPerPerson > 0 ? currentForm.singleSupplementPerPerson : null,
       additionalItems: currentForm.additionalItems || [],
+      regularLandCostPerPersonOverrideTHB: currentForm.regularLandCostPerPerson > 0 ? currentForm.regularLandCostPerPerson : null,
+      tourLeaderLandCostPerPersonTHB: currentForm.tourLeaderLandCostPerPerson,
+      groupTicketPriceOverrideTHB: currentForm.ticketPricePerPerson > 0 ? currentForm.ticketPricePerPerson : null,
+      groupAirportTaxOverrideTHB: currentForm.airportTaxPerPerson > 0 ? currentForm.airportTaxPerPerson : null,
+      groupMarginPerTravelerOverrideTHB: currentForm.groupMarginPerTraveler > 0 ? currentForm.groupMarginPerTraveler : null,
+      groupSellingPriceOverrideTHB: currentForm.groupSellingPriceOverridePerPerson > 0 ? currentForm.groupSellingPriceOverridePerPerson : null,
     }, settings, packages);
     if (!result) return;
     setForm((current) => current ? recalculateFinancials(current, {
       packageName: result.packageName,
+      pricingMode: result.pricingMode,
+      chargeablePassengerCount: result.chargeablePassengerCount,
+      tourLeaderCount: result.tourLeaderCount,
       sellingPricePerPerson: result.sellingPricePerPerson,
+      regularLandCostPerPerson: result.regularLandCostPerPerson,
+      tourLeaderLandCostPerPerson: result.tourLeaderLandCostPerPerson,
+      groupMarginPerTraveler: result.groupMarginPerTraveler,
+      groupSellingPriceOverridePerPerson: current.groupSellingPriceOverridePerPerson,
+      groupPricingCostTotal: result.totalBeforeAverage,
       singleRoomCount: result.singleRoomCount,
       singleSupplementPerPerson: result.singleSupplementPerPerson,
       ticketPricePerPerson: result.airTicketPerPerson,
@@ -1308,10 +1390,11 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   const generalSupplementalRevenue = generalSupplementalInvoices(form, invoices).reduce((sum, invoice) => sum + Math.max(0, invoice.amount || 0), 0);
   const combinedPackageTotal = packageSalesTotal(form);
   const combinedPassengerCount = totalPackagePassengerCount(form);
-  const combinedBasePackageTotal = Math.max(0, form.sellingPricePerPerson || 0) * Math.max(0, form.passengerCount || 0) + addedBasePackageRevenue;
-  const combinedBusinessUpgradeTotal = Math.max(0, form.businessUpgradeTotal || 0) + addedBusinessUpgradeRevenue;
-  const combinedSingleSupplementTotal = Math.max(0, form.singleSupplementTotal || 0) + addedSingleSupplementRevenue;
-  const combinedAdditionalItemsTotal = Math.max(0, form.additionalItemsTotal || 0) + addedExtrasRevenue;
+  const originalBilledPax = originalChargeablePassengerCount(form);
+  const combinedBasePackageTotal = (form.pricingMode === 'group_tl' ? Math.max(0, form.totalAmount || 0) : Math.max(0, form.sellingPricePerPerson || 0) * Math.max(0, form.passengerCount || 0)) + addedBasePackageRevenue;
+  const combinedBusinessUpgradeTotal = (form.pricingMode === 'group_tl' ? 0 : Math.max(0, form.businessUpgradeTotal || 0)) + addedBusinessUpgradeRevenue;
+  const combinedSingleSupplementTotal = (form.pricingMode === 'group_tl' ? 0 : Math.max(0, form.singleSupplementTotal || 0)) + addedSingleSupplementRevenue;
+  const combinedAdditionalItemsTotal = (form.pricingMode === 'group_tl' ? 0 : Math.max(0, form.additionalItemsTotal || 0)) + addedExtrasRevenue;
   const combinedAirfareTotal = Math.max(0, form.ticketAmount || 0) + addedTravelerAirfareTotal(form);
   const combinedAirportTaxTotal = Math.max(0, form.airportTaxAmount || 0) + addedTravelerAirportTaxTotal(form);
   const combinedTicketAndTaxTotal = combinedAirfareTotal + combinedAirportTaxTotal;
@@ -1321,6 +1404,18 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   const hasLandConversion = form.landPayment > 0 && form.landInvoiceAmountUSD > 0 && form.landExchangeRate > 0;
   const calculatedProfit = hasLandConversion ? realizedGrossProfit(form, invoices, form.landPayment) : null;
   const profit = form.landPaidAt && calculatedProfit !== null ? calculatedProfit : null;
+  const groupTLBreakdown = form.pricingMode === 'group_tl' ? calculateGroupTLBreakdown({
+    actualPassengerCount: form.passengerCount,
+    chargeablePassengerCount: originalChargeablePassengerCount(form),
+    regularLandCostPerPerson: form.regularLandCostPerPerson,
+    tourLeaderLandCostPerPerson: form.tourLeaderLandCostPerPerson,
+    ticketPerTraveler: form.ticketPricePerPerson,
+    airportTaxPerTraveler: form.airportTaxPerPerson,
+    marginPerTraveler: form.groupMarginPerTraveler,
+    businessUpgradeTotal: form.businessUpgradeTotal,
+    singleSupplementTotal: form.singleSupplementTotal,
+    additionalItemsTotal: form.additionalItemsTotal,
+  }) : null;
 
   return <Modal open={open} title={th ? 'Customer Journey — รายละเอียดและขั้นตอนดำเนินงาน' : 'Customer Journey — workflow details'} onClose={onClose} wide>
     <div className="journey-editor">
@@ -1333,6 +1428,7 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
           <label className="field"><span>{th ? 'Lead Source' : 'Lead source'}</span><select value={form.leadSource} onChange={(e) => set('leadSource', e.target.value as LeadSource)}>{leadSources.map((x) => <option key={x}>{x}</option>)}</select></label>
           <label className="field"><span>{th ? 'เบอร์โทร' : 'Phone'}</span><input value={form.phone} onChange={(e) => set('phone', e.target.value)}/></label>
           <label className="field"><span>Email</span><input value={form.email} onChange={(e) => set('email', e.target.value)}/></label>
+          <label className="field span-2"><span>{th ? 'ที่อยู่สำหรับออก Invoice / Quotation (ไม่บังคับ)' : 'Billing address for invoices / quotations (optional)'}</span><textarea rows={3} value={form.invoiceAddress || ''} onChange={(e) => set('invoiceAddress', e.target.value)} placeholder={th ? 'ชื่อบริษัท ที่อยู่ เลขประจำตัวผู้เสียภาษี หรือเว้นว่างได้' : 'Company, address, tax ID, or leave blank'}/></label>
           <label className="field"><span>{th ? 'พนักงานผู้ดูแล' : 'Sales owner'}</span><select value={form.salesOwnerId} onChange={(e) => set('salesOwnerId', e.target.value)}>{users.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label className="field"><span>{th ? 'สถานะการขาย' : 'Sales status'}</span><select value={form.status} onChange={(e) => set('status', e.target.value as TrackingStatus)}>{statuses.map((x) => <option key={x} value={x}>{trackingStatusLabel(x, th)}</option>)}</select></label>
           <MilestoneField label={th ? 'วันที่ส่งราคาให้ลูกค้า' : 'Quotation sent'} value={form.quotationSentAt} onChange={(v) => set('quotationSentAt', v)} onToday={() => markToday('quotationSentAt')} th={th}/>
@@ -1344,12 +1440,15 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         <div className="tracking-form-grid">
           <label className="field span-2"><span>{th ? 'โปรแกรมทัวร์' : 'Tour package'}</span><select value={form.packageId} onChange={(e) => syncPackage(e.target.value)}>{packages.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label className="field"><span>{th ? 'ช่องทางราคา' : 'Pricing channel'}</span><select value={form.channel} onChange={(e) => set('channel', e.target.value as PricingChannel)}><option value="retail">Retail / Customer</option><option value="agent">Agent / Partner</option></select></label>
+          <label className="field"><span>{th ? 'รูปแบบการคิดราคา' : 'Pricing model'}</span><select value={form.pricingMode || 'standard'} onChange={(e) => updatePricingFields({ pricingMode: e.target.value as CustomerTracking['pricingMode'], chargeablePassengerCount: e.target.value === 'group_tl' ? Math.max(1, Math.min(form.passengerCount, form.chargeablePassengerCount || form.passengerCount - 1)) : form.passengerCount })}><option value="standard">{th ? 'กรุ๊ปปกติ — เรียกเก็บทุกท่าน' : 'Standard — bill every traveller'}</option><option value="group_tl">{th ? 'กรุ๊ปใหญ่ + Tour Leader' : 'Large group + Tour Leader'}</option></select></label>
           <label className="field"><span>{th ? 'ระดับโรงแรม' : 'Hotel category'}</span><select value={form.hotelCategory} onChange={(e) => syncHotelCategory(e.target.value as HotelCategory)}><option>3 Stars</option><option>4 Stars</option><option>5 Stars</option></select></label>
           <label className="field"><span>{th ? 'วันเริ่มเดินทาง' : 'Travel start'}</span><input type="date" value={form.travelStartDate} onChange={(e) => syncDates(e.target.value)}/></label>
           <label className="field"><span>{th ? 'วันสิ้นสุด' : 'Travel end'}</span><input type="date" value={form.travelEndDate} onChange={(e) => set('travelEndDate', e.target.value)}/></label>
-          <label className="field"><span>{th ? 'จำนวนผู้เดินทาง' : 'No. of pax'}</span><input type="number" min="1" value={form.passengerCount} onChange={(e) => updatePricingFields({ passengerCount: Math.max(1, Number(e.target.value)) })}/></label>
+          <label className="field"><span>{form.pricingMode === 'group_tl' ? (th ? 'ผู้เดินทางจริงทั้งหมด (รวม TL)' : 'Actual travellers (incl. TL)') : (th ? 'จำนวนผู้เดินทาง' : 'No. of pax')}</span><input type="number" min="1" max="99" value={form.passengerCount} onChange={(e) => updatePricingFields({ passengerCount: Math.max(1, Number(e.target.value)), chargeablePassengerCount: form.pricingMode === 'group_tl' ? Math.min(Math.max(1, form.chargeablePassengerCount || 1), Math.max(1, Number(e.target.value))) : Math.max(1, Number(e.target.value)) })}/></label>
+          {form.pricingMode === 'group_tl' && <label className="field"><span>{th ? 'จำนวนผู้ชำระเงิน' : 'Chargeable travellers'}</span><input type="number" min="1" max={form.passengerCount} value={form.chargeablePassengerCount || form.passengerCount} onChange={(e) => updatePricingFields({ chargeablePassengerCount: Math.min(form.passengerCount, Math.max(1, Number(e.target.value))) })}/></label>}
+          {form.pricingMode === 'group_tl' && <div className="group-tl-stat tracking-group-tl-stat"><span>Tour Leader</span><strong>{Math.max(0, form.passengerCount - (form.chargeablePassengerCount || form.passengerCount))}</strong><small>{th ? 'ฟรีเฉพาะที่พัก' : 'hotel-only complimentary'}</small></div>}
           <label className="field"><span>{th ? 'จำนวนผู้พักเดี่ยว' : 'Single-room travellers'}</span><input type="number" min="0" max={Math.max(1, form.passengerCount)} value={form.singleRoomCount} onChange={(e) => updateSingleRoomDetails(Number(e.target.value), form.singleSupplementPerPerson)}/></label>
-          <div className="tracking-calc-action"><button className="secondary-button" type="button" onClick={calculateFromPricing}><CircleDollarSign/>{th ? 'ดึงราคามาตรฐานจากระบบ' : 'Load standard pricing'}</button></div>
+          <div className="tracking-calc-action"><button className="secondary-button" type="button" onClick={calculateFromPricing}><CircleDollarSign/>{form.pricingMode === 'group_tl' ? (th ? 'คำนวณราคาเฉลี่ยกรุ๊ป TL' : 'Calculate TL group average') : (th ? 'ดึงราคามาตรฐานจากระบบ' : 'Load standard pricing')}</button></div>
         </div>
         <div className="traveler-addition-inline-action">
           <div className="traveler-addition-inline-copy">
@@ -1368,10 +1467,31 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
             <button type="button" className="secondary-button traveler-addition-open-button" onClick={() => setTicketChangePanelOpen(true)}><CalendarClock/>{th ? 'เลื่อนตั๋ว / เดินทางล่าช้า' : 'Ticket change / delayed travel'}</button>
           </div>
         </div>
+        {form.pricingMode === 'group_tl' && groupTLBreakdown && <section className="group-tl-pricing-panel tracking-group-tl-panel">
+          <div className="group-tl-pricing-head"><div><span>{th ? 'สูตรกรุ๊ปใหญ่' : 'Large-group formula'}</span><h4>{originalBilledPax}+{form.tourLeaderCount} TL</h4><p>{th ? `เดินทางจริง ${form.passengerCount} ท่าน แต่เฉลี่ยยอดรวมให้ผู้ชำระ ${originalBilledPax} ท่าน` : `${form.passengerCount} actual travellers; all costs are averaged over ${originalBilledPax} paying travellers.`}</p></div><div className="group-tl-average-box"><small>{th ? 'ราคาขายจริง / ผู้ชำระ' : 'Final selling / paying pax'}</small><strong>{formatTHB(form.sellingPricePerPerson, language)}</strong><span>{th ? `แนะนำ ${formatTHB(groupTLBreakdown.sellingPricePerChargeablePerson, language)} · ยอดเรียกเก็บ ${formatTHB(form.totalAmount, language)}` : `Customer total ${formatTHB(form.totalAmount, language)}`}</span></div></div>
+          <div className="tracking-form-grid money-grid group-tl-cost-inputs">
+            <MoneyField label={th ? 'LAND ผู้เดินทางปกติ / ท่าน' : 'Regular LAND / traveller'} value={form.regularLandCostPerPerson} onChange={(v) => updatePricingFields({ regularLandCostPerPerson: v })}/>
+            <MoneyField label={th ? 'LAND สำหรับ TL / ท่าน' : 'TL LAND / traveller'} value={form.tourLeaderLandCostPerPerson} onChange={(v) => updatePricingFields({ tourLeaderLandCostPerPerson: v })}/>
+            <MoneyField label={th ? 'ตั๋วเครื่องบิน / ผู้เดินทางจริง' : 'Airfare / actual traveller'} value={form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ ticketPricePerPerson: v })}/>
+            <MoneyField label={th ? 'ภาษีสนามบิน / ผู้เดินทางจริง' : 'Airport tax / actual traveller'} value={form.airportTaxPerPerson} onChange={(v) => updatePricingFields({ airportTaxPerPerson: v })}/>
+            <MoneyField label={th ? 'Margin / ผู้เดินทางจริง' : 'Margin / actual traveller'} value={form.groupMarginPerTraveler} onChange={(v) => updatePricingFields({ groupMarginPerTraveler: v })}/>
+            <MoneyField label={th ? 'ราคาขายจริง / ผู้ชำระ (แก้ได้)' : 'Final selling / paying pax (editable)'} value={form.groupSellingPriceOverridePerPerson || form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ groupSellingPriceOverridePerPerson: v })}/>
+          </div>
+          <div className="group-tl-cost-summary">
+            <div><span>LAND {originalBilledPax} PAX</span><b>{formatTHB(groupTLBreakdown.regularLandTotal, language)}</b></div>
+            <div><span>LAND {form.tourLeaderCount} TL</span><b>{formatTHB(groupTLBreakdown.tourLeaderLandTotal, language)}</b></div>
+            <div><span>{th ? 'ตั๋วทั้งหมด' : 'All airfare'}</span><b>{formatTHB(groupTLBreakdown.flightTotal, language)}</b></div>
+            <div><span>{th ? 'ภาษีทั้งหมด' : 'All airport tax'}</span><b>{formatTHB(groupTLBreakdown.airportTaxTotal, language)}</b></div>
+            <div><span>Margin</span><b>{formatTHB(groupTLBreakdown.marginTotal, language)}</b></div>
+            <div className="featured"><span>{th ? 'รวมก่อนหาร' : 'Total before average'}</span><b>{formatTHB(groupTLBreakdown.totalBeforeAverage, language)}</b></div>
+            <div className="featured"><span>{th ? `หาร ${originalBilledPax} ท่าน` : `Divide by ${originalBilledPax}`}</span><b>{formatTHB(groupTLBreakdown.averageBeforeRounding, language)}</b></div>
+          </div>
+          <p className="group-tl-pricing-note">{th ? 'TL ฟรีเฉพาะค่าที่พักเท่านั้น กรุณากรอก LAND ของ TL เป็นยอดที่ยังรวม SDF, Visa และบริการภาคพื้นดินที่ต้องจ่ายจริง ส่วนตั๋วและภาษีจะคูณตามผู้เดินทางจริงทุกคน' : 'The TL receives complimentary accommodation only. Enter TL LAND with payable SDF, visa and ground services; airfare and airport tax are charged for every actual traveller.'}</p>
+        </section>}
         <div className="tracking-form-grid money-grid journey-money-grid pricing-input-grid">
-          <MoneyField label={th ? 'ราคาขายแพ็กเกจ / ท่าน' : 'Package selling price / pax'} value={form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ sellingPricePerPerson: v })}/>
-          <MoneyField label={th ? 'ราคาตั๋วเครื่องบิน / ท่าน' : 'Airfare / pax'} value={form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ ticketPricePerPerson: v })}/>
-          <MoneyField label={th ? 'ภาษีสนามบิน / ท่าน' : 'Airport tax / pax'} value={form.airportTaxPerPerson} onChange={(v) => updatePricingFields({ airportTaxPerPerson: v })}/>
+          {form.pricingMode === 'standard' && <MoneyField label={th ? 'ราคาขายแพ็กเกจ / ท่าน' : 'Package selling price / pax'} value={form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ sellingPricePerPerson: v })}/>} 
+          {form.pricingMode === 'standard' && <MoneyField label={th ? 'ราคาตั๋วเครื่องบิน / ท่าน' : 'Airfare / pax'} value={form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ ticketPricePerPerson: v })}/>} 
+          {form.pricingMode === 'standard' && <MoneyField label={th ? 'ภาษีสนามบิน / ท่าน' : 'Airport tax / pax'} value={form.airportTaxPerPerson} onChange={(v) => updatePricingFields({ airportTaxPerPerson: v })}/>} 
           <MoneyField label={th ? 'ส่วนเพิ่มราคาขาย Business Class / ท่าน' : 'Business Class selling surcharge / pax'} value={form.businessUpgradePerPerson} onChange={(v) => updatePricingFields({ businessUpgradePerPerson: v })}/>
           <label className="field"><span>{th ? 'จำนวนผู้โดยสาร Business Class' : 'Business Class passengers'}</span><input type="number" min="0" max={form.passengerCount} value={form.businessUpgradeCount} onChange={(e) => updatePricingFields({ businessUpgradeCount: Math.min(form.passengerCount, Math.max(0, Number(e.target.value))) })}/></label>
           <MoneyField label={th ? 'ส่วนต่างพักเดี่ยว / ท่าน' : 'Single supplement / pax'} value={form.singleSupplementPerPerson} onChange={(v) => updateSingleRoomDetails(form.singleRoomCount, v)}/>
@@ -1380,11 +1500,11 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         <div className="automatic-totals-panel">
           <div className="automatic-totals-head"><div><b>{th ? 'สรุปราคาอัตโนมัติ' : 'Automatic price summary'}</b><span>{th ? 'รวมผู้เดินทางชุดแรกและผู้เดินทางที่เพิ่มทุกชุดโดยอัตโนมัติ' : 'Automatically combines the original group and every added-traveller batch.'}</span></div><strong>{formatTHB(combinedPackageTotal, language)}</strong></div>
           <div className="automatic-totals-grid">
-            <AutoTotal label={th ? `แพ็กเกจพื้นฐานรวม ${combinedPassengerCount} ท่าน` : `Base package — ${combinedPassengerCount} pax`} formula={addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม` : `${form.passengerCount} original + ${addedPassengerCount(form)} added`) : `${formatTHB(form.sellingPricePerPerson, language)} × ${form.passengerCount}`} value={combinedBasePackageTotal} language={language}/>
+            <AutoTotal label={form.pricingMode === 'group_tl' ? (th ? `ราคาเฉลี่ยกรุ๊ป ${form.passengerCount} ท่าน (${originalBilledPax}+${form.tourLeaderCount} TL)` : `Averaged group price — ${form.passengerCount} travellers (${originalBilledPax}+${form.tourLeaderCount} TL)`) : (th ? `แพ็กเกจพื้นฐานรวม ${combinedPassengerCount} ท่าน` : `Base package — ${combinedPassengerCount} pax`)} formula={form.pricingMode === 'group_tl' ? `${formatTHB(form.sellingPricePerPerson, language)} × ${originalBilledPax}` : (addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม` : `${form.passengerCount} original + ${addedPassengerCount(form)} added`) : `${formatTHB(form.sellingPricePerPerson, language)} × ${form.passengerCount}`)} value={combinedBasePackageTotal} language={language}/>
             {addedPassengerCount(form) > 0 && <AutoTotal label={th ? 'มูลค่าแพ็กเกจของผู้เดินทางเพิ่ม' : 'Added-traveller package value'} formula={`${addedPassengerCount(form)} ${th ? 'ท่าน' : 'pax'}`} value={addedPackageRevenue} language={language}/>} 
-            <AutoTotal label={th ? 'ส่วนเพิ่ม Business Class รวมทุกชุด' : 'Business Class surcharge — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedBusinessUpgradeTotal} language={language}/>
-            <AutoTotal label={th ? 'พักเดี่ยวรวมทุกชุด' : 'Single supplements — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedSingleSupplementTotal} language={language}/>
-            <AutoTotal label={th ? 'รายการเพิ่มเติมรวมทุกชุด' : 'Additional services — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAdditionalItemsTotal} language={language}/>
+            {form.pricingMode !== 'group_tl' && <AutoTotal label={th ? 'ส่วนเพิ่ม Business Class รวมทุกชุด' : 'Business Class surcharge — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedBusinessUpgradeTotal} language={language}/>} 
+            {form.pricingMode !== 'group_tl' && <AutoTotal label={th ? 'พักเดี่ยวรวมทุกชุด' : 'Single supplements — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedSingleSupplementTotal} language={language}/>} 
+            {form.pricingMode !== 'group_tl' && <AutoTotal label={th ? 'รายการเพิ่มเติมรวมทุกชุด' : 'Additional services — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAdditionalItemsTotal} language={language}/>} 
             <AutoTotal featured label={th ? 'ยอดแพ็กเกจรวมผู้เดินทางทั้งหมด' : 'Combined package total'} formula={addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม = ${combinedPassengerCount} ท่าน` : `${form.passengerCount} original + ${addedPassengerCount(form)} added = ${combinedPassengerCount} pax`) : (th ? `${form.passengerCount} ท่าน` : `${form.passengerCount} pax`)} value={combinedPackageTotal} language={language}/>
             <AutoTotal label={th ? 'ค่าตั๋วเครื่องบินรวมทุกชุด' : 'Total airfare — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAirfareTotal} language={language}/>
             <AutoTotal label={th ? 'ภาษีสนามบินรวมทุกชุด' : 'Total airport tax — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAirportTaxTotal} language={language}/>
@@ -1821,7 +1941,7 @@ function InvoicePreview({ value, language, payments, invoices, onClose, onSaveIn
     <div className="invoice-toolbar no-print"><button className="ghost-button" onClick={onClose}><ArrowLeft/>{th ? 'กลับ' : 'Back'}</button><label><span>{th ? 'สถานะเอกสาร' : 'Status'}</span><select value={status} onChange={(e) => void updateStatus(e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label><button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF'}</button></div>
     <article className="invoice-sheet journey-invoice-sheet" id="invoice-print-area">
       <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{isGeneralSupplemental ? (invoice.title || documentTitle) : (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
-      <section className="invoice-meta"><div><span>{th ? 'เรียกเก็บจาก' : 'Bill to'}</span><strong>{tracking.customerName}</strong><small>{[tracking.phone, tracking.email].filter(Boolean).join(' · ') || '-'}</small></div><div><span>{th ? 'วันที่ออกเอกสาร' : 'Issue date'}</span><strong>{formatDate(invoice.issueDate, language)}</strong><small>{th ? 'ครบกำหนด' : 'Due'}: {invoice.dueDate ? formatDate(invoice.dueDate, language) : '-'}</small></div></section>
+      <section className="invoice-meta"><div><span>{th ? 'เรียกเก็บจาก' : 'Bill to'}</span><strong>{tracking.customerName}</strong><small>{[tracking.phone, tracking.email].filter(Boolean).join(' · ') || '-'}</small>{tracking.invoiceAddress && <small className="invoice-billing-address">{tracking.invoiceAddress}</small>}</div><div><span>{th ? 'วันที่ออกเอกสาร' : 'Issue date'}</span><strong>{formatDate(invoice.issueDate, language)}</strong><small>{th ? 'ครบกำหนด' : 'Due'}: {invoice.dueDate ? formatDate(invoice.dueDate, language) : '-'}</small></div></section>
       <section className="invoice-trip-summary"><div><span>{th ? 'โปรแกรม' : 'Package'}</span><b>{tracking.packageName || '-'}</b></div><div><span>{th ? 'วันเดินทาง' : 'Travel date'}</span><b>{tracking.travelStartDate ? formatDate(tracking.travelStartDate, language) : '-'}</b></div><div><span>{th ? 'ผู้เดินทางรวม' : 'Total travellers'}</span><b>{totalTravellers} {th ? 'ท่าน' : 'pax'}</b></div></section>
 
       {isGeneralSupplemental ? <>

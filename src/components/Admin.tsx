@@ -276,7 +276,7 @@ function UsersManager({ items, currentUser, mode, onCreate, onSave, onDelete }: 
   }
   return <div className="admin-stack user-management-page">
     <div className="user-management-heading">
-      <div><span className="version-chip">v12.6.1</span><h2>{t('users')}</h2><p>{language === 'th' ? `${items.length} บัญชี · สร้างบัญชี Supabase พร้อมรหัสผ่านชั่วคราว` : `${items.length} accounts · Create Supabase accounts with a temporary password`}</p></div>
+      <div><span className="version-chip">v12.7.0</span><h2>{t('users')}</h2><p>{language === 'th' ? `${items.length} บัญชี · สร้างบัญชี Supabase พร้อมรหัสผ่านชั่วคราว` : `${items.length} accounts · Create Supabase accounts with a temporary password`}</p></div>
       <button className="primary-button user-add-primary" onClick={() => setCreating(true)}><UserPlus/>{language === 'th' ? 'เพิ่มผู้ใช้งาน' : 'Add user'}</button>
     </div>
     <div className="info-banner user-create-banner"><ShieldCheck/><span>{language === 'th' ? 'เพิ่มบัญชีจากหน้านี้ได้โดยตรง ไม่ต้องไปสร้างใน Supabase Authentication ก่อน' : 'Create accounts directly from this page; no manual Supabase Authentication step is required.'}</span><button type="button" onClick={() => setCreating(true)}><Plus/>{language === 'th' ? 'สร้างบัญชีใหม่' : 'Create account'}</button></div>

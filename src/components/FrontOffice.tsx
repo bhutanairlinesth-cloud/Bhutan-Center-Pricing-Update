@@ -22,7 +22,7 @@ interface FrontOfficeProps {
   onLogout: () => void;
 }
 
-const emptyCustomer: CustomerDetails = { name: '', phone: '', email: '', note: '' };
+const emptyCustomer: CustomerDetails = { name: '', phone: '', email: '', invoiceAddress: '', note: '' };
 
 export function FrontOffice({ settings, packages, currentUser, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
   const { t, language } = useI18n();
@@ -30,8 +30,10 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
   const firstCategory: HotelCategory = '3 Stars';
   const [input, setInput] = useState<PricingInput>({
     channel: 'retail',
+    pricingMode: 'standard',
     packageId: firstPackage?.id || '',
     passengerCount: 2,
+    chargeablePassengerCount: 2,
     hotelCategory: firstCategory,
     travelDate: '',
     businessUpgradeCount: 0,
@@ -39,6 +41,12 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
     singleRoomCount: 0,
     singleSupplementOverrideTHB: null,
     additionalItems: [],
+    regularLandCostPerPersonOverrideTHB: null,
+    tourLeaderLandCostPerPersonTHB: null,
+    groupTicketPriceOverrideTHB: null,
+    groupAirportTaxOverrideTHB: null,
+    groupMarginPerTravelerOverrideTHB: null,
+    groupSellingPriceOverrideTHB: null,
   });
   const [customer, setCustomer] = useState<CustomerDetails>(emptyCustomer);
   const [customerOpen, setCustomerOpen] = useState(false);
@@ -64,9 +72,36 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
   const groupDiscountLabel = language === 'th'
     ? `ลด ${groupDiscountDisplay}%`
     : `${groupDiscountDisplay}% off`;
+  const isGroupTL = input.pricingMode === 'group_tl';
+  const chargeablePax = Math.min(input.passengerCount, Math.max(1, input.chargeablePassengerCount || input.passengerCount));
+  const tourLeaderCount = Math.max(0, input.passengerCount - chargeablePax);
+  const defaultRegularLand = result?.regularLandCostPerPerson || 0;
+  const effectiveRegularLand = input.regularLandCostPerPersonOverrideTHB ?? defaultRegularLand;
+  const effectiveTlLand = input.tourLeaderLandCostPerPersonTHB ?? 0;
+  const effectiveGroupTicket = input.groupTicketPriceOverrideTHB ?? (input.channel === 'agent' ? (settings.agentTicketPriceTHB ?? 25220) : settings.ticketPriceTHB);
+  const effectiveGroupTax = input.groupAirportTaxOverrideTHB ?? settings.airportTaxTHB;
+  const effectiveGroupMargin = input.groupMarginPerTravelerOverrideTHB ?? (input.channel === 'agent' ? (settings.agentMarginTHB ?? 3000) : settings.marginTHB);
 
   function update<K extends keyof PricingInput>(key: K, value: PricingInput[K]) {
     setInput((current) => ({ ...current, [key]: value }));
+  }
+
+  function setPricingMode(mode: PricingInput['pricingMode']) {
+    setInput((current) => {
+      if (mode === 'group_tl') {
+        const actual = current.passengerCount <= 2 ? 16 : current.passengerCount;
+        const chargeable = current.passengerCount <= 2 ? 15 : Math.min(actual, Math.max(1, current.chargeablePassengerCount || actual - 1));
+        return {
+          ...current,
+          pricingMode: mode,
+          passengerCount: actual,
+          chargeablePassengerCount: chargeable,
+          businessUpgradeCount: Math.min(current.businessUpgradeCount, actual),
+          singleRoomCount: Math.min(current.singleRoomCount, actual),
+        };
+      }
+      return { ...current, pricingMode: mode, chargeablePassengerCount: current.passengerCount };
+    });
   }
 
   function openQuotation() {
@@ -101,6 +136,14 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
               <ChannelCard active={input.channel === 'retail'} channel="retail" title={t('retail')} detail={t('retailHint')} meta={`${formatTHB(settings.ticketPriceTHB, language)} · ${t('margin')} ${formatTHB(settings.marginTHB, language)}`} onClick={() => update('channel', 'retail')}/>
               <ChannelCard active={input.channel === 'agent'} channel="agent" title={t('agent')} detail={t('agentHint')} meta={`${formatTHB(settings.agentTicketPriceTHB ?? 25220, language)} · -${formatNumber(agentDiscount, 2)}%`} onClick={() => update('channel', 'agent')}/>
             </div>
+            <div className="pricing-mode-switch">
+              <button type="button" className={!isGroupTL ? 'active' : ''} onClick={() => setPricingMode('standard')}>
+                <Users/><span><b>{language === 'th' ? 'ราคากรุ๊ปปกติ' : 'Standard group'}</b><small>{language === 'th' ? 'คิดราคาตามจำนวนผู้เดินทางทุกท่าน' : 'Every traveller is billed'}</small></span>
+              </button>
+              <button type="button" className={isGroupTL ? 'active' : ''} onClick={() => setPricingMode('group_tl')}>
+                <BadgePercent/><span><b>{language === 'th' ? 'กรุ๊ปใหญ่ + Tour Leader' : 'Large group + Tour Leader'}</b><small>{language === 'th' ? 'เช่น 15+1 TL เดินทาง 16 แต่เฉลี่ยเรียกเก็บ 15 ท่าน' : 'e.g. 15+1 TL: 16 travel, 15 are billed'}</small></span>
+              </button>
+            </div>
           </div>
 
           <div className="section-divider"/>
@@ -108,12 +151,32 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
             <div className="section-title"><span>02</span><div><h2>{t('tripDetails')}</h2><p>{packages.length} packages · 3 hotel levels</p></div></div>
             <div className="form-grid">
               <label className="field span-2"><span>{t('package')}</span><div className="select-wrap"><Plane/><select value={input.packageId} onChange={(event) => setInput((value) => ({ ...value, packageId: event.target.value, singleSupplementOverrideTHB: null }))}>{packages.map((pkg) => <option value={pkg.id} key={pkg.id}>{pkg.name}</option>)}</select><ChevronDown/></div></label>
-              <label className="field"><span>{t('passengers')}</span><div className="select-wrap"><Users/><select value={input.passengerCount} onChange={(event) => {
-                const pax = Number(event.target.value); setInput((value) => ({ ...value, passengerCount: pax, businessUpgradeCount: Math.min(value.businessUpgradeCount, pax), singleRoomCount: Math.min(value.singleRoomCount, pax) }));
-              }}>{Array.from({ length: 15 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{pax >= groupDiscountMinPax && groupDiscountPercent > 0 ? ` · ${groupDiscountLabel}` : ''}</option>)}</select><ChevronDown/></div></label>
+              <label className="field"><span>{isGroupTL ? (language === 'th' ? 'ผู้เดินทางทั้งหมด (รวม TL)' : 'Total travellers (incl. TL)') : t('passengers')}</span><div className="select-wrap"><Users/><select value={input.passengerCount} onChange={(event) => {
+                const pax = Number(event.target.value); setInput((value) => ({ ...value, passengerCount: pax, chargeablePassengerCount: value.pricingMode === 'group_tl' ? Math.min(pax, Math.max(1, value.chargeablePassengerCount)) : pax, businessUpgradeCount: Math.min(value.businessUpgradeCount, pax), singleRoomCount: Math.min(value.singleRoomCount, pax) }));
+              }}>{Array.from({ length: 50 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{!isGroupTL && pax >= groupDiscountMinPax && groupDiscountPercent > 0 ? ` · ${groupDiscountLabel}` : ''}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{t('travelDate')}</span><div className="input-with-icon simple"><CalendarDays/><input type="date" value={input.travelDate} onChange={(event) => update('travelDate', event.target.value)}/></div></label>
               <label className="field span-2"><span>{t('hotelLevel')}</span><div className="select-wrap"><Building2/><select value={input.hotelCategory} onChange={(event) => setInput((value) => ({ ...value, hotelCategory: event.target.value as HotelCategory, singleSupplementOverrideTHB: null }))}><option value="3 Stars">3 Stars</option><option value="4 Stars">4 Stars</option><option value="5 Stars">5 Stars</option></select><ChevronDown/></div></label>
             </div>
+            {isGroupTL && <div className="group-tl-pricing-panel">
+              <div className="group-tl-head">
+                <div><BadgePercent/><span><b>{language === 'th' ? 'คำนวณกรุ๊ปใหญ่แบบ TL' : 'Tour-leader group pricing'}</b><small>{language === 'th' ? 'รวมต้นทุนผู้เดินทางทุกคน แล้วเฉลี่ยเรียกเก็บเฉพาะผู้ชำระ' : 'Pool every traveller cost, then average across paying travellers.'}</small></span></div>
+                <div className="group-tl-badge">{chargeablePax}+{tourLeaderCount} TL</div>
+              </div>
+              <div className="group-tl-count-grid">
+                <label className="field"><span>{language === 'th' ? 'จำนวนผู้ชำระเงิน' : 'Chargeable travellers'}</span><input type="number" min="1" max={input.passengerCount} value={chargeablePax} onChange={(event) => update('chargeablePassengerCount', Math.min(input.passengerCount, Math.max(1, Number(event.target.value))))}/></label>
+                <div className="group-tl-stat"><span>{language === 'th' ? 'ผู้เดินทางจริง' : 'Actual travellers'}</span><strong>{input.passengerCount}</strong><small>{language === 'th' ? 'รวม Tour Leader' : 'including TL'}</small></div>
+                <div className="group-tl-stat"><span>Tour Leader</span><strong>{tourLeaderCount}</strong><small>{language === 'th' ? 'ฟรีเฉพาะที่พัก' : 'hotel-only complimentary'}</small></div>
+              </div>
+              <div className="group-tl-money-grid">
+                <label className="field money-input"><span>{language === 'th' ? 'LAND ผู้ชำระ / ท่าน' : 'Regular LAND / pax'}</span><div><input type="number" min="0" step="1" value={effectiveRegularLand} onChange={(event) => update('regularLandCostPerPersonOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{language === 'th' ? 'รวมที่พัก SDF วีซ่า และบริการภาคพื้น' : 'Hotel, SDF, visa and ground services'}</small></label>
+                <label className="field money-input"><span>{language === 'th' ? 'LAND ของ TL / ท่าน' : 'TL LAND / pax'}</span><div><input type="number" min="0" step="1" value={effectiveTlLand} onChange={(event) => update('tourLeaderLandCostPerPersonTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{language === 'th' ? 'กรอกหลังหักค่าที่พักฟรี แต่ยังรวม SDF/วีซ่า' : 'After free hotel; still includes SDF/visa'}</small></label>
+                <label className="field money-input"><span>{language === 'th' ? 'ตั๋วเครื่องบิน / ผู้เดินทางจริง' : 'Airfare / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTicket} onChange={(event) => update('groupTicketPriceOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
+                <label className="field money-input"><span>{language === 'th' ? 'ภาษีสนามบิน / ผู้เดินทางจริง' : 'Airport tax / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTax} onChange={(event) => update('groupAirportTaxOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
+                <label className="field money-input"><span>{language === 'th' ? 'Margin / ผู้เดินทางจริง' : 'Margin / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupMargin} onChange={(event) => update('groupMarginPerTravelerOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
+                <label className="field money-input"><span>{language === 'th' ? 'ราคาขายจริง / ผู้ชำระ (แก้ได้)' : 'Final selling / paying pax (editable)'}</span><div><input type="number" min="0" step="500" value={input.groupSellingPriceOverrideTHB ?? 0} onChange={(event) => update('groupSellingPriceOverrideTHB', Number(event.target.value) > 0 ? Number(event.target.value) : null)}/><em>THB</em></div><small>{language === 'th' ? 'ใส่ 0 เพื่อใช้ราคาแนะนำอัตโนมัติ' : 'Enter 0 to use the recommended price'}</small></label>
+              </div>
+              <div className="group-tl-note"><ShieldCheck/><span>{language === 'th' ? `ระบบจะคิดตั๋วและภาษีครบ ${input.passengerCount} ท่าน รวม LAND ผู้ชำระ ${chargeablePax} ท่าน และ LAND ของ TL ${tourLeaderCount} ท่าน แล้วเฉลี่ยหาร ${chargeablePax} ท่าน` : `Airfare and taxes are charged for all ${input.passengerCount}; regular LAND for ${chargeablePax} and TL LAND for ${tourLeaderCount}; the total is averaged across ${chargeablePax} paying travellers.`}</span></div>
+            </div>}
           </div>
 
           <div className="single-room-row">
@@ -155,24 +218,45 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
         </section>
 
         <aside className="price-summary-card">
-          <div className="summary-top"><span className={`channel-badge ${input.channel}`}>{input.channel === 'retail' ? t('retail') : t('agent')}</span><span className="live-dot"><i/> LIVE</span></div>
-          <div className="summary-hero"><span>{t('perPerson')}</span><strong>{formatTHB(result?.sellingPricePerPerson || 0, language)}</strong><small>{selectedPackage?.nights || 0} {t('nights')} · {input.passengerCount} {t('people')}</small></div>
+          <div className="summary-top">
+            <span className={`channel-badge ${input.channel}`}>{input.channel === 'retail' ? t('retail') : t('agent')}</span>
+            {isGroupTL && <span className="group-tl-summary-badge">{chargeablePax}+{tourLeaderCount} TL</span>}
+            <span className="live-dot"><i/> LIVE</span>
+          </div>
+          <div className="summary-hero">
+            <span>{isGroupTL ? (language === 'th' ? 'ราคาขายเฉลี่ย / ผู้ชำระ' : 'Average selling / payer') : t('perPerson')}</span>
+            <strong>{formatTHB(result?.sellingPricePerPerson || 0, language)}</strong>
+            <small>{isGroupTL
+              ? (language === 'th' ? `เดินทาง ${input.passengerCount} · เรียกเก็บ ${chargeablePax} · TL ${tourLeaderCount}` : `${input.passengerCount} travel · ${chargeablePax} billed · ${tourLeaderCount} TL`)
+              : `${selectedPackage?.nights || 0} ${t('nights')} · ${input.passengerCount} ${t('people')}`}</small>
+          </div>
           <div className="summary-lines">
+            {isGroupTL && <PriceLine icon={<HotelIcon/>} label={language === 'th' ? 'LAND ผู้ชำระรวม' : 'Regular LAND total'} value={formatTHB(result?.regularLandTotal || 0, language)} note={`${formatTHB(result?.regularLandCostPerPerson || 0, language)} × ${chargeablePax}`}/>}
+            {isGroupTL && tourLeaderCount > 0 && <PriceLine icon={<BadgePercent/>} label={language === 'th' ? 'LAND ของ TL รวม' : 'TL LAND total'} value={formatTHB(result?.tourLeaderLandTotal || 0, language)} note={`${formatTHB(result?.tourLeaderLandCostPerPerson || 0, language)} × ${tourLeaderCount}`}/>}
             <PriceLine icon={<Plane/>} label={language === 'th' ? 'ค่าตั๋วรวม' : 'Total airfare'} value={formatTHB(result?.flightTotal || 0, language)} note={`${formatTHB(result?.airTicketPerPerson || 0, language)} × ${input.passengerCount}${result?.hasGroupFlightDiscount ? ` · ${groupDiscountLabel}` : ''}`}/>
             <PriceLine icon={<WalletCards/>} label={language === 'th' ? 'ภาษีสนามบินรวม' : 'Total airport tax'} value={formatTHB(result?.airportTaxTotal || 0, language)} note={`${formatTHB(result?.airportTaxPerPerson || 0, language)} × ${input.passengerCount}`}/>
-            <PriceLine icon={<HotelIcon/>} label={t('ground')} value={formatTHB(result?.groundCostTHBPerPerson || 0, language)} note={`${formatUSD(result?.groundRateUSDPerPersonPerNight || 0)} / night / pax`}/>
-            {(result?.singleRoomCount || 0) > 0 && <PriceLine icon={<BedDouble/>} label={t('singleRoom')} value={formatTHB(result?.singleSupplementTotal || 0, language)} note={`${result?.singleRoomCount || 0} ${t('people')} × ${formatTHB(result?.singleSupplementPerPerson || 0, language)}`}/>} 
-            {(result?.additionalItemsTotal || 0) > 0 && <PriceLine icon={<Sparkles/>} label={language === 'th' ? 'รายการเพิ่มเติมรวม' : 'Additional services'} value={formatTHB(result?.additionalItemsTotal || 0, language)} note={`${result?.additionalItems.length || 0} ${language === 'th' ? 'รายการ' : 'items'}`}/>} 
-            <PriceLine icon={<ShieldCheck/>} label={t('visa')} value={formatTHB(result?.visaTHBPerPerson || 0, language)} note={formatUSD(result?.visaUSDPerPerson || 0)}/>
+            {!isGroupTL && <PriceLine icon={<HotelIcon/>} label={t('ground')} value={formatTHB(result?.groundCostTHBPerPerson || 0, language)} note={`${formatUSD(result?.groundRateUSDPerPersonPerNight || 0)} / night / pax`}/>}
+            {isGroupTL && <PriceLine icon={<CircleDollarSign/>} label={language === 'th' ? 'Margin รวมทั้งกรุ๊ป' : 'Group margin target'} value={formatTHB(result?.groupMarginTotal || 0, language)} note={`${formatTHB(result?.groupMarginPerTraveler || 0, language)} × ${input.passengerCount}`}/>}
+            {(result?.businessUpgradeTotal || 0) > 0 && <PriceLine icon={<BriefcaseBusiness/>} label="Business Class" value={formatTHB(result?.businessUpgradeTotal || 0, language)} note={`${result?.businessUpgradeCount || 0} × ${formatTHB(result?.businessUpgradePerPerson || 0, language)}`}/>}
+            {(result?.singleRoomCount || 0) > 0 && <PriceLine icon={<BedDouble/>} label={t('singleRoom')} value={formatTHB(result?.singleSupplementTotal || 0, language)} note={`${result?.singleRoomCount || 0} ${t('people')} × ${formatTHB(result?.singleSupplementPerPerson || 0, language)}`}/>}
+            {(result?.additionalItemsTotal || 0) > 0 && <PriceLine icon={<Sparkles/>} label={language === 'th' ? 'รายการเพิ่มเติมรวม' : 'Additional services'} value={formatTHB(result?.additionalItemsTotal || 0, language)} note={`${result?.additionalItems.length || 0} ${language === 'th' ? 'รายการ' : 'items'}`}/>}
+            {!isGroupTL && <PriceLine icon={<ShieldCheck/>} label={t('visa')} value={formatTHB(result?.visaTHBPerPerson || 0, language)} note={formatUSD(result?.visaUSDPerPerson || 0)}/>}
           </div>
-          <div className="profit-strip"><div><span>{language === 'th' ? 'ต้นทุนต่อท่าน' : 'Cost / pax'}</span><b>{formatTHB(result?.baseCostPerPerson || 0, language)}</b></div><div><span>{language === 'th' ? 'กำไรต่อท่าน' : 'Profit / pax'}</span><b>{formatTHB(result?.profitPerPerson || 0, language)}</b></div></div>
-          <div className="auto-total-breakdown">
+          {isGroupTL ? <>
+            <div className="group-tl-average-box">
+              <div><span>{language === 'th' ? 'ยอดรวมก่อนเฉลี่ย' : 'Total before averaging'}</span><b>{formatTHB(result?.totalBeforeAverage || 0, language)}</b></div>
+              <div><span>{language === 'th' ? `เฉลี่ยหาร ${chargeablePax} ท่าน` : `Average across ${chargeablePax} payers`}</span><b>{formatTHB(result?.averageBeforeRounding || 0, language)}</b></div>
+              <div><span>{language === 'th' ? 'ปัดราคาขึ้น / ท่าน' : 'Rounded selling / payer'}</span><b>{formatTHB(result?.sellingPricePerPerson || 0, language)}</b></div>
+            </div>
+            <div className="profit-strip"><div><span>{language === 'th' ? 'ต้นทุนดำเนินการรวม' : 'Operating cost total'}</span><b>{formatTHB(result?.operatingCostTotal || 0, language)}</b></div><div><span>{language === 'th' ? 'กำไรหลังปัดราคา' : 'Profit after rounding'}</span><b>{formatTHB(result?.groupProfit || 0, language)}</b></div></div>
+          </> : <div className="profit-strip"><div><span>{language === 'th' ? 'ต้นทุนต่อท่าน' : 'Cost / pax'}</span><b>{formatTHB(result?.baseCostPerPerson || 0, language)}</b></div><div><span>{language === 'th' ? 'กำไรต่อท่าน' : 'Profit / pax'}</span><b>{formatTHB(result?.profitPerPerson || 0, language)}</b></div></div>}
+          {!isGroupTL && <div className="auto-total-breakdown">
             <div><span>{language === 'th' ? 'แพ็กเกจพื้นฐาน' : 'Base package'}</span><b>{formatTHB(result?.groupSubtotal || 0, language)}</b></div>
             {(result?.singleSupplementTotal || 0) > 0 && <div><span>{t('singleRoom')}</span><b>+ {formatTHB(result?.singleSupplementTotal || 0, language)}</b></div>}
             {(result?.businessUpgradeTotal || 0) > 0 && <div><span>Business Class</span><b>+ {formatTHB(result?.businessUpgradeTotal || 0, language)}</b></div>}
             {(result?.additionalItemsTotal || 0) > 0 && <div><span>{language === 'th' ? 'รายการเพิ่มเติม' : 'Additional services'}</span><b>+ {formatTHB(result?.additionalItemsTotal || 0, language)}</b></div>}
-          </div>
-          <div className="group-total"><span>{language === 'th' ? 'ยอดรวมทั้งหมด ก่อนออกเอกสาร' : 'Grand total before document'}</span><strong>{formatTHB(result?.groupTotal || 0, language)}</strong><small>{language === 'th' ? 'ระบบคำนวณจากจำนวนผู้เดินทางและรายการทั้งหมดอัตโนมัติ' : 'Automatically calculated from all travellers and services'}</small></div>
+          </div>}
+          <div className="group-total"><span>{language === 'th' ? 'ยอดรวมทั้งหมด ก่อนออกเอกสาร' : 'Grand total before document'}</span><strong>{formatTHB(result?.groupTotal || 0, language)}</strong><small>{isGroupTL ? (language === 'th' ? `เรียกเก็บ ${chargeablePax} ท่าน จากผู้เดินทางจริง ${input.passengerCount} ท่าน` : `${chargeablePax} billed from ${input.passengerCount} actual travellers`) : (language === 'th' ? 'ระบบคำนวณจากจำนวนผู้เดินทางและรายการทั้งหมดอัตโนมัติ' : 'Automatically calculated from all travellers and services')}</small></div>
           <button className="primary-button quote-button" disabled={!result} onClick={() => setCustomerOpen(true)}><FileText/><span>{t('createQuote')}</span><ArrowRight/></button>
           <div className="summary-foot"><CircleDollarSign/><span>1 USD = {formatNumber(settings.exchangeRateUSD, 2)} THB · Rounded up / 500 THB</span></div>
         </aside>
@@ -186,6 +270,7 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
           <label className="field"><span>{t('phone')}</span><input value={customer.phone} onChange={(event) => setCustomer((value) => ({ ...value, phone: event.target.value }))}/></label>
           <label className="field"><span>{t('email')}</span><input type="email" value={customer.email} onChange={(event) => setCustomer((value) => ({ ...value, email: event.target.value }))}/></label>
         </div>
+        <label className="field"><span>{language === 'th' ? 'ที่อยู่สำหรับออกเอกสาร (ไม่บังคับ)' : 'Billing / invoice address (optional)'}</span><textarea rows={3} value={customer.invoiceAddress} onChange={(event) => setCustomer((value) => ({ ...value, invoiceAddress: event.target.value }))} placeholder={language === 'th' ? 'ชื่อบริษัท ที่อยู่ เลขประจำตัวผู้เสียภาษี หรือเว้นว่างได้' : 'Company, address, tax ID, or leave blank'}/></label>
         <label className="field"><span>{t('note')}</span><textarea rows={3} value={customer.note} onChange={(event) => setCustomer((value) => ({ ...value, note: event.target.value }))}/></label>
         <div className="modal-actions"><button className="ghost-button" onClick={() => setCustomerOpen(false)}>{t('cancel')}</button><button className="primary-button" onClick={openQuotation} disabled={!customer.name.trim()}>{t('continue')}<ArrowRight/></button></div>
       </div>
@@ -276,14 +361,14 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
       </header>
       <div className="quote-accent"/>
       <section className="quote-meta-grid">
-        <div><span>{t('preparedFor')}</span><strong>{customer.name || '-'}</strong><small>{[customer.phone, customer.email].filter(Boolean).join(' · ') || '-'}</small></div>
+        <div><span>{t('preparedFor')}</span><strong>{customer.name || '-'}</strong><small>{[customer.phone, customer.email].filter(Boolean).join(' · ') || '-'}</small>{customer.invoiceAddress && <small className="quote-address">{customer.invoiceAddress}</small>}</div>
         <div><span>{t('issueDate')}</span><strong>{formatDate(issued, language)}</strong><small>{t('preparedBy')}: {currentUser.name}</small></div>
       </section>
       <section className="quote-trip-card">
         <div><span>{t('package')}</span><strong>{result.packageName}</strong></div>
         <div><span>{t('travelDate')}</span><strong>{result.travelDate ? formatDate(result.travelDate, language) : '-'}</strong></div>
         <div><span>{t('hotelLevel')}</span><strong>{result.hotelCategory}</strong><small>{result.nights} {t('nights')}</small></div>
-        <div><span>{t('passengers')}</span><strong>{result.passengerCount} {t('people')}</strong><small>{result.nights} {t('nights')}</small></div>
+        <div><span>{t('passengers')}</span><strong>{result.passengerCount} {t('people')}</strong><small>{result.pricingMode === 'group_tl' ? (language === 'th' ? `เรียกเก็บ ${result.chargeablePassengerCount} · TL ${result.tourLeaderCount}` : `${result.chargeablePassengerCount} billed · ${result.tourLeaderCount} TL`) : `${result.nights} ${t('nights')}`}</small></div>
       </section>
       <section className="quote-price-table quote-passenger-table">
         <div className="quote-table-head quote-six-columns">
@@ -300,27 +385,27 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
             <strong>{language === 'th'
               ? `แพ็กเกจ ${result.nights + 1} วัน ${result.nights} คืน โรงแรม ${result.hotelCategory}`
               : `Package ${result.nights + 1}D${result.nights}N ${result.hotelCategory} Hotel`}</strong>
-            <small>{result.packageName}{result.hasGroupFlightDiscount ? ` · ${t('groupDiscount')} ${formatNumber(result.groupDiscountPercentApplied, 2)}%` : ''}</small>
+            <small>{result.packageName}{result.hasGroupFlightDiscount ? ` · ${t('groupDiscount')} ${formatNumber(result.groupDiscountPercentApplied, 2)}%` : ''}{result.pricingMode === 'group_tl' ? (language === 'th' ? ` · เดินทางจริง ${result.passengerCount} ท่าน (${result.chargeablePassengerCount}+${result.tourLeaderCount} TL)` : ` · ${result.passengerCount} actual travellers (${result.chargeablePassengerCount}+${result.tourLeaderCount} TL)`) : ''}</small>
           </span>
           <span className="quote-center-cell"><b>ADT</b></span>
-          <span className="quote-center-cell"><b>{result.passengerCount}</b></span>
+          <span className="quote-center-cell"><b>{result.chargeablePassengerCount}</b></span>
           <span className="quote-number-cell"><b>{formatNumber(result.sellingPricePerPerson, 2)}</b></span>
           <span className="quote-number-cell"><b>—</b></span>
           <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.groupSubtotal, 2)}</b></span>
         </div>
-        {result.businessUpgradeCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row">
+        {result.pricingMode !== 'group_tl' && result.businessUpgradeCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row">
           <span className="quote-service-cell"><strong>Business Class Upgrade</strong><small>{language === 'th' ? 'อัปเกรดชั้นโดยสาร' : 'Cabin upgrade'}</small></span>
           <span className="quote-center-cell"><b>ADT</b></span><span className="quote-center-cell"><b>{result.businessUpgradeCount}</b></span>
           <span className="quote-number-cell"><b>{formatNumber(result.businessUpgradePerPerson, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
           <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.businessUpgradeTotal, 2)}</b></span>
         </div>}
-        {result.additionalItems.map((item) => <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row" key={item.id}>
+        {result.pricingMode !== 'group_tl' && result.additionalItems.map((item) => <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row" key={item.id}>
           <span className="quote-service-cell"><strong>{item.description || (language === 'th' ? 'รายการเพิ่มเติม' : 'Additional service')}</strong><small>{item.basis === 'per_person' ? (language === 'th' ? 'คิดต่อท่าน' : 'Per person') : item.basis === 'per_group' ? (language === 'th' ? 'เหมาทั้งกลุ่ม' : 'Per group') : (language === 'th' ? 'จำนวนกำหนดเอง' : 'Custom quantity')}</small></span>
           <span className="quote-center-cell"><b>SRV</b></span><span className="quote-center-cell"><b>{formatNumber(item.quantity, 0)}</b></span>
           <span className="quote-number-cell"><b>{formatNumber(item.unitPriceTHB, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
           <span className="quote-number-cell quote-line-total"><b>{formatNumber(item.totalTHB, 2)}</b></span>
         </div>)}
-        {result.singleRoomCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-single-room-row">
+        {result.pricingMode !== 'group_tl' && result.singleRoomCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-single-room-row">
           <span className="quote-service-cell"><strong>{language === 'th' ? 'ส่วนต่างห้องพักเดี่ยว' : 'Single-room supplement'}</strong><small>{result.hotelCategory} · {result.nights} {t('nights')}</small></span>
           <span className="quote-center-cell"><b>ADT</b></span>
           <span className="quote-center-cell"><b>{result.singleRoomCount}</b></span>
@@ -333,6 +418,13 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
           <strong>THB {formatNumber(result.groupTotal, 2)}</strong>
         </div>
       </section>
+      {result.pricingMode === 'group_tl' && <section className="quote-group-tl-note">
+        <strong>{language === 'th' ? `เงื่อนไขกรุ๊ป ${result.chargeablePassengerCount}+${result.tourLeaderCount} TL` : `Group arrangement ${result.chargeablePassengerCount}+${result.tourLeaderCount} TL`}</strong>
+        <span>{language === 'th'
+          ? `เดินทางจริง ${result.passengerCount} ท่าน เรียกเก็บราคาเฉลี่ย ${result.chargeablePassengerCount} ท่าน โดย Tour Leader ${result.tourLeaderCount} ท่านได้รับยกเว้นเฉพาะค่าที่พัก ส่วนตั๋วเครื่องบิน ภาษี SDF วีซ่า และค่าใช้จ่ายที่เกี่ยวข้องยังรวมครบตามจำนวนผู้เดินทางจริง`
+          : `${result.passengerCount} actual travellers; pricing is averaged across ${result.chargeablePassengerCount} paying travellers. ${result.tourLeaderCount} tour leader(s) receive complimentary hotel only; airfare, airport tax, SDF, visa and related costs remain included for every actual traveller.`}</span>
+        {(result.businessUpgradeTotal > 0 || result.singleSupplementTotal > 0 || result.additionalItemsTotal > 0) && <small>{language === 'th' ? 'ราคาเฉลี่ยข้างต้นรวม Business Class พักเดี่ยว และรายการเพิ่มเติมที่เลือกไว้แล้ว' : 'The averaged price already includes selected Business Class, single-room and additional-service charges.'}</small>}
+      </section>}
       <section className="quote-scope-grid">
         <div className="quote-scope-card quote-included">
           <h3>{language === 'th' ? 'ราคารวม' : 'Package Includes'}</h3>

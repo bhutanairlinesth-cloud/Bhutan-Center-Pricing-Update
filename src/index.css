@@ -2469,3 +2469,32 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .user-row select { order: 4; }
   .user-row .icon-button { order: 5; }
 }
+
+
+/* v12.6.1 — Keep user creation action visible on every viewport */
+.admin-main { min-width: 0; overflow-x: hidden; }
+.admin-header, .admin-content, .admin-stack { min-width: 0; }
+.user-management-page { width: 100%; }
+.user-management-heading {
+  width: 100%; min-height: 92px; display: flex; align-items: center; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap;
+}
+.user-management-heading h2 { margin: 7px 0 0; font-size: 32px; line-height: 1.1; letter-spacing: -.035em; }
+.user-management-heading p { margin: 7px 0 0; color: #7c8b84; font-size: 13px; line-height: 1.5; }
+.version-chip { display: inline-flex; padding: 5px 9px; border-radius: 999px; color: #0a6b51; background: #e7f5ef; font-size: 10px; font-weight: 850; letter-spacing: .06em; }
+.user-add-primary { min-width: 164px; min-height: 50px; justify-content: center; flex: 0 0 auto; }
+.user-add-primary svg { width: 19px; height: 19px; }
+.user-create-banner { justify-content: flex-start; flex-wrap: wrap; }
+.user-create-banner > span { min-width: 260px; flex: 1; }
+.user-create-banner > button {
+  min-height: 40px; padding: 0 15px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  flex: 0 0 auto; border-radius: 11px; color: #fff; background: #0c684f; font-size: 13px; font-weight: 800;
+}
+.user-create-banner > button:hover { background: #09543f; }
+.user-create-banner > button svg { width: 16px; height: 16px; color: currentColor; }
+@media (max-width: 700px) {
+  .user-management-heading { align-items: stretch; flex-direction: column; }
+  .user-add-primary { width: 100%; }
+  .user-create-banner { align-items: stretch; flex-direction: column; }
+  .user-create-banner > button { width: 100%; }
+}

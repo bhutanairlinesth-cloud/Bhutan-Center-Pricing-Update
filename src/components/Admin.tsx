@@ -274,14 +274,12 @@ function UsersManager({ items, currentUser, mode, onCreate, onSave, onDelete }: 
   async function remove(item: User) {
     if (item.id !== currentUser.id && window.confirm(language === 'th' ? `ลบบัญชี ${item.email} ออกจากระบบใช่หรือไม่` : `Delete ${item.email} from the system?`)) await onDelete(item.id);
   }
-  return <div className="admin-stack">
-    <PageAction
-      title={t('users')}
-      detail={language === 'th' ? `${items.length} บัญชี · สร้างบัญชีพร้อมรหัสผ่านชั่วคราว` : `${items.length} accounts · Create accounts with a temporary password`}
-      action={language === 'th' ? 'เพิ่มผู้ใช้งาน' : 'Add user'}
-      onAction={() => setCreating(true)}
-    />
-    <div className="info-banner"><ShieldCheck/><span>{language === 'th' ? 'Admin สามารถเพิ่มบัญชีใหม่ กำหนดสิทธิ์ และลบบัญชีได้ ผู้ใช้งานใหม่เข้าสู่ระบบได้ทันทีด้วยอีเมลและรหัสผ่านชั่วคราว' : 'Admins can create accounts, assign roles and remove users. New users can sign in immediately with the temporary password.'}</span></div>
+  return <div className="admin-stack user-management-page">
+    <div className="user-management-heading">
+      <div><span className="version-chip">v12.6.1</span><h2>{t('users')}</h2><p>{language === 'th' ? `${items.length} บัญชี · สร้างบัญชี Supabase พร้อมรหัสผ่านชั่วคราว` : `${items.length} accounts · Create Supabase accounts with a temporary password`}</p></div>
+      <button className="primary-button user-add-primary" onClick={() => setCreating(true)}><UserPlus/>{language === 'th' ? 'เพิ่มผู้ใช้งาน' : 'Add user'}</button>
+    </div>
+    <div className="info-banner user-create-banner"><ShieldCheck/><span>{language === 'th' ? 'เพิ่มบัญชีจากหน้านี้ได้โดยตรง ไม่ต้องไปสร้างใน Supabase Authentication ก่อน' : 'Create accounts directly from this page; no manual Supabase Authentication step is required.'}</span><button type="button" onClick={() => setCreating(true)}><Plus/>{language === 'th' ? 'สร้างบัญชีใหม่' : 'Create account'}</button></div>
     {mode === 'supabase' && <div className="user-security-note"><KeyRound/><span>{language === 'th' ? 'รหัสผ่านจะแสดงเพียงครั้งเดียวหลังสร้างบัญชี กรุณาคัดลอกและส่งให้พนักงานผ่านช่องทางที่ปลอดภัย' : 'The password is shown once after account creation. Copy it and share it securely.'}</span></div>}
     <section className="panel-card no-padding">
       {items.length ? items.map((user) => <div className="user-row" key={user.id}>

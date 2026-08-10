@@ -580,7 +580,10 @@ export function CustomerTrackingWorkspace(props: Props) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return props.trackings.filter((item) => {
+    const today = isoToday();
+    const todayTs = new Date(`${today}T00:00:00`).getTime();
+
+    const rows = props.trackings.filter((item) => {
       const stage = getJourneyStage(item);
       const matchSearch = !q || [item.opportunityName, item.customerName, item.phone, item.email, item.packageName, item.airline, item.flightPnr, item.landSupplier, item.landInvoiceNo, item.landTransferReference, ...(item.travelerAdditions || []).flatMap((entry) => [entry.pnr, entry.passengerNames, entry.airline])]
         .join(' ').toLowerCase().includes(q);
@@ -588,7 +591,32 @@ export function CustomerTrackingWorkspace(props: Props) {
       const matchPayment = paymentFilter === 'all' || paymentSummary(item, props.payments) === paymentFilter;
       return matchSearch && matchGroup && matchPayment;
     });
-  }, [props.trackings, props.payments, search, groupFilter, paymentFilter]);
+
+    // Priority for the working list:
+    // 1) active trips that are coming up, nearest departure first
+    // 2) active trips whose departure date has already passed, most recent first
+    // 3) active records without a travel date
+    // 4) closed/cancelled records, kept at the bottom
+    return [...rows].sort((a, b) => {
+      const priority = (item: CustomerTracking) => {
+        const stage = getJourneyStage(item);
+        const isClosed = stage === 'closed' || stage === 'cancelled';
+        const travelTs = item.travelStartDate ? new Date(`${item.travelStartDate}T00:00:00`).getTime() : Number.NaN;
+        const hasTravelDate = Number.isFinite(travelTs);
+
+        if (isClosed) return { bucket: 3, order: hasTravelDate ? -travelTs : 0 };
+        if (hasTravelDate && travelTs >= todayTs) return { bucket: 0, order: travelTs };
+        if (hasTravelDate) return { bucket: 1, order: -travelTs };
+        return { bucket: 2, order: -(new Date(item.createdAt || item.updatedAt || 0).getTime() || 0) };
+      };
+
+      const ap = priority(a);
+      const bp = priority(b);
+      if (ap.bucket !== bp.bucket) return ap.bucket - bp.bucket;
+      if (ap.order !== bp.order) return ap.order - bp.order;
+      return (a.customerName || a.opportunityName || '').localeCompare(b.customerName || b.opportunityName || '', language === 'th' ? 'th' : 'en');
+    });
+  }, [props.trackings, props.payments, search, groupFilter, paymentFilter, language]);
 
   const totals = useMemo(() => ({
     all: props.trackings.length,

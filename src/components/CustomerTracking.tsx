@@ -980,9 +980,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   const [ticketChangeDueDate, setTicketChangeDueDate] = useState('');
   const [ticketChangeBusy, setTicketChangeBusy] = useState(false);
   const [ticketChangePanelOpen, setTicketChangePanelOpen] = useState(false);
+  const [supplementalPanelOpen, setSupplementalPanelOpen] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState<string>('');
   const [slipInputKey, setSlipInputKey] = useState(0);
-  React.useEffect(() => { setForm(item ? { ...item, travelerAdditions: item.travelerAdditions || [] } : item); setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); setTravelerPanelOpen(false); setTicketChangeDraft(newTicketChangeDraft(item)); setTicketChangeDueDate(''); setTicketChangePanelOpen(false); }, [item]);
+  React.useEffect(() => { setForm(item ? { ...item, travelerAdditions: item.travelerAdditions || [] } : item); setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setSupplementalPanelOpen(false); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); setTravelerPanelOpen(false); setTicketChangeDraft(newTicketChangeDraft(item)); setTicketChangeDueDate(''); setTicketChangePanelOpen(false); }, [item]);
   if (!form) return null;
   const currentForm = form;
   const set = <K extends keyof CustomerTracking>(key: K, value: CustomerTracking[K]) => setForm((current) => current ? ({ ...current, [key]: value }) : current);
@@ -1514,6 +1515,7 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
             {addedPassengerCount(form) > 0 && <span>{th ? `เพิ่มแล้ว ${addedPassengerCount(form)} ท่าน` : `${addedPassengerCount(form)} added`}</span>}
             {pendingAddedTicketInvoices.length > 0 && <span className="traveler-payment-pending">{th ? `รอชำระ Invoice 1 เพิ่มผู้เดินทาง ${pendingAddedTicketInvoices.length} รายการ` : `${pendingAddedTicketInvoices.length} added Invoice 1 item(s) pending`}</span>}
             <button type="button" className="secondary-button traveler-addition-open-button" disabled={travelerAdditionLocked} onClick={() => setTravelerPanelOpen(true)}><Plus/>{th ? 'เพิ่มผู้เดินทาง' : 'Add travellers'}</button>
+            <button type="button" className="secondary-button traveler-addition-open-button supplemental-open-button" onClick={() => setSupplementalPanelOpen(true)}><ReceiptText/>{th ? 'เรียกเก็บเพิ่มเติม' : 'Additional charge'}{generalSupplementalInvoices(form, invoices).filter((x) => x.status !== 'cancelled').length > 0 && <em>{generalSupplementalInvoices(form, invoices).filter((x) => x.status !== 'cancelled').length}</em>}</button>
             <button type="button" className="secondary-button traveler-addition-open-button" onClick={() => setTicketChangePanelOpen(true)}><CalendarClock/>{th ? 'เลื่อนตั๋ว / เดินทางล่าช้า' : 'Ticket change / delayed travel'}</button>
           </div>
         </div>
@@ -1641,18 +1643,16 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         </div>
       </WorkflowSection>
 
-      <SupplementalInvoiceManager
-        tracking={form}
-        invoices={invoices}
-        payments={payments}
-        language={language}
-        draft={supplementalDraft}
-        setDraft={setSupplementalDraft}
-        busy={supplementalBusy}
-        onCreate={submitSupplementalInvoice}
-        onOpen={(invoice) => onOpenInvoice(form, invoice)}
-        onDelete={(invoice) => onDeleteSupplementalInvoice(form, invoice)}
-      />
+      <section className="editor-section supplemental-compact-entry">
+        <div className="supplemental-compact-copy">
+          <span><ReceiptText/></span>
+          <div><h3>{th ? 'รายการเรียกเก็บเพิ่มเติม' : 'Additional charges'}</h3><p>{th ? 'Invoice 3 เป็นต้นไป เช่น อัปเกรดโรงแรม ระบำหน้ากาก รถขนกระเป๋า หรือบริการที่ลูกค้าขอเพิ่มภายหลัง' : 'Invoice 3+ for hotel upgrades, mask dance, baggage vehicle or later customer requests.'}</p></div>
+        </div>
+        <div className="supplemental-compact-actions">
+          {generalSupplementalInvoices(form, invoices).filter((x) => x.status !== 'cancelled').length > 0 && <span>{th ? `${generalSupplementalInvoices(form, invoices).filter((x) => x.status !== 'cancelled').length} Invoice` : `${generalSupplementalInvoices(form, invoices).filter((x) => x.status !== 'cancelled').length} invoice(s)`}</span>}
+          <button type="button" className="primary-button" onClick={() => setSupplementalPanelOpen(true)}><Plus/>{th ? 'เพิ่มรายการเรียกเก็บ' : 'Add charge'}</button>
+        </div>
+      </section>
 
       <WorkflowSection number="07" icon={<Landmark/>} title={th ? 'โอนชำระ LAND และคำนวณกำไรจริง' : 'Pay land supplier & calculate realized profit'} subtitle={th ? 'หลังรับชำระ Invoice 2 จากลูกค้า ให้ใส่อัตราแลกเปลี่ยน ณ วันโอน ระบบจะแปลง USD เป็นบาทและคำนวณกำไรจริง' : 'After receiving Payment 2, enter the transfer-day FX rate. The system converts USD to THB and calculates realized profit.'}>
         {!form.fullPaymentReceivedAt && form.balanceStatus !== 'paid' && <div className="land-payment-warning"><Hourglass/><div><b>{th ? 'ยังไม่ควรโอน LAND' : 'Land transfer not ready'}</b><span>{th ? 'ตาม Workflow ให้รับชำระค่าแพ็กเกจจากลูกค้าครบก่อน แล้วจึงโอนตาม Land Invoice' : 'Receive the customer’s full package payment before paying the land supplier.'}</span></div></div>}
@@ -1689,6 +1689,30 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       </WorkflowSection>
 
       <div className="modal-actions tracking-modal-actions"><button className="ghost-button" onClick={onClose}>{th ? 'ปิด' : 'Close'}</button><button className="primary-button" disabled={!form.opportunityName.trim() || !form.customerName.trim()} onClick={saveAndStay}><BadgeCheck/>{th ? 'บันทึก Customer Journey' : 'Save customer journey'}</button></div>
+
+      {supplementalPanelOpen && <div className="journey-submodal-layer" role="dialog" aria-modal="true" aria-label={th ? 'เรียกเก็บเพิ่มเติม' : 'Additional charge'}>
+        <button type="button" className="journey-submodal-backdrop" onClick={() => setSupplementalPanelOpen(false)} aria-label={th ? 'ปิด' : 'Close'}/>
+        <section className="journey-submodal-card supplemental-submodal-card">
+          <header className="journey-submodal-header">
+            <div><span><ReceiptText/></span><div><h2>{th ? 'เรียกเก็บเพิ่มเติม / Invoice 3+' : 'Additional charge / Invoice 3+'}</h2><p>{th ? 'เพิ่มรายการเรียกเก็บภายหลังได้ไม่จำกัด ยอดขายและต้นทุนจะถูกรวมในยอดหลักและ Dashboard อัตโนมัติ' : 'Create unlimited later charges. Revenue and cost are included in the main totals and dashboard automatically.'}</p></div></div>
+            <button type="button" onClick={() => setSupplementalPanelOpen(false)} aria-label={th ? 'ปิด' : 'Close'}><X/></button>
+          </header>
+          <div className="journey-submodal-body">
+            <SupplementalInvoiceManager
+              tracking={form}
+              invoices={invoices}
+              payments={payments}
+              language={language}
+              draft={supplementalDraft}
+              setDraft={setSupplementalDraft}
+              busy={supplementalBusy}
+              onCreate={submitSupplementalInvoice}
+              onOpen={(invoice) => onOpenInvoice(form, invoice)}
+              onDelete={(invoice) => onDeleteSupplementalInvoice(form, invoice)}
+            />
+          </div>
+        </section>
+      </div>}
 
       {travelerPanelOpen && <div className="journey-submodal-layer" role="dialog" aria-modal="true" aria-label={th ? 'เพิ่มผู้เดินทาง' : 'Add travellers'}>
         <button type="button" className="journey-submodal-backdrop" onClick={() => setTravelerPanelOpen(false)} aria-label={th ? 'ปิด' : 'Close'}/>

@@ -2686,3 +2686,28 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .ticket-fare-row > span { padding: 5px 6px; border-color: #aaa; }
   .ticket-fare-row { color: #111; border-color: #aaa; }
 }
+
+/* v12.7.3 — make supplemental billing visible and compact */
+.supplemental-open-button { position: relative; }
+.supplemental-open-button em {
+  min-width: 20px; height: 20px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; color: #fff; background: #0d6b50; font-style: normal; font-size: 10px; font-weight: 900;
+}
+.supplemental-compact-entry {
+  padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  border: 1px solid #d8e7df; border-radius: 18px; background: linear-gradient(135deg,#f7fbf9,#eef8f3);
+}
+.supplemental-compact-copy { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.supplemental-compact-copy > span { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; border-radius: 13px; color: #0d6b50; background: #dff2e9; }
+.supplemental-compact-copy svg { width: 20px; height: 20px; }
+.supplemental-compact-copy h3 { margin: 0 0 3px; color: #173c31; font-size: 15px; }
+.supplemental-compact-copy p { margin: 0; color: #71857b; font-size: 11px; line-height: 1.5; }
+.supplemental-compact-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.supplemental-compact-actions > span { padding: 7px 10px; border-radius: 999px; color: #0b664c; background: #dff2e9; font-size: 10px; font-weight: 850; }
+.supplemental-submodal-card { width: min(1040px, calc(100vw - 32px)); }
+.supplemental-submodal-card .journey-workflow-section { margin: 0; border: 0; box-shadow: none; }
+@media (max-width: 760px) {
+  .supplemental-compact-entry { align-items: stretch; flex-direction: column; }
+  .supplemental-compact-actions { justify-content: space-between; }
+  .supplemental-compact-actions .primary-button { flex: 1; }
+}

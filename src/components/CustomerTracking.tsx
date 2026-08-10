@@ -46,6 +46,43 @@ const statuses: TrackingStatus[] = ['new', 'following', 'quote_sent', 'won', 'lo
 const paymentStatuses: PaymentStageStatus[] = ['pending', 'invoiced', 'paid', 'overdue', 'cancelled'];
 const paymentTypes: PaymentTransactionType[] = ['ticket_deposit', 'package_balance', 'supplemental', 'refund', 'other'];
 
+const TRACKING_DRAFT_PREFIX = 'bhutan_customer_tracking_draft_v1:';
+const NEW_TRACKING_DRAFT_KEY = `${TRACKING_DRAFT_PREFIX}new`;
+interface TrackingDraftEnvelope {
+  data: CustomerTracking;
+  savedAt: string;
+  mode: 'new' | 'edit';
+}
+function trackingDraftKey(id: string, isNew: boolean) {
+  return isNew ? NEW_TRACKING_DRAFT_KEY : `${TRACKING_DRAFT_PREFIX}${id}`;
+}
+function readTrackingDraft(key: string): TrackingDraftEnvelope | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as TrackingDraftEnvelope;
+    return parsed?.data?.id ? parsed : null;
+  } catch { return null; }
+}
+function writeTrackingDraft(key: string, data: CustomerTracking, mode: 'new' | 'edit'): string {
+  const savedAt = new Date().toISOString();
+  if (typeof window !== 'undefined') {
+    try { window.localStorage.setItem(key, JSON.stringify({ data, savedAt, mode } satisfies TrackingDraftEnvelope)); } catch {}
+  }
+  return savedAt;
+}
+function clearTrackingDraft(key: string) {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.removeItem(key); } catch {}
+}
+function formatDraftTime(value: string, th: boolean) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString(th ? 'th-TH' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 function isoToday() {
   const d = new Date();
   const offset = d.getTimezoneOffset();
@@ -573,6 +610,7 @@ export function CustomerTrackingWorkspace(props: Props) {
   const { language } = useI18n();
   const th = language === 'th';
   const [editing, setEditing] = useState<CustomerTracking | null>(null);
+  const [editingIsNew, setEditingIsNew] = useState(false);
   const [invoicePreview, setInvoicePreview] = useState<{ tracking: CustomerTracking; invoice: PaymentInvoice } | null>(null);
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState<'all' | 'sales' | 'booking' | 'visa' | 'travel' | 'after'>('all');
@@ -878,6 +916,29 @@ export function CustomerTrackingWorkspace(props: Props) {
     setInvoicePreview({ tracking, invoice });
   }
 
+  const pendingNewDraft = readTrackingDraft(NEW_TRACKING_DRAFT_KEY);
+  function startNewTracking() {
+    if (pendingNewDraft) {
+      const startFresh = window.confirm(th
+        ? 'มี Draft ลูกค้าที่ยังไม่ได้บันทึกอยู่ หากเริ่มรายการใหม่ Draft เดิมจะถูกลบ\n\nกด ตกลง = เริ่มรายการใหม่\nกด ยกเลิก = กลับไปทำ Draft เดิมต่อ'
+        : 'An unsaved customer draft exists. Starting a new record will remove that draft.\n\nOK = start fresh\nCancel = resume the draft');
+      if (!startFresh) {
+        setEditingIsNew(true);
+        setEditing({ ...pendingNewDraft.data });
+        return;
+      }
+      clearTrackingDraft(NEW_TRACKING_DRAFT_KEY);
+    }
+    setEditingIsNew(true);
+    setEditing(newTracking());
+  }
+  function resumeNewDraft() {
+    const draft = readTrackingDraft(NEW_TRACKING_DRAFT_KEY);
+    if (!draft) return;
+    setEditingIsNew(true);
+    setEditing({ ...draft.data });
+  }
+
   return <div className="tracking-shell journey-shell">
     <header className="tracking-header">
       <Brand/>
@@ -887,7 +948,10 @@ export function CustomerTrackingWorkspace(props: Props) {
     <main className="tracking-main journey-main">
       <section className="tracking-page-head journey-page-head">
         <div><span className="eyebrow"><Sparkles/> CUSTOMER JOURNEY</span><h1>{th ? 'ติดตามลูกค้าตั้งแต่เสนอราคา ถึงปิดจบทริป' : 'Track every customer from quotation to trip closure'}</h1><p>{th ? 'เห็นขั้นตอนปัจจุบัน งานถัดไป เอกสาร การชำระเงิน วีซ่า และ Feedback ในหน้าจอเดียว' : 'Manage next actions, documents, payments, visas, travel readiness and feedback in one workspace.'}</p></div>
-        <button className="primary-button tracking-add" onClick={() => setEditing(newTracking())}><Plus/>{th ? 'เพิ่มลูกค้าใหม่' : 'Add customer'}</button>
+        <div className="tracking-head-actions">
+          {pendingNewDraft && <button className="ghost-button tracking-draft-resume" onClick={resumeNewDraft}><FileCheck2/><span>{th ? 'Draft ล่าสุด' : 'Latest draft'}</span><small>{formatDraftTime(pendingNewDraft.savedAt, th)}</small></button>}
+          <button className="primary-button tracking-add" onClick={startNewTracking}><Plus/>{th ? 'เพิ่มลูกค้าใหม่' : 'Add customer'}</button>
+        </div>
       </section>
 
       <section className="tracking-stats journey-stats">
@@ -913,20 +977,22 @@ export function CustomerTrackingWorkspace(props: Props) {
           const paid = sumPayments(itemPayments);
           const remaining = Math.max(0, customerGrandTotal(item, props.invoices) - paid);
           const recommended = item.nextAction || nextRecommendedAction(item, th);
+          const localDraft = readTrackingDraft(trackingDraftKey(item.id, false));
+          const hasNewerLocalDraft = Boolean(localDraft && new Date(localDraft.savedAt).getTime() > new Date(item.updatedAt || item.createdAt || 0).getTime());
           return <article className="journey-card" key={item.id}>
             <div className="journey-card-customer"><span>{item.customerName?.[0]?.toUpperCase() || '?'}</span><div><b>{item.opportunityName || item.customerName || '-'}</b><small>{item.customerName}{item.leadSource ? ` · ${item.leadSource}` : ''}</small><em>{item.phone || item.email || '-'}</em></div></div>
-            <div className="journey-card-stage"><span className={`journey-stage stage-${stageGroup[stage]}`}>{stageLabel(stage, th)}</span><small>{item.packageName || '-'} · {item.passengerCount + addedPassengerCount(item)} {th ? 'ท่าน' : 'pax'}</small><em>{item.travelStartDate ? formatDate(item.travelStartDate, language) : th ? 'ยังไม่กำหนดวันเดินทาง' : 'Travel date not set'}</em></div>
+            <div className="journey-card-stage"><div className="journey-stage-line"><span className={`journey-stage stage-${stageGroup[stage]}`}>{stageLabel(stage, th)}</span>{hasNewerLocalDraft && <span className="local-draft-badge"><FileCheck2/>Draft</span>}</div><small>{item.packageName || '-'} · {item.passengerCount + addedPassengerCount(item)} {th ? 'ท่าน' : 'pax'}</small><em>{item.travelStartDate ? formatDate(item.travelStartDate, language) : th ? 'ยังไม่กำหนดวันเดินทาง' : 'Travel date not set'}</em></div>
             <div className="journey-card-action"><small>{th ? 'งานถัดไป' : 'Next action'}</small><b>{recommended}</b><em className={item.nextActionDueDate && item.nextActionDueDate <= isoToday() ? 'overdue' : ''}>{item.nextActionDueDate ? `${th ? 'ภายใน' : 'Due'} ${formatDate(item.nextActionDueDate, language)}` : th ? 'ยังไม่กำหนด Deadline' : 'No deadline'}</em></div>
             <div className="journey-card-payment"><small>{th ? `แพ็กเกจรวม ${totalPackagePassengerCount(item)} ท่าน` : `Package total — ${totalPackagePassengerCount(item)} pax`}</small><b>{formatTHB(packageSalesTotal(item), language)}</b><em>{th ? `รับแล้ว ${formatTHB(paid, language)} · คงเหลือ ${formatTHB(remaining, language)}` : `Paid ${formatTHB(paid, language)} · Balance ${formatTHB(remaining, language)}`}</em><PaymentBadge status={paymentSummary(item, props.payments)} th={th}/></div>
-            <div className="journey-card-actions"><button className="invoice-one" onClick={() => issueInvoice(item, 'deposit')}><ReceiptText/><span>{th ? 'Invoice 1' : 'Invoice 1'}</span></button><button className="invoice-two" onClick={() => issueInvoice(item, 'balance')}><FileText/><span>{th ? 'Invoice 2' : 'Invoice 2'}</span></button><button onClick={() => setEditing(item)} title={th ? 'เปิดรายละเอียด' : 'Open details'}><Edit3/></button><button className="danger" onClick={() => window.confirm(th ? 'ยืนยันการลบรายการนี้?' : 'Delete this record?') && props.onDeleteTracking(item.id)}><Trash2/></button></div>
+            <div className="journey-card-actions"><button className="invoice-one" onClick={() => issueInvoice(item, 'deposit')}><ReceiptText/><span>{th ? 'Invoice 1' : 'Invoice 1'}</span></button><button className="invoice-two" onClick={() => issueInvoice(item, 'balance')}><FileText/><span>{th ? 'Invoice 2' : 'Invoice 2'}</span></button><button onClick={() => { setEditingIsNew(false); setEditing(item); }} title={th ? 'เปิดรายละเอียด' : 'Open details'}><Edit3/></button><button className="danger" onClick={() => window.confirm(th ? 'ยืนยันการลบรายการนี้?' : 'Delete this record?') && props.onDeleteTracking(item.id)}><Trash2/></button></div>
           </article>;
         })}</div> : <EmptyState title={th ? 'ยังไม่มีข้อมูลที่ตรงกับตัวกรอง' : 'No matching records'} detail={th ? 'กด “เพิ่มลูกค้าใหม่” เพื่อเริ่มติดตามกระบวนการ' : 'Add a customer to start the workflow.'}/>} 
       </section>
     </main>
 
-    <TrackingEditor open={Boolean(editing)} item={editing} settings={props.settings} packages={props.packages} users={props.users} currentUser={props.currentUser}
+    <TrackingEditor open={Boolean(editing)} item={editing} isNewRecord={editingIsNew} settings={props.settings} packages={props.packages} users={props.users} currentUser={props.currentUser}
       payments={editing ? paymentsFor(editing.id, props.payments) : []} invoices={editing ? supplementalInvoicesFor(editing.id, props.invoices) : []}
-      onClose={() => setEditing(null)} onSave={async (item) => { await props.onSaveTracking(item); setEditing(item); }}
+      onClose={() => { setEditing(null); setEditingIsNew(false); }} onSave={async (item) => { await props.onSaveTracking(item); setEditingIsNew(false); setEditing(item); }}
       onSavePayment={props.onSavePayment} onDeletePayment={props.onDeletePayment} onSaveInvoice={props.onSaveInvoice} onIssueInvoice={issueInvoice}
       onCreateSupplementalInvoice={createSupplementalInvoice} onCreateTravelerAddition={createTravelerAdditionInvoice} onOpenInvoice={openExistingInvoice} onDeleteSupplementalInvoice={deleteSupplementalInvoice}
       onUploadPaymentSlip={props.onUploadPaymentSlip} onGetPaymentSlipUrl={props.onGetPaymentSlipUrl} onDeletePaymentSlip={props.onDeletePaymentSlip}/>
@@ -954,8 +1020,8 @@ function paymentTypeLabel(type: PaymentTransactionType, th: boolean) {
   return labels[type];
 }
 
-function TrackingEditor({ open, item, settings, packages, users, currentUser, payments, invoices, onClose, onSave, onSavePayment, onDeletePayment, onSaveInvoice, onIssueInvoice, onCreateSupplementalInvoice, onCreateTravelerAddition, onOpenInvoice, onDeleteSupplementalInvoice, onUploadPaymentSlip, onGetPaymentSlipUrl, onDeletePaymentSlip }: {
-  open: boolean; item: CustomerTracking | null; settings: GlobalSettings; packages: TourPackage[]; users: User[]; currentUser: User; payments: PaymentTransaction[]; invoices: PaymentInvoice[];
+function TrackingEditor({ open, item, isNewRecord, settings, packages, users, currentUser, payments, invoices, onClose, onSave, onSavePayment, onDeletePayment, onSaveInvoice, onIssueInvoice, onCreateSupplementalInvoice, onCreateTravelerAddition, onOpenInvoice, onDeleteSupplementalInvoice, onUploadPaymentSlip, onGetPaymentSlipUrl, onDeletePaymentSlip }: {
+  open: boolean; item: CustomerTracking | null; isNewRecord: boolean; settings: GlobalSettings; packages: TourPackage[]; users: User[]; currentUser: User; payments: PaymentTransaction[]; invoices: PaymentInvoice[];
   onClose: () => void; onSave: (item: CustomerTracking) => Promise<void>; onSavePayment: (item: PaymentTransaction) => Promise<void>; onDeletePayment: (id: string) => Promise<void>; onSaveInvoice: (item: PaymentInvoice) => Promise<void>;
   onIssueInvoice: (tracking: CustomerTracking, installment: InvoiceInstallment) => Promise<void>;
   onCreateSupplementalInvoice: (tracking: CustomerTracking, draft: { title: string; dueDate: string; note: string; lineItems: SupplementalInvoiceLine[] }) => Promise<void>;
@@ -983,10 +1049,64 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
   const [supplementalPanelOpen, setSupplementalPanelOpen] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState<string>('');
   const [slipInputKey, setSlipInputKey] = useState(0);
-  React.useEffect(() => { setForm(item ? { ...item, travelerAdditions: item.travelerAdditions || [] } : item); setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setSupplementalPanelOpen(false); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); setTravelerPanelOpen(false); setTicketChangeDraft(newTicketChangeDraft(item)); setTicketChangeDueDate(''); setTicketChangePanelOpen(false); }, [item]);
+  const [draftSavedAt, setDraftSavedAt] = useState('');
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const baselineRef = React.useRef('');
+  const draftKey = item ? trackingDraftKey(item.id, isNewRecord) : NEW_TRACKING_DRAFT_KEY;
+  React.useEffect(() => {
+    const normalizedItem = item ? { ...item, travelerAdditions: item.travelerAdditions || [] } : item;
+    const savedDraft = item ? readTrackingDraft(trackingDraftKey(item.id, isNewRecord)) : null;
+    const itemUpdatedAt = item?.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+    const draftUpdatedAt = savedDraft?.savedAt ? new Date(savedDraft.savedAt).getTime() : 0;
+    const shouldRestore = Boolean(savedDraft && (isNewRecord || draftUpdatedAt > itemUpdatedAt));
+    const initialForm = shouldRestore ? { ...savedDraft!.data, travelerAdditions: savedDraft!.data.travelerAdditions || [] } : normalizedItem;
+    setForm(initialForm);
+    baselineRef.current = normalizedItem ? JSON.stringify(normalizedItem) : '';
+    setDraftSavedAt(savedDraft?.savedAt || '');
+    setDraftRestored(shouldRestore);
+    setHasUnsavedChanges(Boolean(initialForm && baselineRef.current && JSON.stringify(initialForm) !== baselineRef.current));
+    setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setSupplementalPanelOpen(false); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); setTravelerPanelOpen(false); setTicketChangeDraft(newTicketChangeDraft(item)); setTicketChangeDueDate(''); setTicketChangePanelOpen(false); }, [item, isNewRecord]);
   if (!form) return null;
   const currentForm = form;
   const set = <K extends keyof CustomerTracking>(key: K, value: CustomerTracking[K]) => setForm((current) => current ? ({ ...current, [key]: value }) : current);
+
+  React.useEffect(() => {
+    if (!open || !form) return;
+    const serialized = JSON.stringify(form);
+    const dirty = Boolean(baselineRef.current && serialized !== baselineRef.current);
+    setHasUnsavedChanges(dirty);
+    if (!dirty) return;
+    const timer = window.setTimeout(() => {
+      const savedAt = writeTrackingDraft(draftKey, form, isNewRecord ? 'new' : 'edit');
+      setDraftSavedAt(savedAt);
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [form, open, draftKey, isNewRecord]);
+
+  React.useEffect(() => {
+    if (!open || !hasUnsavedChanges) return;
+    const handler = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [open, hasUnsavedChanges]);
+
+  function saveDraftNow() {
+    if (!form) return;
+    const savedAt = writeTrackingDraft(draftKey, form, isNewRecord ? 'new' : 'edit');
+    setDraftSavedAt(savedAt);
+    setDraftRestored(true);
+  }
+  function requestClose() {
+    if (hasUnsavedChanges && form) {
+      saveDraftNow();
+      const closeAnyway = window.confirm(th
+        ? 'มีข้อมูลที่ยังไม่ได้กดบันทึก\nระบบเก็บ Draft ล่าสุดไว้ให้แล้ว หากปิดตอนนี้สามารถกลับมาเปิดต่อได้\n\nต้องการปิดหน้าต่างหรือไม่?'
+        : 'You have unsaved changes.\nThe latest draft has been saved automatically and can be resumed later.\n\nClose this window?');
+      if (!closeAnyway) return;
+    }
+    onClose();
+  }
 
   function recalculateFinancials(current: CustomerTracking, patch: Partial<CustomerTracking> = {}): CustomerTracking {
     const next = { ...current, ...patch };
@@ -1226,7 +1346,17 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
       updatedAt: new Date().toISOString(),
     };
   }
-  async function saveAndStay() { const normalized = normalizeBeforeSave(); setForm(normalized); await onSave(normalized); }
+  async function saveAndStay() {
+    const normalized = normalizeBeforeSave();
+    setForm(normalized);
+    await onSave(normalized);
+    baselineRef.current = JSON.stringify(normalized);
+    setHasUnsavedChanges(false);
+    setDraftSavedAt('');
+    setDraftRestored(false);
+    clearTrackingDraft(draftKey);
+    if (isNewRecord) clearTrackingDraft(NEW_TRACKING_DRAFT_KEY);
+  }
   async function markToday(key: keyof CustomerTracking) {
     let next = { ...currentForm, [key]: isoToday() } as CustomerTracking;
     if (key === 'landPaidAt') {
@@ -1468,7 +1598,15 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
     additionalItemsTotal: form.additionalItemsTotal,
   }) : null;
 
-  return <Modal open={open} title={th ? 'Customer Journey — รายละเอียดและขั้นตอนดำเนินงาน' : 'Customer Journey — workflow details'} onClose={onClose} wide>
+  return <Modal open={open} title={th ? 'Customer Journey — รายละเอียดและขั้นตอนดำเนินงาน' : 'Customer Journey — workflow details'} onClose={requestClose} wide closeOnBackdrop={false} closeOnEscape={false}>
+    <div className={`tracking-draft-status ${hasUnsavedChanges || draftRestored ? 'active' : ''}`}>
+      <div className="tracking-draft-status-icon"><FileCheck2/></div>
+      <div className="tracking-draft-status-copy">
+        <b>{hasUnsavedChanges ? (th ? 'กำลังบันทึก Draft อัตโนมัติ' : 'Auto-saving draft') : draftRestored ? (th ? 'กู้ Draft ล่าสุดกลับมาแล้ว' : 'Latest draft restored') : (th ? 'Draft พร้อมใช้งาน' : 'Draft protection ready')}</b>
+        <span>{draftSavedAt ? `${th ? 'บันทึกล่าสุด' : 'Last saved'} ${formatDraftTime(draftSavedAt, th)}` : (th ? 'ข้อมูลที่แก้ไขจะถูกเก็บอัตโนมัติใน Browser เครื่องนี้' : 'Changes are automatically kept in this browser')}</span>
+      </div>
+      <button type="button" className="ghost-button tracking-save-draft" onClick={saveDraftNow}><FileText/>{th ? 'บันทึก Draft ตอนนี้' : 'Save draft now'}</button>
+    </div>
     <div className="journey-editor">
       <div className="journey-editor-summary"><div><span>{th ? 'สถานะปัจจุบัน' : 'Current stage'}</span><strong>{stageLabel(currentStage, th)}</strong><small>{form.opportunityName || form.customerName || '-'}</small></div><div><span>{th ? 'งานถัดไป' : 'Next action'}</span><strong>{form.nextAction || nextRecommendedAction(form, th)}</strong><small>{form.nextActionDueDate ? formatDate(form.nextActionDueDate, language) : th ? 'ยังไม่กำหนด Deadline' : 'No deadline'}</small></div><div><span>{th ? 'ยอดรับชำระ / คงเหลือ' : 'Paid / remaining'}</span><strong>{formatTHB(totalPaid, language)} / {formatTHB(Math.max(0, grandTotal - totalPaid), language)}</strong><small>{form.passengerCount + addedPassengerCount(form)} {th ? 'ท่านรวม' : 'total pax'}</small></div></div>
 
@@ -1688,7 +1826,10 @@ function TrackingEditor({ open, item, settings, packages, users, currentUser, pa
         <div className="tracking-form-grid"><label className="field span-2"><span>{th ? 'งานถัดไป' : 'Next action'}</span><input value={form.nextAction} onChange={(e) => set('nextAction', e.target.value)} placeholder={nextRecommendedAction(form, th)}/></label><label className="field"><span>{th ? 'Deadline งานถัดไป' : 'Next action deadline'}</span><input type="date" value={form.nextActionDueDate} onChange={(e) => set('nextActionDueDate', e.target.value)}/></label><label className="field"><span>{th ? 'สถานะ Workflow ปัจจุบัน' : 'Current workflow stage'}</span><input value={stageLabel(currentStage, th)} readOnly/></label><label className="field span-2"><span>{th ? 'หมายเหตุภายใน' : 'Internal note'}</span><textarea rows={4} value={form.note} onChange={(e) => set('note', e.target.value)}/></label></div>
       </WorkflowSection>
 
-      <div className="modal-actions tracking-modal-actions"><button className="ghost-button" onClick={onClose}>{th ? 'ปิด' : 'Close'}</button><button className="primary-button" disabled={!form.opportunityName.trim() || !form.customerName.trim()} onClick={saveAndStay}><BadgeCheck/>{th ? 'บันทึก Customer Journey' : 'Save customer journey'}</button></div>
+      <div className="modal-actions tracking-modal-actions">
+        <div className="tracking-modal-draft-actions"><button className="ghost-button" onClick={saveDraftNow}><FileText/>{th ? 'บันทึก Draft' : 'Save draft'}</button><button className="ghost-button" onClick={requestClose}>{th ? 'ปิด' : 'Close'}</button></div>
+        <button className="primary-button" disabled={!form.opportunityName.trim() || !form.customerName.trim()} onClick={saveAndStay}><BadgeCheck/>{th ? 'บันทึก Customer Journey' : 'Save customer journey'}</button>
+      </div>
 
       {supplementalPanelOpen && <div className="journey-submodal-layer" role="dialog" aria-modal="true" aria-label={th ? 'เรียกเก็บเพิ่มเติม' : 'Additional charge'}>
         <button type="button" className="journey-submodal-backdrop" onClick={() => setSupplementalPanelOpen(false)} aria-label={th ? 'ปิด' : 'Close'}/>

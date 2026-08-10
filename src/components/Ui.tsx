@@ -14,19 +14,19 @@ export function ToastStack({ items, onDismiss }: { items: ToastItem[]; onDismiss
   </div>;
 }
 
-export function Modal({ open, title, children, onClose, wide = false }: {
-  open: boolean; title?: string; children: React.ReactNode; onClose: () => void; wide?: boolean;
+export function Modal({ open, title, children, onClose, wide = false, closeOnBackdrop = true, closeOnEscape = true }: {
+  open: boolean; title?: string; children: React.ReactNode; onClose: () => void; wide?: boolean; closeOnBackdrop?: boolean; closeOnEscape?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
-    const handler = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    const handler = (event: KeyboardEvent) => { if (event.key === 'Escape' && closeOnEscape) onClose(); };
     document.addEventListener('keydown', handler);
     document.body.classList.add('modal-open');
     return () => { document.removeEventListener('keydown', handler); document.body.classList.remove('modal-open'); };
-  }, [open, onClose]);
+  }, [open, onClose, closeOnEscape]);
   if (!open) return null;
   return <div className="modal-layer" role="dialog" aria-modal="true">
-    <button className="modal-backdrop" onClick={onClose} aria-label="Close modal"/>
+    <button className="modal-backdrop" onClick={closeOnBackdrop ? onClose : undefined} aria-label="Close modal"/>
     <section className={`modal-card ${wide ? 'wide' : ''}`}>
       <header><h2>{title}</h2><button onClick={onClose} aria-label="Close"><X/></button></header>
       <div className="modal-body">{children}</div>

@@ -1067,10 +1067,6 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     setDraftRestored(shouldRestore);
     setHasUnsavedChanges(Boolean(initialForm && baselineRef.current && JSON.stringify(initialForm) !== baselineRef.current));
     setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setSupplementalPanelOpen(false); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); setTravelerPanelOpen(false); setTicketChangeDraft(newTicketChangeDraft(item)); setTicketChangeDueDate(''); setTicketChangePanelOpen(false); }, [item, isNewRecord]);
-  if (!form) return null;
-  const currentForm = form;
-  const set = <K extends keyof CustomerTracking>(key: K, value: CustomerTracking[K]) => setForm((current) => current ? ({ ...current, [key]: value }) : current);
-
   React.useEffect(() => {
     if (!open || !form) return;
     const serialized = JSON.stringify(form);
@@ -1090,6 +1086,14 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [open, hasUnsavedChanges]);
+
+  // Keep every React hook above this guard. TrackingEditor stays mounted while
+  // closed (item=null), so returning before later hooks caused React to throw
+  // "Rendered more hooks than during the previous render" when Add customer
+  // changed item from null to a new record.
+  if (!form) return null;
+  const currentForm = form;
+  const set = <K extends keyof CustomerTracking>(key: K, value: CustomerTracking[K]) => setForm((current) => current ? ({ ...current, [key]: value }) : current);
 
   function saveDraftNow() {
     if (!form) return;

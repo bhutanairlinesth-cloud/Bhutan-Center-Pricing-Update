@@ -2746,7 +2746,7 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 .local-draft-badge svg { width:12px; height:12px; }
 
 /* =========================================================
-   v12.8 — readable invoices, payment accounts, QR and VAT
+   v12.8.1 — readable invoices, bank accounts and VAT
    ========================================================= */
 .payment-account-settings {
   padding: 22px;
@@ -2761,10 +2761,7 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 .payment-account-card-head > div:first-child { display: flex; flex-direction: column; gap: 4px; }
 .payment-account-card-head b { color: #163b30; font-size: 16px; }
 .payment-account-card-head small { color: #728078; font-size: 12px; line-height: 1.5; }
-.payment-account-card-head img, .payment-qr-placeholder { width: 84px; height: 84px; border-radius: 13px; border: 1px solid #d9e5df; object-fit: contain; background: #fff; }
-.payment-qr-placeholder { display: grid; place-items: center; color: #8aa097; background: #f3f8f5; font-size: 17px; font-weight: 900; letter-spacing: .08em; }
-.vat-setting-row { margin-top: 16px; padding: 16px 18px; display: grid; grid-template-columns: minmax(240px,.55fr) 1fr; gap: 18px; align-items: end; border-radius: 16px; background: #fff8de; border: 1px solid #eedb8d; }
-.vat-setting-row p { margin: 0 0 7px; color: #6d5d25; font-size: 12px; line-height: 1.6; }
+.vat-setting-row { margin-top: 16px; padding: 16px 18px; display: grid; grid-template-columns: minmax(240px,420px); gap: 18px; align-items: end; border-radius: 16px; background: #fff8de; border: 1px solid #eedb8d; }
 
 .invoice-toolbar-payment { flex-wrap: wrap; }
 .invoice-toolbar-payment .invoice-vat-toggle button { min-height: 42px; padding: 0 13px; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #d6e1dc; border-radius: 10px; background: #fff; color: #56665e; font-weight: 800; }
@@ -2808,21 +2805,14 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 .invoice-total-readable > aside { padding: 16px 18px; display: flex; flex-direction: column; justify-content: center; border: 2px solid #e9c94e; border-radius: 14px; background: #fff5a8; color: #342b08; }
 .invoice-total-readable > aside span { color: #816d17; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .invoice-total-readable > aside b { margin-top: 4px; color: #8e1f17; font-size: 18px; line-height: 1.25; }
-.invoice-total-readable > aside small { margin-top: 5px; color: #665719; font-size: 10.5px; line-height: 1.45; }
 
-.invoice-bank-payment { margin-top: 12px; padding: 15px 17px; display: grid; grid-template-columns: 1fr 108px; gap: 16px; align-items: center; border: 1px solid #cfded7; border-radius: 14px; background: #f3f8f5; }
+.invoice-bank-payment { margin-top: 12px; padding: 16px 18px; display: block; border: 1px solid #cfded7; border-radius: 14px; background: #f3f8f5; }
 .invoice-bank-copy > span { color: #547066; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .invoice-bank-copy h3 { margin: 5px 0 8px; color: #123e31; font-size: 14px; }
 .invoice-bank-copy dl { margin: 0; display: grid; gap: 5px; }
 .invoice-bank-copy dl > div { display: grid; grid-template-columns: 88px 1fr; gap: 8px; align-items: baseline; }
 .invoice-bank-copy dt { color: #718079; font-size: 10.5px; }
 .invoice-bank-copy dd { margin: 0; color: #142f27; font-size: 13px; font-weight: 800; }
-.invoice-tax-account-note { margin: 9px 0 0; padding: 8px 10px; border-radius: 9px; color: #71591a; background: #fff5c7; font-size: 10.5px; line-height: 1.5; }
-.invoice-payment-qr { min-height: 104px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
-.invoice-payment-qr img { width: 94px; height: 94px; object-fit: contain; border: 1px solid #d8e2dd; border-radius: 8px; background: #fff; }
-.invoice-payment-qr span { color: #567066; font-size: 9.5px; font-weight: 800; text-align: center; }
-.invoice-payment-qr.empty { padding: 10px; border: 1px dashed #bdd0c7; border-radius: 10px; }
-.invoice-payment-qr.empty svg { width: 24px; height: 24px; color: #799188; }
 .invoice-balance-subtotal b, .invoice-vat-row b { font-size: 13px !important; }
 .invoice-vat-row { color: #8a4f14; background: #fff8e8; }
 
@@ -2850,9 +2840,108 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .invoice-total-readable { grid-template-columns: minmax(0,1fr) 250px !important; break-inside: avoid !important; }
   .invoice-total-readable strong { font-size: 26px !important; }
   .invoice-total-readable > aside b { font-size: 17px !important; }
-  .invoice-bank-payment { grid-template-columns: 1fr 100px !important; break-inside: avoid !important; }
-  .invoice-payment-qr img { width: 88px !important; height: 88px !important; }
+  .invoice-bank-payment { display: block !important; break-inside: avoid !important; }
   .invoice-bank-copy h3 { font-size: 13px !important; }
   .invoice-bank-copy dd { font-size: 12px !important; }
   .invoice-note p { font-size: 10.5px !important; }
 }
+
+/* =========================================================
+   v12.9 — senior-friendly quotation typography
+   Match invoice readability. Readability wins over forcing
+   every quotation onto a single page; A4 print may continue
+   to page 2 if the document is genuinely long.
+   ========================================================= */
+.quotation-sheet {
+  font-size: 12px;
+  line-height: 1.55;
+}
+.quote-header p { font-size: 11px; line-height: 1.45; }
+.quote-title span { font-size: 10.5px; }
+.quote-title h1 { font-size: 31px; line-height: 1.05; }
+.quote-title b { font-size: 11px; }
+.quote-meta-grid span,
+.quote-trip-card span { font-size: 10.5px; }
+.quote-meta-grid strong { font-size: 15px; line-height: 1.35; }
+.quote-meta-grid small { font-size: 11.5px; line-height: 1.5; }
+.quote-trip-card strong { font-size: 13px; line-height: 1.35; }
+.quote-trip-card small { font-size: 10.5px; line-height: 1.45; }
+
+.quote-passenger-table .quote-table-head { font-size: 10px; min-height: 44px; }
+.quote-passenger-table .quote-table-head span { padding: 9px 8px; }
+.quote-passenger-row { min-height: 90px; }
+.quote-passenger-row > span { padding: 12px 10px; }
+.quote-service-cell .quote-travel-period { font-size: 12px !important; line-height: 1.35; }
+.quote-service-cell > strong { font-size: 11.5px !important; line-height: 1.45; }
+.quote-service-cell small { font-size: 10px !important; line-height: 1.5; }
+.quote-center-cell b,
+.quote-number-cell b { font-size: 11.5px !important; }
+.quote-line-total b { font-size: 13px !important; }
+.quote-table-grand-total { min-height: 60px; padding: 12px 16px; }
+.quote-table-grand-total span { font-size: 11px; }
+.quote-table-grand-total strong { font-size: 21px; }
+
+.quote-group-tl-note strong { font-size: 12.5px; }
+.quote-group-tl-note span { font-size: 11px; line-height: 1.6; }
+.quote-group-tl-note small { font-size: 10.5px; line-height: 1.55; }
+
+.quote-scope-card { padding: 13px 15px 12px; }
+.quote-scope-card h3 { font-size: 12px; margin-bottom: 8px; }
+.quote-scope-card ol,
+.quote-scope-card ul { font-size: 10.5px; line-height: 1.55; }
+.quote-scope-card li { margin-bottom: 4px; }
+.quote-note span { font-size: 10.5px; }
+.quote-note p { font-size: 11.5px; line-height: 1.6; }
+.quote-terms h3 { font-size: 11px; }
+.quote-terms ol { font-size: 10px; line-height: 1.55; }
+.quote-footer strong { font-size: 11.5px; }
+.quote-footer span { font-size: 10px; }
+
+@media print {
+  .quotation-sheet { font-size: 11px !important; line-height: 1.5 !important; }
+  .quote-header p { font-size: 10px !important; }
+  .quote-title span { font-size: 9.5px !important; }
+  .quote-title h1 { font-size: 28px !important; }
+  .quote-title b { font-size: 10px !important; }
+  .quote-meta-grid span,
+  .quote-trip-card span { font-size: 9.5px !important; }
+  .quote-meta-grid strong { font-size: 14px !important; }
+  .quote-meta-grid small { font-size: 10.5px !important; }
+  .quote-trip-card strong { font-size: 12px !important; }
+  .quote-trip-card small { font-size: 9.8px !important; }
+
+  .quote-passenger-table .quote-table-head { font-size: 9.2px !important; min-height: 42px !important; }
+  .quote-passenger-row { min-height: 82px !important; }
+  .quote-service-cell .quote-travel-period { font-size: 11px !important; }
+  .quote-service-cell > strong { font-size: 10.5px !important; }
+  .quote-service-cell small { font-size: 9.3px !important; }
+  .quote-center-cell b,
+  .quote-number-cell b { font-size: 10.5px !important; }
+  .quote-line-total b { font-size: 12px !important; }
+  .quote-table-grand-total { min-height: 55px !important; }
+  .quote-table-grand-total span { font-size: 10px !important; }
+  .quote-table-grand-total strong { font-size: 19px !important; }
+
+  .quote-group-tl-note strong { font-size: 11px !important; }
+  .quote-group-tl-note span { font-size: 10px !important; }
+  .quote-group-tl-note small { font-size: 9.5px !important; }
+  .quote-scope-card { padding: 10px 12px 9px !important; }
+  .quote-scope-card h3 { font-size: 10.5px !important; }
+  .quote-scope-card ol,
+  .quote-scope-card ul { font-size: 9.6px !important; line-height: 1.48 !important; }
+  .quote-terms h3 { font-size: 10px !important; }
+  .quote-terms ol { font-size: 9.3px !important; line-height: 1.5 !important; }
+  .quote-footer strong { font-size: 10.5px !important; }
+  .quote-footer span { font-size: 9.3px !important; }
+}
+
+/* Full-payment card uses a distinct but calm visual treatment. */
+.installment-card.full-payment {
+  border-color: #afd7c7;
+  background: linear-gradient(135deg, #f5fbf8, #eaf7f1);
+}
+.installment-card.full-payment .installment-head > span {
+  color: #fff;
+  background: #0d6b50;
+}
+.invoice-full-payment-reference { border-color: #c9dfd5; }

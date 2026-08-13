@@ -1,6 +1,7 @@
 export type UserRole = 'admin' | 'sales';
 export type PricingChannel = 'retail' | 'agent';
 export type PricingMode = 'standard' | 'group_tl';
+export type PaymentPlan = 'installments' | 'full_payment' | 'custom';
 export type HotelCategory = '3 Stars' | '4 Stars' | '5 Stars';
 export type Language = 'th' | 'en';
 export type AdditionalChargeBasis = 'per_person' | 'per_group' | 'custom';
@@ -185,9 +186,9 @@ export interface CustomerDetails {
 export type LeadSource = 'LINE OA' | 'LINE' | 'Facebook' | 'Call in' | 'Referral' | 'Walk in' | 'Other';
 export type TrackingStatus = 'new' | 'following' | 'quote_sent' | 'won' | 'lost' | 'completed';
 export type JourneyStage = 'lead' | 'quotation_sent' | 'booking_confirmed' | 'flight_reserved' | 'invoice_1_sent' | 'first_payment_received' | 'ticket_sent' | 'documents_sent_to_land' | 'land_invoice_received' | 'invoice_2_ready' | 'visa_received' | 'visa_sent' | 'full_payment_received' | 'land_payment_pending' | 'land_paid' | 'itinerary_sent' | 'ready_to_travel' | 'traveling' | 'returned' | 'feedback_requested' | 'feedback_received' | 'closed' | 'cancelled';
-export type PaymentTransactionType = 'ticket_deposit' | 'package_balance' | 'supplemental' | 'refund' | 'other';
+export type PaymentTransactionType = 'ticket_deposit' | 'package_balance' | 'full_payment' | 'supplemental' | 'refund' | 'other';
 export type PaymentStageStatus = 'pending' | 'invoiced' | 'paid' | 'overdue' | 'cancelled';
-export type InvoiceInstallment = 'deposit' | 'balance' | 'supplemental';
+export type InvoiceInstallment = 'deposit' | 'balance' | 'full' | 'supplemental';
 export type PaymentAccountType = 'company' | 'owner';
 
 
@@ -256,6 +257,8 @@ export interface CustomerTracking {
   tourLeaderCount: number;
   pricingMode: PricingMode;
   channel: PricingChannel;
+  /** How this customer will be billed: normal 2-stage, one-time full payment, or manual/custom. */
+  paymentPlan: PaymentPlan;
   sellingPricePerPerson: number;
   regularLandCostPerPerson: number;
   tourLeaderLandCostPerPerson: number;
@@ -398,7 +401,7 @@ export interface InvoiceDeductionSnapshot {
 
 export interface InvoiceDocumentSnapshot {
   version: number;
-  kind: 'ticket_original' | 'ticket_added' | 'package_balance' | 'supplemental';
+  kind: 'ticket_original' | 'ticket_added' | 'package_balance' | 'full_payment' | 'supplemental';
   packageRows: InvoicePackageLineSnapshot[];
   packageTotalTHB: number;
   totalPassengerCount: number;

@@ -129,6 +129,7 @@ export const mockDb = {
 
   getTrackings: (): CustomerTracking[] => read<CustomerTracking[]>(KEYS.trackings, []).map((item): CustomerTracking => ({
     ...item,
+    paymentPlan: item.paymentPlan ?? 'installments',
     singleRoomCount: item.singleRoomCount ?? 0,
     singleSupplementPerPerson: item.singleSupplementPerPerson ?? 0,
     singleSupplementTotal: item.singleSupplementTotal ?? 0,
@@ -167,7 +168,7 @@ export const mockDb = {
 
   getInvoices: (): PaymentInvoice[] => read<PaymentInvoice[]>(KEYS.invoices, []).map((item) => ({
     ...item,
-    sequenceNumber: item.sequenceNumber ?? (item.installment === 'deposit' ? 1 : item.installment === 'balance' ? 2 : 3),
+    sequenceNumber: item.sequenceNumber ?? (item.installment === 'deposit' ? 1 : item.installment === 'balance' ? 2 : item.installment === 'full' ? 1 : 3),
     title: item.title ?? '',
     lineItems: item.lineItems ?? [],
     costAmount: item.costAmount ?? 0,

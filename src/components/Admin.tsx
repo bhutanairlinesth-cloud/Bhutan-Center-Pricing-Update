@@ -30,8 +30,6 @@ interface AdminProps {
   onSaveSettings: (settings: GlobalSettings) => Promise<void>;
   onUploadLogo: (file: File) => Promise<string>;
   onResetLogo: () => Promise<void>;
-  onUploadPaymentQr: (accountType: 'company' | 'owner', file: File) => Promise<string>;
-  onResetPaymentQr: (accountType: 'company' | 'owner') => Promise<void>;
   onSaveHotel: (hotel: Hotel) => Promise<void>;
   onDeleteHotel: (id: string) => Promise<void>;
   onSavePackage: (pkg: TourPackage) => Promise<void>;
@@ -41,7 +39,7 @@ interface AdminProps {
   onDeleteUser: (id: string) => Promise<void>;
 }
 
-export function Admin({ settings, hotels, packages, users, trackings, invoices, payments, currentUser, mode, onBack, onOpenTracking, onLogout, onRefresh, onSaveSettings, onUploadLogo, onResetLogo, onUploadPaymentQr, onResetPaymentQr, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onCreateUser, onSaveUser, onDeleteUser }: AdminProps) {
+export function Admin({ settings, hotels, packages, users, trackings, invoices, payments, currentUser, mode, onBack, onOpenTracking, onLogout, onRefresh, onSaveSettings, onUploadLogo, onResetLogo, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onCreateUser, onSaveUser, onDeleteUser }: AdminProps) {
   const { t, language } = useI18n();
   const [page, setPage] = useState<AdminPage>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -73,7 +71,7 @@ export function Admin({ settings, hotels, packages, users, trackings, invoices, 
         {page === 'overview' && <AdminOverview settings={settings} hotels={hotels} packages={packages} users={users} language={language} onOpen={setPage}/>} 
         {page === 'packages' && <PackagesManager items={packages} onSave={onSavePackage} onDelete={onDeletePackage}/>} 
         {page === 'hotels' && <HotelsManager items={hotels} onSave={onSaveHotel} onDelete={onDeleteHotel}/>} 
-        {page === 'settings' && <SettingsManager initial={settings} onSave={onSaveSettings} onUploadLogo={onUploadLogo} onResetLogo={onResetLogo} onUploadPaymentQr={onUploadPaymentQr} onResetPaymentQr={onResetPaymentQr}/>} 
+        {page === 'settings' && <SettingsManager initial={settings} onSave={onSaveSettings} onUploadLogo={onUploadLogo} onResetLogo={onResetLogo}/>} 
         {page === 'users' && <UsersManager items={users} currentUser={currentUser} mode={mode} onCreate={onCreateUser} onSave={onSaveUser} onDelete={onDeleteUser}/>} 
       </div>
     </main>
@@ -207,14 +205,11 @@ function RateFields({ rates, setRate }: { rates: { pax1USD: number; pax2USD: num
   return <div className="rate-fields"><label className="field"><span>{t('rate1')} · USD</span><input type="number" min="0" value={rates.pax1USD} onChange={(e) => setRate('pax1USD', Number(e.target.value))}/></label><label className="field"><span>{t('rate2')} · USD</span><input type="number" min="0" value={rates.pax2USD} onChange={(e) => setRate('pax2USD', Number(e.target.value))}/></label><label className="field"><span>{t('rate3')} · USD</span><input type="number" min="0" value={rates.pax3PlusUSD} onChange={(e) => setRate('pax3PlusUSD', Number(e.target.value))}/></label></div>;
 }
 
-function SettingsManager({ initial, onSave, onUploadLogo, onResetLogo, onUploadPaymentQr, onResetPaymentQr }: { initial: GlobalSettings; onSave: (settings: GlobalSettings) => Promise<void>; onUploadLogo: (file: File) => Promise<string>; onResetLogo: () => Promise<void>; onUploadPaymentQr: (accountType: 'company' | 'owner', file: File) => Promise<string>; onResetPaymentQr: (accountType: 'company' | 'owner') => Promise<void> }) {
+function SettingsManager({ initial, onSave, onUploadLogo, onResetLogo }: { initial: GlobalSettings; onSave: (settings: GlobalSettings) => Promise<void>; onUploadLogo: (file: File) => Promise<string>; onResetLogo: () => Promise<void> }) {
   const { t, language } = useI18n();
   const [form, setForm] = useState(initial);
   const [logoBusy, setLogoBusy] = useState(false);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
-  const companyQrInputRef = useRef<HTMLInputElement | null>(null);
-  const ownerQrInputRef = useRef<HTMLInputElement | null>(null);
-  const [qrBusy, setQrBusy] = useState<'company' | 'owner' | null>(null);
   React.useEffect(() => setForm(initial), [initial]);
   const change = (key: keyof GlobalSettings, value: number) => setForm((current) => ({ ...current, [key]: value }));
   const changeText = (key: keyof GlobalSettings, value: string) => setForm((current) => ({ ...current, [key]: value }));
@@ -237,37 +232,18 @@ function SettingsManager({ initial, onSave, onUploadLogo, onResetLogo, onUploadP
       setForm((current) => ({ ...current, logoUrl: '' }));
     } finally { setLogoBusy(false); }
   }
-  async function choosePaymentQr(accountType: 'company' | 'owner', file?: File) {
-    if (!file) return;
-    setQrBusy(accountType);
-    try {
-      const url = await onUploadPaymentQr(accountType, file);
-      setForm((current) => ({ ...current, [accountType === 'company' ? 'companyPaymentQrUrl' : 'ownerPaymentQrUrl']: url }));
-    } finally {
-      setQrBusy(null);
-      const ref = accountType === 'company' ? companyQrInputRef : ownerQrInputRef;
-      if (ref.current) ref.current.value = '';
-    }
-  }
-  async function resetPaymentQr(accountType: 'company' | 'owner') {
-    setQrBusy(accountType);
-    try {
-      await onResetPaymentQr(accountType);
-      setForm((current) => ({ ...current, [accountType === 'company' ? 'companyPaymentQrUrl' : 'ownerPaymentQrUrl']: '' }));
-    } finally { setQrBusy(null); }
-  }
   return <div className="admin-stack"><PageAction title={t('pricingSettings')} detail="Retail · Agent · USD · Visa · Branding"/>
   <section className="branding-settings-card">
     <div className="branding-preview"><span className="branding-preview-label">{language === 'th' ? 'ตัวอย่างโลโก้ในเว็บไซต์และเอกสาร' : 'Website and document logo preview'}</span><div className="branding-preview-canvas"><Brand logoUrl={form.logoUrl}/></div></div>
     <div className="branding-actions"><div className="settings-card-title"><span><Settings2/></span><div><h3>{language === 'th' ? 'โลโก้บริษัท' : 'Company logo'}</h3><p>{language === 'th' ? 'อัปโหลดครั้งเดียว โลโก้จะเปลี่ยนบนเว็บไซต์ ใบเสนอราคา และ Invoice' : 'Upload once to update the website, quotations and invoices.'}</p></div></div><p className="branding-file-hint">PNG, JPG หรือ WEBP · ไม่เกิน 2 MB · แนะนำพื้นหลังโปร่งใส</p><input ref={logoInputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => chooseLogo(event.target.files?.[0])}/><div className="branding-button-row"><button className="primary-button" disabled={logoBusy} onClick={() => logoInputRef.current?.click()}><Plus/>{logoBusy ? (language === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...') : (language === 'th' ? 'อัปเดตโลโก้' : 'Update logo')}</button><button className="ghost-button" disabled={logoBusy || !form.logoUrl} onClick={resetBrand}><RefreshCw/>{language === 'th' ? 'ใช้โลโก้เริ่มต้น' : 'Use default logo'}</button></div></div>
   </section>
   <section className="payment-account-settings">
-    <div className="settings-card-title payment-account-title"><span><Building2/></span><div><h3>{language === 'th' ? 'บัญชีรับชำระใน Invoice' : 'Invoice payment accounts'}</h3><p>{language === 'th' ? 'ตั้งค่าบัญชีบริษัทและบัญชีผู้บริหาร พร้อม QR สำหรับแสดงในเอกสารเรียกเก็บเงิน' : 'Configure company and owner bank accounts and optional payment QR images.'}</p></div></div>
+    <div className="settings-card-title payment-account-title"><span><Building2/></span><div><h3>{language === 'th' ? 'บัญชีรับชำระใน Invoice' : 'Invoice payment accounts'}</h3><p>{language === 'th' ? 'กำหนดข้อมูลบัญชีธนาคารที่จะแสดงในเอกสารเรียกเก็บเงิน' : 'Configure the bank account details shown on invoices.'}</p></div></div>
     <div className="payment-account-grid">
-      <PaymentAccountSettingsCard language={language} title={language === 'th' ? 'บัญชีบริษัท · ค่าเริ่มต้น Invoice 1' : 'Company account · default for Invoice 1'} bankName={form.companyBankName ?? 'ธนาคารกสิกรไทย'} accountName={form.companyAccountName ?? 'บริษัท OMG Experience Co., Ltd.'} accountNumber={form.companyAccountNumber ?? '051-2-51692-0'} qrUrl={form.companyPaymentQrUrl ?? ''} busy={qrBusy === 'company'} inputRef={companyQrInputRef} onBankName={(v) => changeText('companyBankName', v)} onAccountName={(v) => changeText('companyAccountName', v)} onAccountNumber={(v) => changeText('companyAccountNumber', v)} onChoose={(file) => void choosePaymentQr('company', file)} onReset={() => void resetPaymentQr('company')}/>
-      <PaymentAccountSettingsCard language={language} title={language === 'th' ? 'บัญชีเจ้านาย · ค่าเริ่มต้น Invoice 2' : 'Owner account · default for Invoice 2'} bankName={form.ownerBankName ?? 'ธนาคารไทยพาณิชย์'} accountName={form.ownerAccountName ?? 'นายศิเวก สัจเดว'} accountNumber={form.ownerAccountNumber ?? '203-215366-9'} qrUrl={form.ownerPaymentQrUrl ?? ''} busy={qrBusy === 'owner'} inputRef={ownerQrInputRef} onBankName={(v) => changeText('ownerBankName', v)} onAccountName={(v) => changeText('ownerAccountName', v)} onAccountNumber={(v) => changeText('ownerAccountNumber', v)} onChoose={(file) => void choosePaymentQr('owner', file)} onReset={() => void resetPaymentQr('owner')}/>
+      <PaymentAccountSettingsCard language={language} title={language === 'th' ? 'บัญชีบริษัท · ค่าเริ่มต้น Invoice 1' : 'Company account · default for Invoice 1'} bankName={form.companyBankName ?? 'ธนาคารกสิกรไทย'} accountName={form.companyAccountName ?? 'บริษัท OMG Experience Co., Ltd.'} accountNumber={form.companyAccountNumber ?? '051-2-51692-0'} onBankName={(v) => changeText('companyBankName', v)} onAccountName={(v) => changeText('companyAccountName', v)} onAccountNumber={(v) => changeText('companyAccountNumber', v)}/>
+      <PaymentAccountSettingsCard language={language} title={language === 'th' ? 'บัญชีเจ้านาย · ค่าเริ่มต้น Invoice 2' : 'Owner account · default for Invoice 2'} bankName={form.ownerBankName ?? 'ธนาคารไทยพาณิชย์'} accountName={form.ownerAccountName ?? 'นายศิเวก สัจเดว'} accountNumber={form.ownerAccountNumber ?? '203-215366-9'} onBankName={(v) => changeText('ownerBankName', v)} onAccountName={(v) => changeText('ownerAccountName', v)} onAccountNumber={(v) => changeText('ownerAccountNumber', v)}/>
     </div>
-    <div className="vat-setting-row"><NumberField label={language === 'th' ? 'VAT สำหรับ Invoice 2 ที่ขอใบกำกับภาษี' : 'VAT rate for Invoice 2 tax invoice'} value={form.vatRatePercent ?? 7} onChange={(v) => change('vatRatePercent', Math.min(100, Math.max(0, v)))} step="0.01" suffix="%"/><p>{language === 'th' ? 'VAT จะคำนวณเฉพาะยอดแพ็กเกจส่วนที่เหลือหลังหักค่าตั๋วที่ชำระแล้ว และเมื่อเปิด VAT ระบบจะใช้บัญชีบริษัทอัตโนมัติ' : 'VAT applies only to the remaining package balance after paid airfare. Enabling VAT automatically uses the company account.'}</p></div>
+    <div className="vat-setting-row"><NumberField label={language === 'th' ? 'VAT สำหรับ Invoice 2 ที่ขอใบกำกับภาษี' : 'VAT rate for Invoice 2 tax invoice'} value={form.vatRatePercent ?? 7} onChange={(v) => change('vatRatePercent', Math.min(100, Math.max(0, v)))} step="0.01" suffix="%"/></div>
   </section>
   <div className="settings-grid">
     <section className="settings-card"><div className="settings-card-title"><span><Plane/></span><div><h3>{t('flightPricing')}</h3><p>THB / person</p></div></div><NumberField label={t('retailFlight')} value={form.ticketPriceTHB} onChange={(v) => change('ticketPriceTHB', v)}/><NumberField label={t('agentFlight')} value={form.agentTicketPriceTHB ?? 25220} onChange={(v) => change('agentTicketPriceTHB', v)}/><div className="calculated-note"><BadgePercent/> {t('agentDiscount')}: <b>{formatNumber(discount, 2)}%</b></div><NumberField label={t('airportTaxLabel')} value={form.airportTaxTHB} onChange={(v) => change('airportTaxTHB', v)}/><NumberField label={language === 'th' ? 'ส่วนเพิ่มราคาขาย Business Class / ท่าน' : 'Business Class selling surcharge / pax'} value={form.businessUpgradeTHB ?? 15000} onChange={(v) => change('businessUpgradeTHB', v)}/></section>
@@ -279,8 +255,8 @@ function SettingsManager({ initial, onSave, onUploadLogo, onResetLogo, onUploadP
 }
 
 
-function PaymentAccountSettingsCard({ language, title, bankName, accountName, accountNumber, qrUrl, busy, inputRef, onBankName, onAccountName, onAccountNumber, onChoose, onReset }: { language: 'th' | 'en'; title: string; bankName: string; accountName: string; accountNumber: string; qrUrl: string; busy: boolean; inputRef: React.RefObject<HTMLInputElement | null>; onBankName: (value: string) => void; onAccountName: (value: string) => void; onAccountNumber: (value: string) => void; onChoose: (file?: File) => void; onReset: () => void }) {
-  return <article className="payment-account-card"><div className="payment-account-card-head"><div><b>{title}</b><small>{language === 'th' ? 'ข้อมูลนี้จะแสดงใน Invoice ที่เลือกบัญชีนี้' : 'These details appear on invoices using this account.'}</small></div>{qrUrl ? <img src={qrUrl} alt="Payment QR"/> : <div className="payment-qr-placeholder">QR</div>}</div><label className="field"><span>{language === 'th' ? 'ธนาคาร' : 'Bank'}</span><input value={bankName} onChange={(e) => onBankName(e.target.value)}/></label><label className="field"><span>{language === 'th' ? 'ชื่อบัญชี' : 'Account name'}</span><input value={accountName} onChange={(e) => onAccountName(e.target.value)}/></label><label className="field"><span>{language === 'th' ? 'เลขที่บัญชี' : 'Account number'}</span><input value={accountNumber} onChange={(e) => onAccountNumber(e.target.value)}/></label><input ref={inputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => onChoose(e.target.files?.[0])}/><div className="branding-button-row"><button type="button" className="secondary-button" disabled={busy} onClick={() => inputRef.current?.click()}><Plus/>{busy ? (language === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...') : (language === 'th' ? 'อัปโหลด QR' : 'Upload QR')}</button><button type="button" className="ghost-button" disabled={busy || !qrUrl} onClick={onReset}><Trash2/>{language === 'th' ? 'ลบ QR' : 'Remove QR'}</button></div></article>;
+function PaymentAccountSettingsCard({ language, title, bankName, accountName, accountNumber, onBankName, onAccountName, onAccountNumber }: { language: 'th' | 'en'; title: string; bankName: string; accountName: string; accountNumber: string; onBankName: (value: string) => void; onAccountName: (value: string) => void; onAccountNumber: (value: string) => void }) {
+  return <article className="payment-account-card"><div className="payment-account-card-head"><div><b>{title}</b><small>{language === 'th' ? 'ข้อมูลบัญชีนี้จะแสดงใน Invoice ที่เลือกบัญชีนี้' : 'These bank details appear on invoices using this account.'}</small></div></div><label className="field"><span>{language === 'th' ? 'ธนาคาร' : 'Bank'}</span><input value={bankName} onChange={(e) => onBankName(e.target.value)}/></label><label className="field"><span>{language === 'th' ? 'ชื่อบัญชี' : 'Account name'}</span><input value={accountName} onChange={(e) => onAccountName(e.target.value)}/></label><label className="field"><span>{language === 'th' ? 'เลขที่บัญชี' : 'Account number'}</span><input value={accountNumber} onChange={(e) => onAccountNumber(e.target.value)}/></label></article>;
 }
 
 function NumberField({ label, value, onChange, step = '1', suffix = 'THB', min = 0, max }: { label: string; value: number; onChange: (value: number) => void; step?: string; suffix?: string; min?: number; max?: number }) {

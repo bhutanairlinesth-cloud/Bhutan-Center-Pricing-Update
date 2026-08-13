@@ -8,7 +8,7 @@ import {
 import {
   CustomerTracking, GlobalSettings, HotelCategory, InvoiceDeductionSnapshot, InvoiceDocumentSnapshot,
   InvoiceInstallment, InvoicePackageLineSnapshot, InvoiceTicketBatchSnapshot, JourneyStage, LeadSource,
-  PaymentInvoice, PaymentStageStatus, PaymentTransaction, PaymentTransactionType, PricingChannel,
+  PaymentAccountType, PaymentInvoice, PaymentStageStatus, PaymentTransaction, PaymentTransactionType, PricingChannel,
   SupplementalInvoiceLine, TourPackage, TrackingStatus, TravelerAddition, User,
 } from '../types';
 import { LanguageSwitch, useI18n } from '../i18n';
@@ -44,6 +44,24 @@ interface Props {
 const leadSources: LeadSource[] = ['LINE OA', 'LINE', 'Facebook', 'Call in', 'Referral', 'Walk in', 'Other'];
 const statuses: TrackingStatus[] = ['new', 'following', 'quote_sent', 'won', 'lost', 'completed'];
 const paymentStatuses: PaymentStageStatus[] = ['pending', 'invoiced', 'paid', 'overdue', 'cancelled'];
+
+function paymentAccountSnapshot(settings: GlobalSettings, type: PaymentAccountType) {
+  if (type === 'owner') return {
+    paymentAccountType: 'owner' as const,
+    paymentBankName: settings.ownerBankName ?? 'ธนาคารไทยพาณิชย์',
+    paymentAccountName: settings.ownerAccountName ?? 'นายศิเวก สัจเดว',
+    paymentAccountNumber: settings.ownerAccountNumber ?? '203-215366-9',
+    paymentQrUrl: settings.ownerPaymentQrUrl ?? '',
+  };
+  return {
+    paymentAccountType: 'company' as const,
+    paymentBankName: settings.companyBankName ?? 'ธนาคารกสิกรไทย',
+    paymentAccountName: settings.companyAccountName ?? 'บริษัท OMG Experience Co., Ltd.',
+    paymentAccountNumber: settings.companyAccountNumber ?? '051-2-51692-0',
+    paymentQrUrl: settings.companyPaymentQrUrl ?? '',
+  };
+}
+function roundMoney(value: number) { return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100; }
 const paymentTypes: PaymentTransactionType[] = ['ticket_deposit', 'package_balance', 'supplemental', 'refund', 'other'];
 
 const TRACKING_DRAFT_PREFIX = 'bhutan_customer_tracking_draft_v1:';
@@ -723,19 +741,27 @@ export function CustomerTrackingWorkspace(props: Props) {
     const documentData = installment === 'deposit'
       ? buildInvoiceSnapshot(tracking, 'ticket_original', { ticketBatch: buildOriginalTicketSnapshot(tracking) })
       : buildInvoiceSnapshot(tracking, 'package_balance', { invoices: props.invoices, payments: props.payments });
-    const amount = installment === 'deposit'
+    const subtotalAmount = installment === 'deposit'
       ? documentData.ticketBatch?.totalDueTHB || tracking.depositAmount
       : documentData.balanceDueTHB ?? Math.max(0, packageSalesTotal(tracking) - totalTicketPaymentsReceived(tracking, props.invoices, props.payments));
     const sequenceNumber = installment === 'deposit' ? 1 : 2;
+    const vatEnabled = installment === 'balance' ? Boolean(existing?.vatEnabled) : false;
+    const vatRatePercent = Math.max(0, Number(existing?.vatRatePercent ?? props.settings.vatRatePercent ?? 7));
+    const vatAmount = vatEnabled ? roundMoney(subtotalAmount * vatRatePercent / 100) : 0;
+    const amount = roundMoney(subtotalAmount + vatAmount);
+    const preferredAccountType: PaymentAccountType = vatEnabled ? 'company' : (existing?.paymentAccountType || (installment === 'balance' ? 'owner' : 'company'));
+    const account = (existing?.paymentBankName && existing?.paymentAccountNumber && existing?.paymentAccountType === preferredAccountType)
+      ? { paymentAccountType: preferredAccountType, paymentBankName: existing.paymentBankName, paymentAccountName: existing.paymentAccountName, paymentAccountNumber: existing.paymentAccountNumber, paymentQrUrl: existing.paymentQrUrl || '' }
+      : paymentAccountSnapshot(props.settings, preferredAccountType);
     const invoice: PaymentInvoice = existing ? {
       ...existing, sequenceNumber, title: existing.title || (installment === 'deposit' ? 'ค่าตั๋วเครื่องบินและภาษีสนามบิน' : 'ค่าแพ็กเกจส่วนที่เหลือ'),
       lineItems: existing.lineItems || [], costAmount: existing.costAmount || 0, documentData,
-      issueDate: existing.issueDate || isoToday(), dueDate, amount,
+      issueDate: existing.issueDate || isoToday(), dueDate, subtotalAmount, vatEnabled, vatRatePercent, vatAmount, amount, ...account,
       status: existing.status === 'cancelled' ? 'invoiced' : existing.status, updatedAt: now,
     } : {
       id: makeId('inv'), trackingId: tracking.id, invoiceNo: makeInvoiceNo(installment, sequenceNumber), installment, sequenceNumber,
       title: installment === 'deposit' ? 'ค่าตั๋วเครื่องบินและภาษีสนามบิน' : 'ค่าแพ็กเกจส่วนที่เหลือ', lineItems: [], costAmount: 0, documentData,
-      issueDate: isoToday(), dueDate, amount, status: 'invoiced', paidAt: '', note: '', createdAt: now, updatedAt: now,
+      issueDate: isoToday(), dueDate, subtotalAmount, vatEnabled, vatRatePercent, vatAmount, amount, ...account, status: 'invoiced', paidAt: '', note: '', createdAt: now, updatedAt: now,
     };
     await props.onSaveInvoice(invoice);
     const nextTracking: CustomerTracking = {
@@ -781,7 +807,7 @@ export function CustomerTrackingWorkspace(props: Props) {
     const invoice: PaymentInvoice = {
       id: makeId('inv'), trackingId: tracking.id, invoiceNo: makeInvoiceNo('supplemental', sequenceNumber), installment: 'supplemental', sequenceNumber,
       title: draft.title.trim() || (th ? 'บริการเพิ่มเติมภายหลัง' : 'Additional services'), lineItems: lines, costAmount,
-      issueDate: isoToday(), dueDate: draft.dueDate, amount, status: 'invoiced', paidAt: '', note: draft.note.trim(), createdAt: now, updatedAt: now,
+      issueDate: isoToday(), dueDate: draft.dueDate, subtotalAmount: amount, vatEnabled: false, vatRatePercent: props.settings.vatRatePercent ?? 7, vatAmount: 0, amount, ...paymentAccountSnapshot(props.settings, 'company'), status: 'invoiced', paidAt: '', note: draft.note.trim(), createdAt: now, updatedAt: now,
     };
     await props.onSaveInvoice(invoice);
     const nextInvoiceList = [invoice, ...props.invoices.filter((x) => x.id !== invoice.id)];
@@ -856,7 +882,7 @@ export function CustomerTrackingWorkspace(props: Props) {
     const invoice: PaymentInvoice = {
       id: invoiceId, trackingId: tracking.id, invoiceNo: makeAddedTravelerInvoice1No(addedBatchNumber), installment: 'supplemental', sequenceNumber,
       title: th ? `Invoice 1 — ค่าตั๋วผู้เดินทางเพิ่ม ชุดที่ ${addedBatchNumber} (${draft.passengerCount} ท่าน)` : `Invoice 1 — added-traveller tickets, batch ${addedBatchNumber} (${draft.passengerCount} pax)`, lineItems, costAmount: draft.ticketDepositTotal || 0, documentData,
-      issueDate: isoToday(), dueDate, amount: draft.ticketDepositTotal || 0, status: 'invoiced', paidAt: '',
+      issueDate: isoToday(), dueDate, subtotalAmount: draft.ticketDepositTotal || 0, vatEnabled: false, vatRatePercent: props.settings.vatRatePercent ?? 7, vatAmount: 0, amount: draft.ticketDepositTotal || 0, ...paymentAccountSnapshot(props.settings, 'company'), status: 'invoiced', paidAt: '',
       note: [
         draft.note,
         `PNR: ${draft.pnr}`,
@@ -996,7 +1022,7 @@ export function CustomerTrackingWorkspace(props: Props) {
       onSavePayment={props.onSavePayment} onDeletePayment={props.onDeletePayment} onSaveInvoice={props.onSaveInvoice} onIssueInvoice={issueInvoice}
       onCreateSupplementalInvoice={createSupplementalInvoice} onCreateTravelerAddition={createTravelerAdditionInvoice} onOpenInvoice={openExistingInvoice} onDeleteSupplementalInvoice={deleteSupplementalInvoice}
       onUploadPaymentSlip={props.onUploadPaymentSlip} onGetPaymentSlipUrl={props.onGetPaymentSlipUrl} onDeletePaymentSlip={props.onDeletePaymentSlip}/>
-    <InvoicePreview value={invoicePreview} language={language} payments={invoicePreview ? paymentsFor(invoicePreview.tracking.id, props.payments) : []} invoices={invoicePreview ? props.invoices.filter((invoice) => invoice.trackingId === invoicePreview.tracking.id) : []} onClose={() => setInvoicePreview(null)} onSaveInvoice={props.onSaveInvoice} onSaveTracking={props.onSaveTracking}/>
+    <InvoicePreview value={invoicePreview} settings={props.settings} language={language} payments={invoicePreview ? paymentsFor(invoicePreview.tracking.id, props.payments) : []} invoices={invoicePreview ? props.invoices.filter((invoice) => invoice.trackingId === invoicePreview.tracking.id) : []} onClose={() => setInvoicePreview(null)} onSaveInvoice={props.onSaveInvoice} onSaveTracking={props.onSaveTracking}/>
   </div>;
 }
 
@@ -1386,7 +1412,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
       const transaction: PaymentTransaction = {
         id: paymentId,
         trackingId: currentForm.id,
-        invoiceId: ['supplemental', 'ticket_deposit'].includes(paymentDraft.type) ? paymentDraft.invoiceId : '',
+        invoiceId: paymentDraft.type === 'package_balance' ? (invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'balance' && invoice.status !== 'cancelled')?.id || '') : ['supplemental', 'ticket_deposit'].includes(paymentDraft.type) ? paymentDraft.invoiceId : '',
         type: paymentDraft.type,
         amount: paymentDraft.amount,
         paidAt: paymentDraft.paidAt,
@@ -1423,9 +1449,12 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         }
       }
       if (paymentDraft.type === 'package_balance') {
-        const packageReceivedAfter = paidPackage + paymentDraft.amount;
-        const packageDue = Math.max(0, packageSalesTotal(currentForm) - totalTicketPaymentsReceived(currentForm, invoices, payments));
+        const balanceInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'balance' && invoice.status !== 'cancelled');
+        const previousBalancePaid = balanceInvoice ? invoicePaidAmount(balanceInvoice.id, payments) : paidPackage;
+        const packageReceivedAfter = previousBalancePaid + paymentDraft.amount;
+        const packageDue = balanceInvoice?.amount ?? Math.max(0, packageSalesTotal(currentForm) - totalTicketPaymentsReceived(currentForm, invoices, payments));
         const fullyPaid = packageReceivedAfter >= packageDue - 0.01;
+        if (balanceInvoice) await onSaveInvoice({ ...balanceInvoice, status: fullyPaid ? 'paid' : 'invoiced', paidAt: fullyPaid ? paymentDraft.paidAt : balanceInvoice.paidAt, updatedAt: now });
         next = { ...next, balanceStatus: fullyPaid ? 'paid' : (next.balanceStatus === 'pending' ? 'invoiced' : next.balanceStatus), fullPaymentReceivedAt: fullyPaid ? (next.fullPaymentReceivedAt || paymentDraft.paidAt) : next.fullPaymentReceivedAt };
       }
       if (paymentDraft.type === 'supplemental' && paymentDraft.invoiceId) {
@@ -1751,7 +1780,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
 
       <WorkflowSection number="05" icon={<WalletCards/>} title={th ? 'ประวัติรับชำระเงิน' : 'Payment transactions'} subtitle={th ? 'บันทึกการรับชำระและแนบสลิปแยกตามแต่ละรายการ เพื่อใช้ตรวจสอบย้อนหลัง' : 'Record each payment and attach its slip for future verification.'}>
         <div className="payment-entry-form payment-entry-form-with-slip">
-          <label className="field"><span>{th ? 'ประเภทรายการ' : 'Payment type'}</span><select value={paymentDraft.type} onChange={(e) => { const type = e.target.value as PaymentTransactionType; const firstGeneral = generalSupplementalInvoices(currentForm, invoices).find((x) => x.status !== 'cancelled'); setPaymentDraft({ ...paymentDraft, type, invoiceId: type === 'supplemental' ? (firstGeneral?.id || '') : '', amount: type === 'supplemental' ? Math.max(0, (firstGeneral?.amount || 0) - (firstGeneral ? invoicePaidAmount(firstGeneral.id, payments) : 0)) : paymentDraft.amount }); }}>{paymentTypes.map((x) => <option key={x} value={x}>{paymentTypeLabel(x, th)}</option>)}</select></label>
+          <label className="field"><span>{th ? 'ประเภทรายการ' : 'Payment type'}</span><select value={paymentDraft.type} onChange={(e) => { const type = e.target.value as PaymentTransactionType; const firstGeneral = generalSupplementalInvoices(currentForm, invoices).find((x) => x.status !== 'cancelled'); const balanceInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'balance' && invoice.status !== 'cancelled'); const nextAmount = type === 'supplemental' ? Math.max(0, (firstGeneral?.amount || 0) - (firstGeneral ? invoicePaidAmount(firstGeneral.id, payments) : 0)) : type === 'package_balance' ? Math.max(0, (balanceInvoice?.amount ?? balance) - (balanceInvoice ? invoicePaidAmount(balanceInvoice.id, payments) : paidPackage)) : paymentDraft.amount; setPaymentDraft({ ...paymentDraft, type, invoiceId: type === 'supplemental' ? (firstGeneral?.id || '') : type === 'package_balance' ? (balanceInvoice?.id || '') : '', amount: nextAmount }); }}>{paymentTypes.map((x) => <option key={x} value={x}>{paymentTypeLabel(x, th)}</option>)}</select></label>
           {paymentDraft.type === 'ticket_deposit' && addedInvoice1Documents.length > 0 && <label className="field payment-invoice-link"><span>{th ? 'เลือก Invoice 1 ที่รับชำระ' : 'Invoice 1 being paid'}</span><select value={paymentDraft.invoiceId} onChange={(e) => { const invoiceId = e.target.value; const target = addedInvoice1Documents.find((x) => x.id === invoiceId); setPaymentDraft({ ...paymentDraft, invoiceId, amount: target ? Math.max(0, target.amount - invoicePaidAmount(target.id, payments)) : Math.max(0, deposit - ticketPaidAmount(currentForm, payments)) }); }}><option value="">{th ? `Invoice 1 — ผู้เดินทางชุดแรก (${formatTHB(Math.max(0, deposit - ticketPaidAmount(currentForm, payments)), language)})` : `Invoice 1 — original group (${formatTHB(Math.max(0, deposit - ticketPaidAmount(currentForm, payments)), language)})`}</option>{addedInvoice1Documents.filter((x) => x.status !== 'cancelled').map((x, index) => { const addition = activeTravelerAdditions(currentForm).find((entry) => entry.invoiceId === x.id); return <option key={x.id} value={x.id}>{`${th ? 'Invoice 1 ผู้เดินทางเพิ่ม' : 'Invoice 1 added travellers'} ${index + 1} · PNR ${addition?.pnr || '-'} · ${formatTHB(Math.max(0, x.amount - invoicePaidAmount(x.id, payments)), language)}`}</option>; })}</select></label>}
           {paymentDraft.type === 'supplemental' && <label className="field payment-invoice-link"><span>{th ? 'เลือก Invoice เพิ่มเติม' : 'Supplemental invoice'}</span><select value={paymentDraft.invoiceId} onChange={(e) => { const invoiceId = e.target.value; const target = generalSupplementalInvoices(currentForm, invoices).find((x) => x.id === invoiceId); setPaymentDraft({ ...paymentDraft, invoiceId, amount: target ? Math.max(0, target.amount - invoicePaidAmount(target.id, payments)) : 0 }); }}><option value="">{th ? '— เลือก Invoice —' : '— Select invoice —'}</option>{generalSupplementalInvoices(currentForm, invoices).filter((x) => x.status !== 'cancelled').map((x) => <option key={x.id} value={x.id}>{`Invoice ${x.sequenceNumber} · ${x.invoiceNo} · ${formatTHB(Math.max(0, x.amount - invoicePaidAmount(x.id, payments)), language)}`}</option>)}</select></label>}
           <MoneyField label={th ? 'จำนวนเงิน' : 'Amount'} value={paymentDraft.amount} onChange={(amount) => setPaymentDraft({ ...paymentDraft, amount })}/>
@@ -2083,13 +2112,20 @@ function AutoTotal({ label, formula, value, language, featured = false }: { labe
   return <div className={`auto-total-card ${featured ? 'featured' : ''}`}><span>{label}</span><strong>{formatTHB(value, language)}</strong><small>{formula}</small></div>;
 }
 
-function InvoicePreview({ value, language, payments, invoices, onClose, onSaveInvoice, onSaveTracking }: {
-  value: { tracking: CustomerTracking; invoice: PaymentInvoice } | null; language: 'th' | 'en'; payments: PaymentTransaction[]; invoices: PaymentInvoice[]; onClose: () => void;
+function InvoicePreview({ value, settings, language, payments, invoices, onClose, onSaveInvoice, onSaveTracking }: {
+  value: { tracking: CustomerTracking; invoice: PaymentInvoice } | null; settings: GlobalSettings; language: 'th' | 'en'; payments: PaymentTransaction[]; invoices: PaymentInvoice[]; onClose: () => void;
   onSaveInvoice: (item: PaymentInvoice) => Promise<void>; onSaveTracking: (item: CustomerTracking) => Promise<void>;
 }) {
   const th = language === 'th';
   const [status, setStatus] = useState<PaymentStageStatus>(value?.invoice.status || 'invoiced');
+  const [paymentAccountType, setPaymentAccountType] = useState<PaymentAccountType>(value?.invoice.paymentAccountType || (value?.invoice.installment === 'balance' ? 'owner' : 'company'));
+  const [vatEnabled, setVatEnabled] = useState(Boolean(value?.invoice.vatEnabled));
   React.useEffect(() => setStatus(value?.invoice.status || 'invoiced'), [value?.invoice.id, value?.invoice.status]);
+  React.useEffect(() => {
+    if (!value?.invoice) return;
+    setPaymentAccountType(value.invoice.paymentAccountType || (value.invoice.installment === 'balance' ? 'owner' : 'company'));
+    setVatEnabled(Boolean(value.invoice.vatEnabled));
+  }, [value?.invoice.id, value?.invoice.paymentAccountType, value?.invoice.vatEnabled]);
   if (!value) return null;
   const { tracking, invoice } = value;
   const isDeposit = invoice.installment === 'deposit';
@@ -2108,7 +2144,14 @@ function InvoicePreview({ value, language, payments, invoices, onClose, onSaveIn
   const deductions = snapshot?.deductions || (isBalance ? buildTicketDeductionSnapshot(tracking, invoices, payments) : []);
   const deductedTotal = deductions.reduce((sum, row) => sum + row.amountTHB, 0);
   const balanceDue = snapshot?.balanceDueTHB ?? Math.max(0, packageTotal - deductedTotal);
-  const amountDue = isInvoice1 ? (ticketBatch?.totalDueTHB ?? invoice.amount) : isBalance ? balanceDue : invoice.amount;
+  const baseSubtotal = isInvoice1 ? (ticketBatch?.totalDueTHB ?? invoice.subtotalAmount ?? invoice.amount) : isBalance ? balanceDue : (invoice.subtotalAmount ?? invoice.amount);
+  const currentVatRate = Math.max(0, Number(invoice.vatRatePercent ?? settings.vatRatePercent ?? 7));
+  const currentVatAmount = isBalance && vatEnabled ? roundMoney(baseSubtotal * currentVatRate / 100) : 0;
+  const amountDue = roundMoney(baseSubtotal + currentVatAmount);
+  const selectedAccount = paymentAccountSnapshot(settings, isBalance && vatEnabled ? 'company' : paymentAccountType);
+  const paymentDetails = invoice.paymentBankName && invoice.paymentAccountNumber && invoice.paymentAccountType === selectedAccount.paymentAccountType
+    ? { ...selectedAccount, paymentBankName: invoice.paymentBankName, paymentAccountName: invoice.paymentAccountName, paymentAccountNumber: invoice.paymentAccountNumber, paymentQrUrl: invoice.paymentQrUrl || selectedAccount.paymentQrUrl }
+    : selectedAccount;
   const displaySequence = isInvoice1 ? 1 : (invoice.sequenceNumber || (isBalance ? 2 : 3));
   const totalTravellers = snapshot?.totalPassengerCount ?? (tracking.passengerCount + addedPassengerCount(tracking));
   const invoicePassengerNames = ticketBatch?.passengerNames || [];
@@ -2154,6 +2197,25 @@ function InvoicePreview({ value, language, payments, invoices, onClose, onSaveIn
     });
   }
 
+  async function updatePaymentOptions(nextAccountType: PaymentAccountType, nextVatEnabled: boolean) {
+    const forcedAccountType: PaymentAccountType = isBalance && nextVatEnabled ? 'company' : nextAccountType;
+    setPaymentAccountType(forcedAccountType);
+    setVatEnabled(nextVatEnabled);
+    const account = paymentAccountSnapshot(settings, forcedAccountType);
+    const vatRatePercent = Math.max(0, Number(invoice.vatRatePercent ?? settings.vatRatePercent ?? 7));
+    const vatAmount = isBalance && nextVatEnabled ? roundMoney(baseSubtotal * vatRatePercent / 100) : 0;
+    await onSaveInvoice({
+      ...invoice,
+      subtotalAmount: baseSubtotal,
+      vatEnabled: isBalance ? nextVatEnabled : false,
+      vatRatePercent,
+      vatAmount,
+      amount: roundMoney(baseSubtotal + vatAmount),
+      ...account,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   const documentTitle = isTravelerInvoice1
     ? (th ? 'Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers')
     : isGeneralSupplemental
@@ -2161,7 +2223,7 @@ function InvoicePreview({ value, language, payments, invoices, onClose, onSaveIn
       : (th ? `Invoice งวดที่ ${displaySequence}` : `Invoice ${displaySequence}`);
 
   return <Modal open title={documentTitle} onClose={onClose} wide>
-    <div className="invoice-toolbar no-print"><button className="ghost-button" onClick={onClose}><ArrowLeft/>{th ? 'กลับ' : 'Back'}</button><label><span>{th ? 'สถานะเอกสาร' : 'Status'}</span><select value={status} onChange={(e) => void updateStatus(e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label><button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF'}</button></div>
+    <div className="invoice-toolbar invoice-toolbar-payment no-print"><button className="ghost-button" onClick={onClose}><ArrowLeft/>{th ? 'กลับ' : 'Back'}</button><label><span>{th ? 'สถานะเอกสาร' : 'Status'}</span><select value={status} onChange={(e) => void updateStatus(e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label><label><span>{th ? 'บัญชีรับเงิน' : 'Payment account'}</span><select value={isBalance && vatEnabled ? 'company' : paymentAccountType} disabled={isBalance && vatEnabled} onChange={(e) => void updatePaymentOptions(e.target.value as PaymentAccountType, vatEnabled)}><option value="company">{th ? 'บัญชีบริษัท · กสิกรไทย' : 'Company · Kasikornbank'}</option><option value="owner">{th ? 'บัญชีเจ้านาย · ไทยพาณิชย์' : 'Owner · SCB'}</option></select></label>{isBalance && <label className="invoice-vat-toggle"><span>{th ? 'ใบกำกับภาษี' : 'Tax invoice'}</span><button type="button" className={vatEnabled ? 'active' : ''} onClick={() => void updatePaymentOptions(vatEnabled ? paymentAccountType : 'company', !vatEnabled)}><BadgeCheck/>{vatEnabled ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% เปิดอยู่` : `VAT ${formatNumber(currentVatRate, 2)}% on`) : (th ? 'ไม่บวก VAT' : 'No VAT')}</button></label>}<button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF'}</button></div>
     <article className="invoice-sheet journey-invoice-sheet" id="invoice-print-area">
       <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{isGeneralSupplemental ? (invoice.title || documentTitle) : (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
       <section className="invoice-meta"><div><span>{th ? 'เรียกเก็บจาก' : 'Bill to'}</span><strong>{tracking.customerName}</strong><small>{[tracking.phone, tracking.email].filter(Boolean).join(' · ') || '-'}</small>{tracking.invoiceAddress && <small className="invoice-billing-address">{tracking.invoiceAddress}</small>}</div><div><span>{th ? 'วันที่ออกเอกสาร' : 'Issue date'}</span><strong>{formatDate(invoice.issueDate, language)}</strong><small>{th ? 'ครบกำหนด' : 'Due'}: {invoice.dueDate ? formatDate(invoice.dueDate, language) : '-'}</small></div></section>
@@ -2209,13 +2271,16 @@ function InvoicePreview({ value, language, payments, invoices, onClose, onSaveIn
           <div><span>{th ? 'ค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(packageTotal, 2)}</b></div>
           {deductions.map((deduction) => <div key={deduction.id} className="deduction"><span>{th ? deduction.labelTh : deduction.labelEn}{deduction.reference ? ` (${deduction.reference})` : ''}</span><b>-{formatNumber(deduction.amountTHB, 2)}</b></div>)}
           {!deductions.length && <div className="deduction"><span>{th ? 'หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว' : 'Less paid airfare'}</span><b>-{formatNumber(0, 2)}</b></div>}
-          <div className="journey-payment-due"><span>{th ? 'Total Package Due (THB)' : 'Total Package Due (THB)'}</span><strong>{formatNumber(balanceDue, 2)}</strong></div>
+          <div className="invoice-balance-subtotal"><span>{th ? 'ยอดแพ็กเกจส่วนที่เหลือก่อน VAT' : 'Remaining package balance before VAT'}</span><b>{formatNumber(balanceDue, 2)}</b></div>
+          {vatEnabled && <div className="invoice-vat-row"><span>{th ? `VAT ${formatNumber(currentVatRate, 2)}% เฉพาะยอดแพ็กเกจส่วนที่เหลือ` : `VAT ${formatNumber(currentVatRate, 2)}% on remaining package balance only`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
+          <div className="journey-payment-due"><span>{th ? 'Total Package Due (THB)' : 'Total Package Due (THB)'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
         </section>}
 
         {isInvoice1 && ticketBatch && <section className="invoice-passenger-check"><div className="invoice-passenger-check-title"><div><Plane/><span>{th ? 'ข้อมูลการจองตั๋วสำหรับตรวจสอบชื่อ' : 'Flight booking details for name verification'}</span></div><b>{th ? ticketBatch.batchLabelTh : ticketBatch.batchLabelEn}</b></div><div className="invoice-passenger-booking-meta"><div><span>PNR</span><strong>{ticketBatch.pnr || '-'}</strong></div><div><span>{th ? 'สายการบิน' : 'Airline'}</span><strong>{ticketBatch.airline || '-'}</strong></div><div><span>{th ? 'จำนวนรายชื่อ' : 'Names listed'}</span><strong>{invoicePassengerNames.length} / {ticketBatch.passengerCount}</strong></div></div><div className="invoice-passenger-alert"><ShieldCheck/><span>{th ? 'กรุณาตรวจสอบชื่อ–นามสกุล คำนำหน้า และการสะกดทุกตัวอักษรให้ตรงกับหนังสือเดินทาง ก่อนยืนยันให้ออกตั๋วเครื่องบิน' : 'Please verify every passenger’s full name, title and spelling against the passport before ticket issuance.'}</span></div><ol className={`invoice-passenger-list ${invoicePassengerNames.length > 6 ? 'two-columns' : ''}`}>{invoicePassengerNames.length ? invoicePassengerNames.map((name, index) => <li key={`${name}-${index}`}>{name}</li>) : <li>{th ? 'ยังไม่มีรายชื่อผู้เดินทาง' : 'No passenger names recorded'}</li>}</ol></section>}
       </>}
 
-      <section className="invoice-total"><div><span>{isTravelerInvoice1 ? (th ? 'ยอดชำระ Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers amount due') : isGeneralSupplemental ? (th ? `ยอดชำระ Invoice ${displaySequence}` : `Invoice ${displaySequence} amount due`) : (th ? `ยอดชำระงวดที่ ${displaySequence}` : `Payment ${displaySequence} due`)}</span><strong>THB {formatNumber(amountDue, 2)}</strong><small>{invoice.dueDate ? `${th ? 'ภายในวันที่' : 'Due by'} ${formatDate(invoice.dueDate, language)}` : '-'}</small></div></section>
+      <section className="invoice-total invoice-total-readable"><div><span>{isTravelerInvoice1 ? (th ? 'ยอดชำระ Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers amount due') : isGeneralSupplemental ? (th ? `ยอดชำระ Invoice ${displaySequence}` : `Invoice ${displaySequence} amount due`) : (th ? `ยอดชำระงวดที่ ${displaySequence}` : `Payment ${displaySequence} due`)}</span><strong>THB {formatNumber(amountDue, 2)}</strong></div><aside><span>{th ? 'กำหนดชำระ' : 'PAYMENT DEADLINE'}</span><b>{invoice.dueDate ? formatDate(invoice.dueDate, language) : (th ? 'กรุณากำหนดวันชำระ' : 'Please set a due date')}</b><small>{th ? 'กรุณาชำระภายในวันที่ระบุ เพื่อไม่ให้กระทบการจองและการดำเนินงาน' : 'Please pay by this date to avoid affecting reservations and operations.'}</small></aside></section>
+      <section className="invoice-bank-payment"><div className="invoice-bank-copy"><span>{th ? 'บัญชีสำหรับชำระเงิน' : 'PAYMENT ACCOUNT'}</span><h3>{th ? `กรุณาโอนเงินเข้าบัญชี${paymentDetails.paymentBankName}` : `Please transfer to ${paymentDetails.paymentBankName}`}</h3><dl><div><dt>{th ? 'ชื่อบัญชี' : 'Account name'}</dt><dd>{paymentDetails.paymentAccountName}</dd></div><div><dt>{th ? 'เลขที่บัญชี' : 'Account number'}</dt><dd>{paymentDetails.paymentAccountNumber}</dd></div></dl>{isBalance && vatEnabled && <p className="invoice-tax-account-note">{th ? `รายการนี้ออกใบกำกับภาษีและบวก VAT ${formatNumber(currentVatRate, 2)}% เฉพาะยอดแพ็กเกจส่วนที่เหลือ จึงใช้บัญชีบริษัท` : `This tax invoice adds ${formatNumber(currentVatRate, 2)}% VAT only to the remaining package balance and therefore uses the company account.`}</p>}</div>{paymentDetails.paymentQrUrl ? <div className="invoice-payment-qr"><img src={paymentDetails.paymentQrUrl} alt="Payment QR"/><span>{th ? 'สแกนเพื่อชำระเงิน' : 'Scan to pay'}</span></div> : <div className="invoice-payment-qr empty"><Landmark/><span>{th ? 'สามารถเพิ่ม QR ได้ที่หลังบ้าน → ตั้งค่าราคา' : 'Add a QR in Back Office → Pricing Settings'}</span></div>}</section>
       <section className="invoice-note"><h3>{th ? 'หมายเหตุการชำระเงิน' : 'Payment note'}</h3><p>{invoice.note || (isTravelerInvoice1 ? (th ? 'Invoice 1 ฉบับนี้เรียกเก็บเฉพาะค่าตั๋วและภาษีของผู้เดินทางที่เพิ่ม ส่วนค่าแพ็กเกจของผู้เดินทางทั้งหมดจะรวมเรียกเก็บใน Invoice 2' : 'This Invoice 1 collects only added-traveller airfare and tax. The package value for all travellers will be consolidated in Invoice 2.') : isGeneralSupplemental ? (th ? 'ยอด Invoice เพิ่มเติมนี้จะถูกรวมในยอดขายรวมของลูกค้า และติดตามการรับชำระแยกจาก Invoice เดิม' : 'This supplemental invoice is included in the customer grand total and tracked separately from the original invoices.') : isDeposit ? (th ? 'เมื่อบริษัทตรวจสอบยอดชำระงวดที่ 1 แล้ว เจ้าหน้าที่จะดำเนินการออกและส่งตั๋วเครื่องบินให้ลูกค้า' : 'Tickets will be issued and sent after Payment 1 is verified.') : (th ? 'Invoice 2 คำนวณจากมูลค่าแพ็กเกจล่าสุด ณ วันที่ออกเอกสาร รวมพักเดี่ยวและรายการเพิ่มเติมที่เกิดขึ้นก่อนออก Invoice 2 แล้วหักค่าตั๋วที่ชำระแล้วทุกชุด' : 'Invoice 2 uses the latest package value at issue time, including single-room and other additions, less all paid airfare batches.'))}</p></section>
       <footer className="invoice-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div><div><span>{th ? 'ผู้จัดทำ' : 'Prepared by'}</span><b>{tracking.salesOwnerName || '-'}</b></div></footer>
     </article>

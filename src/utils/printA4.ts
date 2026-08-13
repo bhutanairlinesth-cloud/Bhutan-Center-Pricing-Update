@@ -161,11 +161,19 @@ function fitDocumentToSingleA4Page(doc: Document, elementId: string): void {
     return;
   }
 
-  // Keep normal-size documents unchanged. For a slightly long invoice,
-  // reduce it just enough to stay on one A4 page. Very long documents are
-  // capped at 76% and are allowed to continue on another A4 page rather than
-  // becoming unreadably small.
-  const scale = Math.max(0.76, Math.min(1, (targetHeight / naturalHeight) * 0.98));
+  // Readability is more important than forcing every invoice onto one page.
+  // Only apply a very small reduction. If the document would need to shrink
+  // below 92%, keep 100% sizing and allow Chromium to continue on page 2.
+  const proposedScale = Math.min(1, (targetHeight / naturalHeight) * 0.98);
+  if (proposedScale < 0.92) {
+    page.style.setProperty('zoom', '1', 'important');
+    page.style.setProperty('width', '210mm', 'important');
+    page.style.setProperty('min-width', '210mm', 'important');
+    page.style.setProperty('max-width', '210mm', 'important');
+    page.style.setProperty('min-height', '297mm', 'important');
+    return;
+  }
+  const scale = Math.max(0.92, proposedScale);
   page.style.setProperty('zoom', String(scale), 'important');
   page.style.setProperty('width', `${210 / scale}mm`, 'important');
   page.style.setProperty('min-width', `${210 / scale}mm`, 'important');

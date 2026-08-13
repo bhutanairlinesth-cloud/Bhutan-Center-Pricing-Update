@@ -132,6 +132,37 @@ export default function App() {
       throw error;
     }
   };
+
+  const uploadPaymentQr = async (accountType: 'company' | 'owner', file: File): Promise<string> => {
+    try {
+      if (!settings) throw new Error('ไม่พบข้อมูลการตั้งค่า');
+      const url = await database.uploadPaymentQr(accountType, file);
+      const key = accountType === 'company' ? 'companyPaymentQrUrl' : 'ownerPaymentQrUrl';
+      const next = { ...settings, [key]: url } as GlobalSettings;
+      await database.saveSettings(next);
+      setSettings(next);
+      notify(accountType === 'company' ? 'อัปเดต QR บัญชีบริษัทแล้ว' : 'อัปเดต QR บัญชีเจ้านายแล้ว');
+      return url;
+    } catch (error: any) {
+      notify(`${t('error')}: ${error?.message || 'อัปโหลด QR ไม่สำเร็จ'}`, 'error');
+      throw error;
+    }
+  };
+  const resetPaymentQr = async (accountType: 'company' | 'owner'): Promise<void> => {
+    try {
+      if (!settings) return;
+      await database.deletePaymentQr(accountType);
+      const key = accountType === 'company' ? 'companyPaymentQrUrl' : 'ownerPaymentQrUrl';
+      const next = { ...settings, [key]: '' } as GlobalSettings;
+      await database.saveSettings(next);
+      setSettings(next);
+      notify('ลบ QR เรียบร้อยแล้ว');
+    } catch (error: any) {
+      notify(`${t('error')}: ${error?.message || 'ลบ QR ไม่สำเร็จ'}`, 'error');
+      throw error;
+    }
+  };
+
   const saveHotel = async (value: Hotel) => run(async () => { await database.saveHotel(value); setHotels(await database.getHotels()); });
   const deleteHotel = async (id: string) => run(async () => { await database.deleteHotel(id); setHotels(await database.getHotels()); }, t('deleted'));
   const savePackage = async (value: TourPackage) => run(async () => { await database.savePackage(value); setPackages(await database.getPackages()); });
@@ -173,7 +204,7 @@ export default function App() {
     {currentUser && settings && workspace === 'admin' && currentUser.role === 'admin' && <Admin
       settings={settings} hotels={hotels} packages={packages} users={users} trackings={trackings} invoices={invoices} payments={payments} currentUser={currentUser} mode={database.mode}
       onBack={() => setWorkspace('front')} onOpenTracking={() => setWorkspace('tracking')} onLogout={logout} onRefresh={refresh}
-      onSaveSettings={saveSettings} onUploadLogo={uploadLogo} onResetLogo={resetLogo} onSaveHotel={saveHotel} onDeleteHotel={deleteHotel}
+      onSaveSettings={saveSettings} onUploadLogo={uploadLogo} onResetLogo={resetLogo} onUploadPaymentQr={uploadPaymentQr} onResetPaymentQr={resetPaymentQr} onSaveHotel={saveHotel} onDeleteHotel={deleteHotel}
       onSavePackage={savePackage} onDeletePackage={deletePackage} onCreateUser={createUser} onSaveUser={saveUser} onDeleteUser={deleteUser}
     />}
     <ToastStack items={toasts} onDismiss={(id) => setToasts((list) => list.filter((item) => item.id !== id))}/>

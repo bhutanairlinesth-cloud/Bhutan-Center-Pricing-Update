@@ -5,6 +5,8 @@ import { mockDb } from './mockDb';
 const SETTINGS_ID = '00000000-0000-0000-0000-000000000001';
 const BRAND_BUCKET = 'branding';
 const BRAND_LOGO_PATH = 'company-logo';
+const COMPANY_PAYMENT_QR_PATH = 'company-payment-qr';
+const OWNER_PAYMENT_QR_PATH = 'owner-payment-qr';
 const PAYMENT_SLIP_BUCKET = 'payment-slips';
 
 async function adminUserRequest<T>(body: Record<string, unknown>): Promise<T> {
@@ -52,6 +54,15 @@ function mapSettings(row: any): GlobalSettings {
     groupDiscountPercent: Number(row.group_discount_percent ?? 10),
     businessUpgradeTHB: Number(row.business_upgrade_thb ?? 15000),
     logoUrl: String(row.logo_url ?? ''),
+    companyBankName: String(row.company_bank_name ?? 'ธนาคารกสิกรไทย'),
+    companyAccountName: String(row.company_account_name ?? 'บริษัท OMG Experience Co., Ltd.'),
+    companyAccountNumber: String(row.company_account_number ?? '051-2-51692-0'),
+    companyPaymentQrUrl: String(row.company_payment_qr_url ?? ''),
+    ownerBankName: String(row.owner_bank_name ?? 'ธนาคารไทยพาณิชย์'),
+    ownerAccountName: String(row.owner_account_name ?? 'นายศิเวก สัจเดว'),
+    ownerAccountNumber: String(row.owner_account_number ?? '203-215366-9'),
+    ownerPaymentQrUrl: String(row.owner_payment_qr_url ?? ''),
+    vatRatePercent: Number(row.vat_rate_percent ?? 7),
   };
 }
 
@@ -79,6 +90,15 @@ function settingsRow(settings: GlobalSettings) {
     group_discount_percent: Math.min(100, Math.max(0, settings.groupDiscountPercent ?? 10)),
     business_upgrade_thb: Math.max(0, settings.businessUpgradeTHB ?? 15000),
     logo_url: settings.logoUrl ?? '',
+    company_bank_name: settings.companyBankName ?? 'ธนาคารกสิกรไทย',
+    company_account_name: settings.companyAccountName ?? 'บริษัท OMG Experience Co., Ltd.',
+    company_account_number: settings.companyAccountNumber ?? '051-2-51692-0',
+    company_payment_qr_url: settings.companyPaymentQrUrl ?? '',
+    owner_bank_name: settings.ownerBankName ?? 'ธนาคารไทยพาณิชย์',
+    owner_account_name: settings.ownerAccountName ?? 'นายศิเวก สัจเดว',
+    owner_account_number: settings.ownerAccountNumber ?? '203-215366-9',
+    owner_payment_qr_url: settings.ownerPaymentQrUrl ?? '',
+    vat_rate_percent: Math.min(100, Math.max(0, settings.vatRatePercent ?? 7)),
     updated_at: new Date().toISOString(),
   };
 }
@@ -320,6 +340,15 @@ const mapInvoice = (row: any): PaymentInvoice => ({
   status: row.status || 'pending',
   paidAt: row.paid_at || '',
   note: row.note || '',
+  subtotalAmount: Number(row.subtotal_amount ?? row.amount ?? 0),
+  vatEnabled: Boolean(row.vat_enabled ?? false),
+  vatRatePercent: Number(row.vat_rate_percent ?? 7),
+  vatAmount: Number(row.vat_amount ?? 0),
+  paymentAccountType: row.payment_account_type === 'owner' ? 'owner' : 'company',
+  paymentBankName: row.payment_bank_name || '',
+  paymentAccountName: row.payment_account_name || '',
+  paymentAccountNumber: row.payment_account_number || '',
+  paymentQrUrl: row.payment_qr_url || '',
   documentData: row.document_data && typeof row.document_data === 'object' ? row.document_data : null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -340,6 +369,15 @@ const invoiceRow = (item: PaymentInvoice) => ({
   status: item.status,
   paid_at: item.paidAt || null,
   note: item.note,
+  subtotal_amount: Math.max(0, Number(item.subtotalAmount ?? item.amount ?? 0)),
+  vat_enabled: Boolean(item.vatEnabled),
+  vat_rate_percent: Math.min(100, Math.max(0, Number(item.vatRatePercent ?? 7))),
+  vat_amount: Math.max(0, Number(item.vatAmount ?? 0)),
+  payment_account_type: item.paymentAccountType === 'owner' ? 'owner' : 'company',
+  payment_bank_name: item.paymentBankName || '',
+  payment_account_name: item.paymentAccountName || '',
+  payment_account_number: item.paymentAccountNumber || '',
+  payment_qr_url: item.paymentQrUrl || '',
   document_data: item.documentData || null,
   created_at: item.createdAt,
   updated_at: new Date().toISOString(),
@@ -432,6 +470,26 @@ export const database = {
     if (!isSupabaseConfigured) return;
     const { error } = await supabase.storage.from(BRAND_BUCKET).remove([BRAND_LOGO_PATH]);
     if (error && !String(error.message || '').toLowerCase().includes('not found')) fail(error, 'ลบโลโก้ไม่สำเร็จ');
+  },
+
+  async uploadPaymentQr(accountType: 'company' | 'owner', file: File): Promise<string> {
+    if (!file.type.match(/^image\/(png|jpeg|webp)$/)) throw new Error('รองรับ QR เฉพาะไฟล์ PNG, JPG หรือ WEBP');
+    if (file.size > 3 * 1024 * 1024) throw new Error('ไฟล์ QR ต้องมีขนาดไม่เกิน 3 MB');
+    if (!isSupabaseConfigured) return fileToDataUrl(file);
+    const path = accountType === 'owner' ? OWNER_PAYMENT_QR_PATH : COMPANY_PAYMENT_QR_PATH;
+    const { error } = await supabase.storage.from(BRAND_BUCKET).upload(path, file, {
+      upsert: true, contentType: file.type, cacheControl: '60',
+    });
+    if (error) fail(error, 'อัปโหลด QR ไม่สำเร็จ กรุณารัน MIGRATE_INVOICE_PAYMENT_ACCOUNTS_V12_8.sql ก่อน');
+    const { data } = supabase.storage.from(BRAND_BUCKET).getPublicUrl(path);
+    return `${data.publicUrl}?v=${Date.now()}`;
+  },
+
+  async deletePaymentQr(accountType: 'company' | 'owner'): Promise<void> {
+    if (!isSupabaseConfigured) return;
+    const path = accountType === 'owner' ? OWNER_PAYMENT_QR_PATH : COMPANY_PAYMENT_QR_PATH;
+    const { error } = await supabase.storage.from(BRAND_BUCKET).remove([path]);
+    if (error && !String(error.message || '').toLowerCase().includes('not found')) fail(error, 'ลบ QR ไม่สำเร็จ');
   },
 
   async getHotels(): Promise<Hotel[]> {

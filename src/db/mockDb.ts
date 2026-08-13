@@ -66,6 +66,15 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   groupDiscountPercent: 10,
   businessUpgradeTHB: 15000,
   logoUrl: '',
+  companyBankName: 'ธนาคารกสิกรไทย',
+  companyAccountName: 'บริษัท OMG Experience Co., Ltd.',
+  companyAccountNumber: '051-2-51692-0',
+  companyPaymentQrUrl: '',
+  ownerBankName: 'ธนาคารไทยพาณิชย์',
+  ownerAccountName: 'นายศิเวก สัจเดว',
+  ownerAccountNumber: '203-215366-9',
+  ownerPaymentQrUrl: '',
+  vatRatePercent: 7,
 };
 
 const KEYS = {
@@ -162,6 +171,15 @@ export const mockDb = {
     title: item.title ?? '',
     lineItems: item.lineItems ?? [],
     costAmount: item.costAmount ?? 0,
+    subtotalAmount: item.subtotalAmount ?? item.amount ?? 0,
+    vatEnabled: item.vatEnabled ?? false,
+    vatRatePercent: item.vatRatePercent ?? 7,
+    vatAmount: item.vatAmount ?? 0,
+    paymentAccountType: item.paymentAccountType ?? (item.installment === 'balance' ? 'owner' : 'company'),
+    paymentBankName: item.paymentBankName ?? '',
+    paymentAccountName: item.paymentAccountName ?? '',
+    paymentAccountNumber: item.paymentAccountNumber ?? '',
+    paymentQrUrl: item.paymentQrUrl ?? '',
   })),
   saveInvoice(item: PaymentInvoice) {
     const list = this.getInvoices();

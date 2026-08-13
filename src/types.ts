@@ -81,6 +81,15 @@ export interface GlobalSettings {
   groupDiscountPercent?: number;
   businessUpgradeTHB?: number;
   logoUrl?: string;
+  companyBankName?: string;
+  companyAccountName?: string;
+  companyAccountNumber?: string;
+  companyPaymentQrUrl?: string;
+  ownerBankName?: string;
+  ownerAccountName?: string;
+  ownerAccountNumber?: string;
+  ownerPaymentQrUrl?: string;
+  vatRatePercent?: number;
 }
 
 export interface PricingInput {
@@ -179,6 +188,7 @@ export type JourneyStage = 'lead' | 'quotation_sent' | 'booking_confirmed' | 'fl
 export type PaymentTransactionType = 'ticket_deposit' | 'package_balance' | 'supplemental' | 'refund' | 'other';
 export type PaymentStageStatus = 'pending' | 'invoiced' | 'paid' | 'overdue' | 'cancelled';
 export type InvoiceInstallment = 'deposit' | 'balance' | 'supplemental';
+export type PaymentAccountType = 'company' | 'owner';
 
 
 export interface SupplementalInvoiceLine {
@@ -415,6 +425,18 @@ export interface PaymentInvoice {
   status: PaymentStageStatus;
   paidAt: string;
   note: string;
+  /** Base amount before VAT. For old invoices this falls back to amount. */
+  subtotalAmount: number;
+  /** VAT is only used when a customer requests a tax invoice (normally Invoice 2). */
+  vatEnabled: boolean;
+  vatRatePercent: number;
+  vatAmount: number;
+  /** Bank account selected for this invoice. Details are snapshotted so old documents do not change. */
+  paymentAccountType: PaymentAccountType;
+  paymentBankName: string;
+  paymentAccountName: string;
+  paymentAccountNumber: string;
+  paymentQrUrl: string;
   /** Immutable customer-facing values captured when the invoice is issued. */
   documentData?: InvoiceDocumentSnapshot | null;
   createdAt: string;

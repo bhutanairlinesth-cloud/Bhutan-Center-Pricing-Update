@@ -2744,3 +2744,115 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 .journey-stage-line { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
 .local-draft-badge { display:inline-flex; align-items:center; gap:4px; padding:5px 8px; border-radius:999px; color:#8a5a00; background:#fff3cc; border:1px solid #f1d98b; font-size:9px; font-weight:900; text-transform:uppercase; letter-spacing:.03em; }
 .local-draft-badge svg { width:12px; height:12px; }
+
+/* =========================================================
+   v12.8 — readable invoices, payment accounts, QR and VAT
+   ========================================================= */
+.payment-account-settings {
+  padding: 22px;
+  border: 1px solid #d7e5de;
+  border-radius: 20px;
+  background: linear-gradient(180deg,#fbfdfc,#f3f8f5);
+}
+.payment-account-title { margin-bottom: 18px; }
+.payment-account-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.payment-account-card { padding: 18px; display: grid; gap: 12px; border: 1px solid #d9e5df; border-radius: 18px; background: #fff; }
+.payment-account-card-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.payment-account-card-head > div:first-child { display: flex; flex-direction: column; gap: 4px; }
+.payment-account-card-head b { color: #163b30; font-size: 16px; }
+.payment-account-card-head small { color: #728078; font-size: 12px; line-height: 1.5; }
+.payment-account-card-head img, .payment-qr-placeholder { width: 84px; height: 84px; border-radius: 13px; border: 1px solid #d9e5df; object-fit: contain; background: #fff; }
+.payment-qr-placeholder { display: grid; place-items: center; color: #8aa097; background: #f3f8f5; font-size: 17px; font-weight: 900; letter-spacing: .08em; }
+.vat-setting-row { margin-top: 16px; padding: 16px 18px; display: grid; grid-template-columns: minmax(240px,.55fr) 1fr; gap: 18px; align-items: end; border-radius: 16px; background: #fff8de; border: 1px solid #eedb8d; }
+.vat-setting-row p { margin: 0 0 7px; color: #6d5d25; font-size: 12px; line-height: 1.6; }
+
+.invoice-toolbar-payment { flex-wrap: wrap; }
+.invoice-toolbar-payment .invoice-vat-toggle button { min-height: 42px; padding: 0 13px; display: inline-flex; align-items: center; gap: 7px; border: 1px solid #d6e1dc; border-radius: 10px; background: #fff; color: #56665e; font-weight: 800; }
+.invoice-toolbar-payment .invoice-vat-toggle button.active { color: #0d5c46; border-color: #9dcab9; background: #eaf7f1; }
+.invoice-toolbar-payment .invoice-vat-toggle svg { width: 16px; height: 16px; }
+
+/* Larger, senior-friendly invoice typography. */
+.journey-invoice-sheet { font-size: 12px; line-height: 1.55; }
+.invoice-header h1 { font-size: 30px; }
+.invoice-header span { font-size: 11px; }
+.invoice-header b { font-size: 11px; }
+.invoice-meta span, .invoice-trip-summary span { font-size: 10.5px; }
+.invoice-meta strong { font-size: 16px; }
+.invoice-meta small { font-size: 11.5px; line-height: 1.5; }
+.invoice-trip-summary b { font-size: 13px; }
+.journey-invoice-package h3, .journey-payment-breakdown h3 { padding: 11px 14px; font-size: 12px; }
+.journey-invoice-package-head { font-size: 10px; }
+.journey-invoice-package-row > span { font-size: 11.5px; }
+.journey-invoice-package-row b { font-size: 12.5px; }
+.journey-invoice-package-row small { font-size: 10.5px; }
+.journey-invoice-package-total span { font-size: 10.5px; }
+.journey-invoice-package-total strong { font-size: 15px; }
+.journey-payment-breakdown > div { min-height: 42px; font-size: 11.5px; }
+.journey-payment-breakdown > div b { font-size: 12.5px; }
+.journey-payment-breakdown .journey-payment-due strong { font-size: 16px; }
+.invoice-passenger-check-title > div { font-size: 11.5px; }
+.invoice-passenger-check-title > b { font-size: 10px; }
+.invoice-passenger-booking-meta span { font-size: 9.5px; }
+.invoice-passenger-booking-meta strong { font-size: 12.5px; }
+.invoice-passenger-alert { font-size: 10.5px; }
+.invoice-passenger-list li { font-size: 10.5px; min-height: 31px; }
+.invoice-note h3 { font-size: 11.5px; }
+.invoice-note p { font-size: 11.5px; }
+.invoice-footer strong, .invoice-footer b { font-size: 12px; }
+.invoice-footer span { font-size: 10.5px; }
+
+.invoice-total-readable { margin-top: 15px; display: grid; grid-template-columns: minmax(0,1fr) minmax(260px,.82fr); gap: 10px; }
+.invoice-total-readable > div { width: auto; min-width: 0; padding: 18px 20px; }
+.invoice-total-readable span { font-size: 11px; }
+.invoice-total-readable strong { font-size: 28px; }
+.invoice-total-readable > aside { padding: 16px 18px; display: flex; flex-direction: column; justify-content: center; border: 2px solid #e9c94e; border-radius: 14px; background: #fff5a8; color: #342b08; }
+.invoice-total-readable > aside span { color: #816d17; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.invoice-total-readable > aside b { margin-top: 4px; color: #8e1f17; font-size: 18px; line-height: 1.25; }
+.invoice-total-readable > aside small { margin-top: 5px; color: #665719; font-size: 10.5px; line-height: 1.45; }
+
+.invoice-bank-payment { margin-top: 12px; padding: 15px 17px; display: grid; grid-template-columns: 1fr 108px; gap: 16px; align-items: center; border: 1px solid #cfded7; border-radius: 14px; background: #f3f8f5; }
+.invoice-bank-copy > span { color: #547066; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.invoice-bank-copy h3 { margin: 5px 0 8px; color: #123e31; font-size: 14px; }
+.invoice-bank-copy dl { margin: 0; display: grid; gap: 5px; }
+.invoice-bank-copy dl > div { display: grid; grid-template-columns: 88px 1fr; gap: 8px; align-items: baseline; }
+.invoice-bank-copy dt { color: #718079; font-size: 10.5px; }
+.invoice-bank-copy dd { margin: 0; color: #142f27; font-size: 13px; font-weight: 800; }
+.invoice-tax-account-note { margin: 9px 0 0; padding: 8px 10px; border-radius: 9px; color: #71591a; background: #fff5c7; font-size: 10.5px; line-height: 1.5; }
+.invoice-payment-qr { min-height: 104px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
+.invoice-payment-qr img { width: 94px; height: 94px; object-fit: contain; border: 1px solid #d8e2dd; border-radius: 8px; background: #fff; }
+.invoice-payment-qr span { color: #567066; font-size: 9.5px; font-weight: 800; text-align: center; }
+.invoice-payment-qr.empty { padding: 10px; border: 1px dashed #bdd0c7; border-radius: 10px; }
+.invoice-payment-qr.empty svg { width: 24px; height: 24px; color: #799188; }
+.invoice-balance-subtotal b, .invoice-vat-row b { font-size: 13px !important; }
+.invoice-vat-row { color: #8a4f14; background: #fff8e8; }
+
+@media (max-width: 900px) {
+  .payment-account-grid { grid-template-columns: 1fr; }
+  .vat-setting-row { grid-template-columns: 1fr; }
+}
+
+@media print {
+  /* Keep the larger document fonts in print; do not compress the document to unreadable sizes. */
+  .journey-invoice-sheet { font-size: 11.5px !important; line-height: 1.5 !important; }
+  .invoice-header h1 { font-size: 28px !important; }
+  .invoice-meta span, .invoice-trip-summary span { font-size: 10px !important; }
+  .invoice-meta strong { font-size: 15px !important; }
+  .invoice-meta small { font-size: 11px !important; }
+  .invoice-trip-summary b { font-size: 12px !important; }
+  .journey-invoice-package h3, .journey-payment-breakdown h3 { font-size: 11px !important; }
+  .journey-invoice-package-head { font-size: 9.5px !important; }
+  .journey-invoice-package-row > span { font-size: 11px !important; }
+  .journey-invoice-package-row b { font-size: 12px !important; }
+  .journey-invoice-package-row small { font-size: 10px !important; }
+  .journey-payment-breakdown > div { font-size: 11px !important; }
+  .invoice-passenger-list li { font-size: 10px !important; }
+  .invoice-passenger-alert { font-size: 10px !important; }
+  .invoice-total-readable { grid-template-columns: minmax(0,1fr) 250px !important; break-inside: avoid !important; }
+  .invoice-total-readable strong { font-size: 26px !important; }
+  .invoice-total-readable > aside b { font-size: 17px !important; }
+  .invoice-bank-payment { grid-template-columns: 1fr 100px !important; break-inside: avoid !important; }
+  .invoice-payment-qr img { width: 88px !important; height: 88px !important; }
+  .invoice-bank-copy h3 { font-size: 13px !important; }
+  .invoice-bank-copy dd { font-size: 12px !important; }
+  .invoice-note p { font-size: 10.5px !important; }
+}

@@ -2956,3 +2956,107 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   background: #0d6b50;
 }
 .invoice-full-payment-reference { border-color: #c9dfd5; }
+
+/* =========================================================
+   v12.9.3 — modal paint / upload recovery
+   Chrome can occasionally leave a GPU-composited backdrop-filter layer in a
+   bad state after the native file chooser closes.  The result looks like a
+   large blank white dialog that blocks the page.  Keep modal compositing
+   simple and always provide a close control outside the card.
+   ========================================================= */
+.modal-layer-safe {
+  isolation: isolate;
+  background: rgba(9, 27, 21, .52);
+}
+.modal-layer-safe .modal-backdrop {
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.modal-layer-safe .modal-card {
+  z-index: 2;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+  -webkit-transform: none !important;
+  contain: layout paint;
+}
+.modal-layer-safe .modal-safe-header {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: #18372d !important;
+  background: #fff !important;
+}
+.modal-layer-safe .modal-body {
+  position: relative;
+  z-index: 3;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 80px;
+  color: #172c24;
+  background: #fff;
+  overscroll-behavior: contain;
+}
+.modal-emergency-close {
+  position: fixed;
+  top: 30px;
+  right: max(30px, calc((100vw - min(1050px, calc(100vw - 48px))) / 2 + 18px));
+  z-index: 103;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dbe5e0;
+  border-radius: 11px;
+  color: #52645c;
+  background: #f2f6f4;
+  box-shadow: 0 8px 24px rgba(5, 29, 21, .12);
+  cursor: pointer;
+}
+.modal-emergency-close svg { width: 18px; height: 18px; }
+.modal-safe-error {
+  min-height: 180px;
+  padding: 28px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid #efd5d5;
+  border-radius: 14px;
+  color: #7d2b2b;
+  background: #fff7f7;
+}
+.modal-safe-error > svg { width: 22px; height: 22px; flex: 0 0 auto; margin-top: 2px; }
+.modal-safe-error > div { display: grid; gap: 8px; }
+.modal-safe-error strong { font-size: 16px; }
+.modal-safe-error span { color: #735959; font-size: 13px; line-height: 1.55; }
+.modal-safe-error details { font-size: 11px; }
+.modal-safe-error pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Do not use backdrop-filter on nested journey dialogs either. */
+.journey-submodal-backdrop {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* File inputs remain native but are kept in a stable, non-composited layer. */
+.payment-slip-picker,
+.slip-upload-mini,
+.branding-button-row {
+  transform: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+@media (max-width: 620px) {
+  .modal-emergency-close { top: 18px; right: 18px; }
+}
+
+@media print {
+  .modal-emergency-close,
+  .modal-safe-error { display: none !important; }
+}

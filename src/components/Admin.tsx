@@ -209,17 +209,32 @@ function SettingsManager({ initial, onSave, onUploadLogo, onResetLogo }: { initi
   const { t, language } = useI18n();
   const [form, setForm] = useState(initial);
   const [logoBusy, setLogoBusy] = useState(false);
+  const [logoError, setLogoError] = useState('');
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   React.useEffect(() => setForm(initial), [initial]);
   const change = (key: keyof GlobalSettings, value: number) => setForm((current) => ({ ...current, [key]: value }));
   const changeText = (key: keyof GlobalSettings, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const discount = form.ticketPriceTHB > 0 ? ((form.ticketPriceTHB - (form.agentTicketPriceTHB ?? 0)) / form.ticketPriceTHB) * 100 : 0;
   async function chooseLogo(file?: File) {
-    if (!file) return;
+    if (!file || logoBusy) return;
+    setLogoError('');
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
+      setLogoError(language === 'th' ? 'รองรับเฉพาะ PNG, JPG หรือ WEBP' : 'Only PNG, JPG or WEBP files are supported.');
+      if (logoInputRef.current) logoInputRef.current.value = '';
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoError(language === 'th' ? 'ไฟล์โลโก้ต้องมีขนาดไม่เกิน 2 MB' : 'Logo file must be 2 MB or smaller.');
+      if (logoInputRef.current) logoInputRef.current.value = '';
+      return;
+    }
     setLogoBusy(true);
     try {
       const url = await onUploadLogo(file);
       setForm((current) => ({ ...current, logoUrl: url }));
+    } catch (error: any) {
+      console.error('Logo upload failed', error);
+      setLogoError(error?.message || (language === 'th' ? 'อัปโหลดโลโก้ไม่สำเร็จ' : 'Logo upload failed.'));
     } finally {
       setLogoBusy(false);
       if (logoInputRef.current) logoInputRef.current.value = '';
@@ -235,7 +250,7 @@ function SettingsManager({ initial, onSave, onUploadLogo, onResetLogo }: { initi
   return <div className="admin-stack"><PageAction title={t('pricingSettings')} detail="Retail · Agent · USD · Visa · Branding"/>
   <section className="branding-settings-card">
     <div className="branding-preview"><span className="branding-preview-label">{language === 'th' ? 'ตัวอย่างโลโก้ในเว็บไซต์และเอกสาร' : 'Website and document logo preview'}</span><div className="branding-preview-canvas"><Brand logoUrl={form.logoUrl}/></div></div>
-    <div className="branding-actions"><div className="settings-card-title"><span><Settings2/></span><div><h3>{language === 'th' ? 'โลโก้บริษัท' : 'Company logo'}</h3><p>{language === 'th' ? 'อัปโหลดครั้งเดียว โลโก้จะเปลี่ยนบนเว็บไซต์ ใบเสนอราคา และ Invoice' : 'Upload once to update the website, quotations and invoices.'}</p></div></div><p className="branding-file-hint">PNG, JPG หรือ WEBP · ไม่เกิน 2 MB · แนะนำพื้นหลังโปร่งใส</p><input ref={logoInputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => chooseLogo(event.target.files?.[0])}/><div className="branding-button-row"><button className="primary-button" disabled={logoBusy} onClick={() => logoInputRef.current?.click()}><Plus/>{logoBusy ? (language === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...') : (language === 'th' ? 'อัปเดตโลโก้' : 'Update logo')}</button><button className="ghost-button" disabled={logoBusy || !form.logoUrl} onClick={resetBrand}><RefreshCw/>{language === 'th' ? 'ใช้โลโก้เริ่มต้น' : 'Use default logo'}</button></div></div>
+    <div className="branding-actions"><div className="settings-card-title"><span><Settings2/></span><div><h3>{language === 'th' ? 'โลโก้บริษัท' : 'Company logo'}</h3><p>{language === 'th' ? 'อัปโหลดครั้งเดียว โลโก้จะเปลี่ยนบนเว็บไซต์ ใบเสนอราคา และ Invoice' : 'Upload once to update the website, quotations and invoices.'}</p></div></div><p className="branding-file-hint">PNG, JPG หรือ WEBP · ไม่เกิน 2 MB · แนะนำพื้นหลังโปร่งใส</p><input ref={logoInputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => chooseLogo(event.target.files?.[0])}/><div className="branding-button-row"><button type="button" className="primary-button" disabled={logoBusy} onClick={() => logoInputRef.current?.click()}><Plus/>{logoBusy ? (language === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...') : (language === 'th' ? 'อัปเดตโลโก้' : 'Update logo')}</button><button type="button" className="ghost-button" disabled={logoBusy || !form.logoUrl} onClick={resetBrand}><RefreshCw/>{language === 'th' ? 'ใช้โลโก้เริ่มต้น' : 'Use default logo'}</button></div>{logoError && <div className="upload-inline-error" role="alert">{logoError}</div>}</div>
   </section>
   <section className="payment-account-settings">
     <div className="settings-card-title payment-account-title"><span><Building2/></span><div><h3>{language === 'th' ? 'บัญชีรับชำระใน Invoice' : 'Invoice payment accounts'}</h3><p>{language === 'th' ? 'กำหนดข้อมูลบัญชีธนาคารที่จะแสดงในเอกสารเรียกเก็บเงิน' : 'Configure the bank account details shown on invoices.'}</p></div></div>

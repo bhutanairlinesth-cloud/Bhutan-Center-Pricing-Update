@@ -1471,6 +1471,20 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     setForm(next);
     await onSave({ ...next, updatedAt: new Date().toISOString() });
   }
+  function validatePaymentSlipFile(file: File): string {
+    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
+    if (!allowed.includes(file.type)) return th ? 'รองรับเฉพาะ PNG, JPG, WEBP หรือ PDF' : 'Only PNG, JPG, WEBP or PDF files are supported.';
+    if (file.size > 10 * 1024 * 1024) return th ? 'ไฟล์สลิปต้องมีขนาดไม่เกิน 10 MB' : 'Slip file must be 10 MB or smaller.';
+    return '';
+  }
+
+  function choosePaymentSlipFile(file?: File | null) {
+    if (!file) { setPaymentDraft((current) => ({ ...current, slipFile: null })); return; }
+    const error = validatePaymentSlipFile(file);
+    if (error) { window.alert(error); setSlipInputKey((key) => key + 1); return; }
+    setPaymentDraft((current) => ({ ...current, slipFile: file }));
+  }
+
   async function addPayment() {
     if (paymentDraft.amount <= 0 || !paymentDraft.paidAt || paymentBusy) return;
     if (paymentDraft.type === 'supplemental' && !paymentDraft.invoiceId) { window.alert(th ? 'กรุณาเลือก Invoice เพิ่มเติมที่รับชำระ' : 'Select the supplemental invoice being paid.'); return; }
@@ -1577,6 +1591,10 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
       await onSave({ ...next, updatedAt: now });
       setPaymentDraft({ type: (next.paymentPlan || 'installments') === 'full_payment' ? 'full_payment' : 'ticket_deposit', invoiceId: '', amount: 0, paidAt: isoToday(), reference: '', note: '', slipFile: null });
       setSlipInputKey((key) => key + 1);
+    } catch (error) {
+      // App-level callbacks already show a toast. Contain the rejected promise
+      // here so a failed Storage upload can never tear down the React screen.
+      console.error('Payment upload/save failed', error);
     } finally {
       setPaymentBusy('');
     }
@@ -1592,7 +1610,9 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         previewWindow.opener = null;
         previewWindow.location.href = url;
       } else {
-        window.location.href = url;
+        // Never navigate the current app away to a Storage URL. If the browser
+        // blocks a new tab, copy/opening can be retried without losing work.
+        window.alert(th ? 'เบราว์เซอร์บล็อกหน้าต่างดูสลิป กรุณาอนุญาต Pop-up แล้วลองอีกครั้ง' : 'The browser blocked the slip preview. Allow pop-ups and try again.');
       }
     } catch (error) {
       previewWindow?.close();
@@ -1604,12 +1624,16 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
 
   async function replacePaymentSlip(payment: PaymentTransaction, file: File) {
     if (!file || paymentBusy) return;
+    const validationError = validatePaymentSlipFile(file);
+    if (validationError) { window.alert(validationError); return; }
     setPaymentBusy(payment.id);
     try {
       const previousPath = payment.slipPath;
       const slip = await onUploadPaymentSlip(currentForm.id, payment.id, file);
       await onSavePayment({ ...payment, slipPath: slip.path, slipFileName: slip.fileName, slipMimeType: slip.mimeType, slipSize: slip.size, updatedAt: new Date().toISOString() });
       if (previousPath && previousPath !== slip.path) await onDeletePaymentSlip(previousPath);
+    } catch (error) {
+      console.error('Slip replacement failed', error);
     } finally {
       setPaymentBusy('');
     }
@@ -1918,7 +1942,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
           <label className="field"><span>{th ? 'เลขอ้างอิง / ผู้ชำระ' : 'Reference / payer'}</span><input value={paymentDraft.reference} onChange={(e) => setPaymentDraft({ ...paymentDraft, reference: e.target.value })}/></label>
           <label className="field payment-note"><span>{th ? 'หมายเหตุ' : 'Note'}</span><input value={paymentDraft.note} onChange={(e) => setPaymentDraft({ ...paymentDraft, note: e.target.value })}/></label>
           <label className={`payment-slip-picker ${paymentDraft.slipFile ? 'selected' : ''}`}>
-            <input key={slipInputKey} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(e) => setPaymentDraft({ ...paymentDraft, slipFile: e.target.files?.[0] || null })}/>
+            <input key={slipInputKey} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(e) => choosePaymentSlipFile(e.target.files?.[0] || null)}/>
             <span><Paperclip/></span>
             <div><b>{paymentDraft.slipFile ? paymentDraft.slipFile.name : (th ? 'แนบสลิปการโอน' : 'Attach payment slip')}</b><small>{paymentDraft.slipFile ? `${(paymentDraft.slipFile.size / 1024 / 1024).toFixed(2)} MB` : (th ? 'PNG, JPG, WEBP หรือ PDF ไม่เกิน 10 MB' : 'PNG, JPG, WEBP or PDF, max 10 MB')}</small></div>
             <em>{paymentDraft.slipFile ? (th ? 'เปลี่ยนไฟล์' : 'Change') : (th ? 'เลือกไฟล์' : 'Choose')}</em>
@@ -1935,7 +1959,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
             <strong className={payment.type === 'refund' ? 'negative' : ''}>{payment.type === 'refund' ? '-' : ''}{formatTHB(Math.abs(payment.amount), language)}</strong>
             <div className="payment-slip-actions">
               {payment.slipPath ? <button type="button" className="slip-view-button" disabled={paymentBusy === payment.id} onClick={() => viewPaymentSlip(payment)}>{paymentBusy === payment.id ? <LoaderCircle className="spin"/> : <ExternalLink/>}<span>{th ? 'ดูสลิป' : 'View'}</span></button> : <span className="no-slip">{th ? 'ยังไม่มีสลิป' : 'No slip'}</span>}
-              <label className="slip-upload-mini" title={th ? 'แนบหรือเปลี่ยนสลิป' : 'Attach or replace slip'}><input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" disabled={Boolean(paymentBusy)} onChange={(e) => { const file = e.target.files?.[0]; if (file) void replacePaymentSlip(payment, file); e.currentTarget.value = ''; }}/><Upload/><span>{payment.slipPath ? (th ? 'เปลี่ยน' : 'Replace') : (th ? 'แนบ' : 'Attach')}</span></label>
+              <label className="slip-upload-mini" title={th ? 'แนบหรือเปลี่ยนสลิป' : 'Attach or replace slip'}><input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" disabled={Boolean(paymentBusy)} onChange={(e) => { const file = e.currentTarget.files?.[0] || null; e.currentTarget.value = ''; if (file) void replacePaymentSlip(payment, file); }}/><Upload/><span>{payment.slipPath ? (th ? 'เปลี่ยน' : 'Replace') : (th ? 'แนบ' : 'Attach')}</span></label>
               {payment.slipFileName && <small title={payment.slipFileName}>{payment.slipFileName}</small>}
             </div>
             <button className="danger" disabled={Boolean(paymentBusy)} onClick={() => window.confirm(th ? 'ลบรายการรับชำระนี้และไฟล์สลิป?' : 'Delete this payment and its slip?') && onDeletePayment(payment.id)}><Trash2/></button>

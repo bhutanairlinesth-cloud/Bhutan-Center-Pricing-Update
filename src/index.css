@@ -1116,6 +1116,17 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 }
 .branding-preview-canvas .brand.has-uploaded-logo img { height: 68px; max-width: 300px; }
 .branding-actions { display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+
+.upload-inline-error {
+  padding: 10px 12px;
+  border: 1px solid #f0c8c8;
+  border-radius: 10px;
+  background: #fff4f4;
+  color: #a12d2d;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
 .branding-file-hint { margin: 0; color: #78857e; font-size: 12px; line-height: 1.6; }
 .branding-button-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .visually-hidden {

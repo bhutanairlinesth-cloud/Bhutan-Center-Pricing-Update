@@ -8,7 +8,7 @@ import {
 import {
   CustomerTracking, GlobalSettings, HotelCategory, InvoiceDeductionSnapshot, InvoiceDocumentSnapshot,
   InvoiceInstallment, InvoicePackageLineSnapshot, InvoiceTicketBatchSnapshot, JourneyStage, LeadSource,
-  PaymentAccountType, PaymentInvoice, PaymentStageStatus, PaymentTransaction, PaymentTransactionType, PricingChannel,
+  PaymentAccountType, PaymentInvoice, PaymentStageStatus, PaymentTransaction, PaymentTransactionType, PricingChannel, QuotationRecord,
   SupplementalInvoiceLine, TourPackage, TrackingStatus, TravelerAddition, User,
 } from '../types';
 import { LanguageSwitch, useI18n } from '../i18n';
@@ -27,6 +27,9 @@ interface Props {
   trackings: CustomerTracking[];
   invoices: PaymentInvoice[];
   payments: PaymentTransaction[];
+  quotations: QuotationRecord[];
+  onSaveQuotation: (item: QuotationRecord) => Promise<void>;
+  onDeleteQuotation: (id: string) => Promise<void>;
   onBack: () => void;
   onOpenAdmin: () => void;
   onLogout: () => void;
@@ -638,6 +641,8 @@ export function CustomerTrackingWorkspace(props: Props) {
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState<'all' | 'sales' | 'booking' | 'visa' | 'travel' | 'after'>('all');
   const [paymentFilter, setPaymentFilter] = useState<'all' | ReturnType<typeof paymentSummary>>('all');
+  const [quotationArchiveOpen, setQuotationArchiveOpen] = useState(false);
+  const [quotationSearch, setQuotationSearch] = useState('');
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -690,7 +695,7 @@ export function CustomerTrackingWorkspace(props: Props) {
     const first = props.packages[0];
     const now = new Date().toISOString();
     return {
-      id: makeId('crm'), opportunityName: '', customerName: '', phone: '', email: '', invoiceAddress: '', leadSource: 'LINE OA', landSupplier: '', airline: 'Bhutan Airlines',
+      id: makeId('crm'), sourceQuotationId: '', sourceQuotationNo: '', opportunityName: '', customerName: '', phone: '', email: '', invoiceAddress: '', leadSource: 'LINE OA', landSupplier: '', airline: 'Bhutan Airlines',
       travelStartDate: '', travelEndDate: '', packageId: first?.id || '', packageName: first?.name || '', hotelCategory: '3 Stars', passengerCount: 2,
       chargeablePassengerCount: 2, tourLeaderCount: 0, pricingMode: 'standard', channel: 'retail', paymentPlan: 'installments', sellingPricePerPerson: 0,
       regularLandCostPerPerson: 0, tourLeaderLandCostPerPerson: 0, groupMarginPerTraveler: props.settings.marginTHB, groupSellingPriceOverridePerPerson: 0, groupPricingCostTotal: 0,
@@ -707,6 +712,90 @@ export function CustomerTrackingWorkspace(props: Props) {
       readyToTravelAt: '', tripReturnedAt: '', feedbackRequestedAt: '', feedbackReceivedAt: '', feedbackNote: '', nextAction: '', nextActionDueDate: '', closedAt: '',
       createdAt: now, updatedAt: now,
     };
+  }
+
+  function trackingFromQuotation(quotation: QuotationRecord): CustomerTracking {
+    const base = newTracking();
+    const result = quotation.pricingResult;
+    const now = new Date().toISOString();
+    const travelStartDate = quotation.travelDate || result.travelDate || '';
+    const ticketAndTax = Math.max(0, Number(result.flightTotal || 0)) + Math.max(0, Number(result.airportTaxTotal || 0));
+    const totalAmount = Math.max(0, Number(quotation.totalAmount || result.groupTotal || 0));
+    return {
+      ...base,
+      id: makeId('crm'),
+      sourceQuotationId: quotation.id,
+      sourceQuotationNo: quotation.quotationNo,
+      opportunityName: quotation.customerName || quotation.quotationNo,
+      customerName: quotation.customerName,
+      phone: quotation.phone,
+      email: quotation.email,
+      invoiceAddress: quotation.invoiceAddress,
+      packageId: quotation.packageId || quotation.pricingInput.packageId || '',
+      packageName: quotation.packageName || result.packageName || '',
+      hotelCategory: quotation.hotelCategory || result.hotelCategory || '3 Stars',
+      travelStartDate,
+      travelEndDate: travelStartDate ? addDays(travelStartDate, Math.max(0, Number(result.nights || 0))) : '',
+      passengerCount: Math.max(1, Number(quotation.passengerCount || result.passengerCount || 1)),
+      chargeablePassengerCount: Math.max(1, Number(quotation.chargeablePassengerCount || result.chargeablePassengerCount || quotation.passengerCount || 1)),
+      tourLeaderCount: Math.max(0, Number(quotation.tourLeaderCount || result.tourLeaderCount || 0)),
+      pricingMode: quotation.pricingMode || result.pricingMode || 'standard',
+      channel: quotation.channel || result.channel || 'retail',
+      sellingPricePerPerson: Math.max(0, Number(quotation.sellingPricePerPerson || result.sellingPricePerPerson || 0)),
+      regularLandCostPerPerson: Math.max(0, Number(result.regularLandCostPerPerson || 0)),
+      tourLeaderLandCostPerPerson: Math.max(0, Number(result.tourLeaderLandCostPerPerson || 0)),
+      groupMarginPerTraveler: Math.max(0, Number(result.groupMarginPerTraveler || 0)),
+      groupSellingPriceOverridePerPerson: result.pricingMode === 'group_tl' ? Math.max(0, Number(result.sellingPricePerPerson || 0)) : 0,
+      groupPricingCostTotal: Math.max(0, Number(result.operatingCostTotal || 0)),
+      singleRoomCount: Math.max(0, Number(result.singleRoomCount || 0)),
+      singleSupplementPerPerson: Math.max(0, Number(result.singleSupplementPerPerson || 0)),
+      singleSupplementTotal: Math.max(0, Number(result.singleSupplementTotal || 0)),
+      totalAmount,
+      grandTotalAmount: totalAmount,
+      ticketPricePerPerson: Math.max(0, Number(result.airTicketPerPerson || 0)),
+      ticketAmount: Math.max(0, Number(result.flightTotal || 0)),
+      airportTaxPerPerson: Math.max(0, Number(result.airportTaxPerPerson || 0)),
+      airportTaxAmount: Math.max(0, Number(result.airportTaxTotal || 0)),
+      businessUpgradeCount: Math.max(0, Number(result.businessUpgradeCount || 0)),
+      businessUpgradePerPerson: Math.max(0, Number(result.businessUpgradePerPerson || 0)),
+      businessUpgradeTotal: Math.max(0, Number(result.businessUpgradeTotal || 0)),
+      additionalItems: (result.additionalItems || []).map((item) => ({ ...item })),
+      additionalItemsTotal: Math.max(0, Number(result.additionalItemsTotal || 0)),
+      depositAmount: ticketAndTax,
+      balanceAmount: Math.max(0, totalAmount - ticketAndTax),
+      status: 'won',
+      note: quotation.note || '',
+      quotationSentAt: (quotation.createdAt || now).slice(0, 10),
+      bookingConfirmedAt: isoToday(),
+      nextAction: th ? 'รับ Passport และรูปถ่ายของผู้เดินทางให้ครบ' : 'Collect passport and traveller photos',
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  async function confirmQuotationAndStartJourney(quotation: QuotationRecord) {
+    if (quotation.convertedTrackingId) {
+      const existing = props.trackings.find((item) => item.id === quotation.convertedTrackingId);
+      if (existing) { setQuotationArchiveOpen(false); setEditingIsNew(false); setEditing(existing); return; }
+    }
+    const ok = window.confirm(th
+      ? `ยืนยันว่าลูกค้าคอนเฟิร์ม ${quotation.quotationNo} และเริ่ม Customer Journey ใช่หรือไม่?`
+      : `Confirm ${quotation.quotationNo} and start the Customer Journey?`);
+    if (!ok) return;
+    const tracking = trackingFromQuotation(quotation);
+    await props.onSaveTracking(tracking);
+    await props.onSaveQuotation({ ...quotation, status: 'converted', confirmedAt: new Date().toISOString(), convertedTrackingId: tracking.id, updatedAt: new Date().toISOString() });
+    setQuotationArchiveOpen(false);
+    setEditingIsNew(false);
+    setEditing(tracking);
+  }
+
+  function openConvertedQuotation(quotation: QuotationRecord) {
+    const existing = props.trackings.find((item) => item.id === quotation.convertedTrackingId);
+    if (!existing) return;
+    setQuotationArchiveOpen(false);
+    setEditingIsNew(false);
+    setEditing(existing);
   }
 
   async function issueInvoice(tracking: CustomerTracking, installment: InvoiceInstallment) {
@@ -1041,6 +1130,7 @@ export function CustomerTrackingWorkspace(props: Props) {
         <div><span className="eyebrow"><Sparkles/> CUSTOMER JOURNEY</span><h1>{th ? 'ติดตามลูกค้าตั้งแต่เสนอราคา ถึงปิดจบทริป' : 'Track every customer from quotation to trip closure'}</h1><p>{th ? 'เห็นขั้นตอนปัจจุบัน งานถัดไป เอกสาร การชำระเงิน วีซ่า และ Feedback ในหน้าจอเดียว' : 'Manage next actions, documents, payments, visas, travel readiness and feedback in one workspace.'}</p></div>
         <div className="tracking-head-actions">
           {pendingNewDraft && <button className="ghost-button tracking-draft-resume" onClick={resumeNewDraft}><FileCheck2/><span>{th ? 'Draft ล่าสุด' : 'Latest draft'}</span><small>{formatDraftTime(pendingNewDraft.savedAt, th)}</small></button>}
+          <button className="ghost-button quotation-archive-trigger" onClick={() => setQuotationArchiveOpen(true)}><FileText/><span>{th ? 'ใบเสนอราคาที่บันทึก' : 'Saved quotations'}</span><b>{props.quotations.filter((q) => q.status !== 'converted' && q.status !== 'lost').length}</b></button>
           <button className="primary-button tracking-add" onClick={startNewTracking}><Plus/>{th ? 'เพิ่มลูกค้าใหม่' : 'Add customer'}</button>
         </div>
       </section>
@@ -1080,6 +1170,35 @@ export function CustomerTrackingWorkspace(props: Props) {
         })}</div> : <EmptyState title={th ? 'ยังไม่มีข้อมูลที่ตรงกับตัวกรอง' : 'No matching records'} detail={th ? 'กด “เพิ่มลูกค้าใหม่” เพื่อเริ่มติดตามกระบวนการ' : 'Add a customer to start the workflow.'}/>} 
       </section>
     </main>
+
+    <Modal open={quotationArchiveOpen} title={th ? 'ประวัติใบเสนอราคา' : 'Quotation archive'} onClose={() => setQuotationArchiveOpen(false)} wide>
+      <div className="quotation-archive">
+        <div className="quotation-archive-intro">
+          <div><FileText/><span><b>{th ? 'ใบเสนอราคาทุกใบถูกบันทึกไว้ที่นี่' : 'Every quotation is saved here'}</b><small>{th ? 'เมื่อลูกค้าคอนเฟิร์ม กด “เริ่มติดตามลูกค้า” ระบบจะดึงราคาและข้อมูลทั้งหมดเข้า Customer Journey อัตโนมัติ' : 'When the customer confirms, start tracking to copy all pricing and customer details into Customer Journey.'}</small></span></div>
+          <div className="tracking-search quotation-search"><Search/><input value={quotationSearch} onChange={(e) => setQuotationSearch(e.target.value)} placeholder={th ? 'ค้นหาเลขที่ใบเสนอราคา ชื่อลูกค้า โปรแกรม...' : 'Search quotation no., customer, package...'}/></div>
+        </div>
+        <div className="quotation-archive-list">
+          {props.quotations.filter((quotation) => {
+            const q = quotationSearch.trim().toLowerCase();
+            return !q || [quotation.quotationNo, quotation.customerName, quotation.phone, quotation.email, quotation.packageName].join(' ').toLowerCase().includes(q);
+          }).map((quotation) => {
+            const converted = Boolean(quotation.convertedTrackingId);
+            return <article className={`quotation-archive-card ${converted ? 'converted' : ''}`} key={quotation.id}>
+              <div className="quotation-archive-main"><span className="quotation-no">{quotation.quotationNo}</span><b>{quotation.customerName || '-'}</b><small>{quotation.packageName || '-'} · {quotation.passengerCount} {th ? 'ท่าน' : 'pax'} · {quotation.hotelCategory}</small><em>{quotation.travelDate ? formatDate(quotation.travelDate, language) : (th ? 'ยังไม่ระบุวันเดินทาง' : 'Travel date not set')}</em></div>
+              <div className="quotation-archive-price"><small>{th ? 'ยอดเสนอราคา' : 'Quoted total'}</small><b>{formatTHB(quotation.totalAmount, language)}</b><em>{quotation.channel === 'agent' ? 'AGENT' : 'RETAIL'} · {formatDate(quotation.createdAt, language)}</em></div>
+              <div className="quotation-archive-status"><span className={`quote-status quote-${quotation.status}`}>{converted ? (th ? 'สร้าง Customer Journey แล้ว' : 'Journey created') : quotation.status === 'lost' ? (th ? 'ไม่ได้ไปต่อ' : 'Lost') : (th ? 'รอลูกค้าคอนเฟิร์ม' : 'Awaiting confirmation')}</span></div>
+              <div className="quotation-archive-actions">
+                {converted ? <button className="ghost-button" onClick={() => openConvertedQuotation(quotation)}><ExternalLink/>{th ? 'เปิด Customer Journey' : 'Open journey'}</button> : <>
+                  <button className="primary-button" onClick={() => { void confirmQuotationAndStartJourney(quotation); }}><UserRoundCheck/>{th ? 'ลูกค้าคอนเฟิร์ม → เริ่มติดตาม' : 'Confirmed → Start tracking'}</button>
+                  <button className="ghost-button" onClick={() => { void props.onSaveQuotation({ ...quotation, status: quotation.status === 'lost' ? 'sent' : 'lost', updatedAt: new Date().toISOString() }); }}>{quotation.status === 'lost' ? (th ? 'นำกลับมาติดตาม' : 'Restore') : (th ? 'ไม่ได้ไปต่อ' : 'Mark lost')}</button>
+                </>}
+              </div>
+            </article>;
+          })}
+          {!props.quotations.length && <EmptyState title={th ? 'ยังไม่มีใบเสนอราคาที่บันทึก' : 'No saved quotations yet'} detail={th ? 'สร้างใบเสนอราคาจากหน้าคำนวณราคา แล้วรายการจะเข้ามาอยู่ที่นี่อัตโนมัติ' : 'Create a quotation from the pricing page and it will appear here automatically.'}/>}
+        </div>
+      </div>
+    </Modal>
 
     <TrackingEditor open={Boolean(editing)} item={editing} isNewRecord={editingIsNew} settings={props.settings} packages={props.packages} users={props.users} currentUser={props.currentUser}
       payments={editing ? paymentsFor(editing.id, props.payments) : []} invoices={editing ? supplementalInvoicesFor(editing.id, props.invoices) : []}

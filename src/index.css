@@ -3060,3 +3060,80 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
   .modal-emergency-close,
   .modal-safe-error { display: none !important; }
 }
+
+/* ============================================================
+   v12.10 — Quotation archive -> Customer Journey conversion
+   ============================================================ */
+.quotation-archive-trigger {
+  position: relative;
+  gap: 8px;
+}
+.quotation-archive-trigger > b {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #0d624b;
+  background: #e5f4ee;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.quotation-archive { display: grid; gap: 14px; }
+.quotation-archive-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 390px);
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #dce9e3;
+  border-radius: 14px;
+  background: #f5faf8;
+}
+.quotation-archive-intro > div:first-child { display: flex; gap: 12px; align-items: flex-start; }
+.quotation-archive-intro > div:first-child > svg { width: 22px; height: 22px; color: #0b6b50; flex: 0 0 auto; margin-top: 2px; }
+.quotation-archive-intro span { display: grid; gap: 4px; }
+.quotation-archive-intro b { color: #18372d; font-size: 14px; }
+.quotation-archive-intro small { color: #718078; font-size: 12px; line-height: 1.55; }
+.quotation-search { min-width: 0; }
+.quotation-archive-list { display: grid; gap: 10px; max-height: 62vh; overflow: auto; padding-right: 3px; }
+.quotation-archive-card {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.35fr) minmax(170px, .65fr) minmax(150px, .55fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 15px 16px;
+  border: 1px solid #e0e8e4;
+  border-radius: 14px;
+  background: #fff;
+}
+.quotation-archive-card.converted { background: #f9fbfa; }
+.quotation-archive-main, .quotation-archive-price { display: grid; gap: 4px; min-width: 0; }
+.quotation-archive-main .quotation-no { color: #0c6b51; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; }
+.quotation-archive-main b { color: #172c24; font-size: 14px; overflow-wrap: anywhere; }
+.quotation-archive-main small, .quotation-archive-main em, .quotation-archive-price small, .quotation-archive-price em {
+  color: #7b8982;
+  font-size: 11.5px;
+  font-style: normal;
+  line-height: 1.45;
+}
+.quotation-archive-price b { color: #0b654d; font-size: 17px; font-variant-numeric: tabular-nums; }
+.quotation-archive-status { display: flex; justify-content: flex-start; }
+.quote-status { padding: 7px 10px; border-radius: 999px; font-size: 10.5px; font-weight: 800; white-space: nowrap; }
+.quote-sent { color: #8a5a14; background: #fff3d9; }
+.quote-converted, .quote-confirmed { color: #0a684f; background: #e3f4ed; }
+.quote-lost { color: #7b5050; background: #f4ebeb; }
+.quotation-archive-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+.quotation-archive-actions button { min-height: 38px; padding: 0 12px; font-size: 11px; }
+.quotation-archive-actions svg { width: 15px; height: 15px; }
+@media (max-width: 980px) {
+  .quotation-archive-intro { grid-template-columns: 1fr; }
+  .quotation-archive-card { grid-template-columns: 1fr 1fr; }
+  .quotation-archive-actions { justify-content: flex-start; grid-column: 1 / -1; }
+}
+@media (max-width: 620px) {
+  .quotation-archive-card { grid-template-columns: 1fr; }
+  .quotation-archive-actions { grid-column: auto; }
+  .quotation-archive-actions button { width: 100%; justify-content: center; }
+}

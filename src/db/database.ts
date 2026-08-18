@@ -1,4 +1,4 @@
-import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, TourPackage, User } from '../types';
+import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, User } from '../types';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { mockDb } from './mockDb';
 
@@ -145,8 +145,70 @@ const packageRow = (pkg: TourPackage) => ({
 
 
 
+const mapQuotation = (row: any): QuotationRecord => ({
+  id: row.id,
+  quotationNo: row.quotation_no || '',
+  status: ['confirmed', 'converted', 'lost'].includes(row.status) ? row.status : 'sent',
+  customerName: row.customer_name || '',
+  phone: row.phone || '',
+  email: row.email || '',
+  invoiceAddress: row.invoice_address || '',
+  note: row.note || '',
+  channel: row.channel || 'retail',
+  pricingMode: row.pricing_mode === 'group_tl' ? 'group_tl' : 'standard',
+  packageId: row.package_id || '',
+  packageName: row.package_name || '',
+  hotelCategory: row.hotel_category || '3 Stars',
+  travelDate: row.travel_date || '',
+  passengerCount: Number(row.passenger_count || 1),
+  chargeablePassengerCount: Number(row.chargeable_passenger_count || row.passenger_count || 1),
+  tourLeaderCount: Number(row.tour_leader_count || 0),
+  sellingPricePerPerson: Number(row.selling_price_per_person || 0),
+  totalAmount: Number(row.total_amount || 0),
+  pricingInput: row.pricing_input || {},
+  pricingResult: row.pricing_result || {},
+  createdById: row.created_by_id || '',
+  createdByName: row.created_by_name || '',
+  confirmedAt: row.confirmed_at || '',
+  convertedTrackingId: row.converted_tracking_id || '',
+  createdAt: row.created_at || new Date().toISOString(),
+  updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
+});
+
+const quotationRow = (item: QuotationRecord) => ({
+  id: item.id,
+  quotation_no: item.quotationNo,
+  status: item.status,
+  customer_name: item.customerName,
+  phone: item.phone,
+  email: item.email,
+  invoice_address: item.invoiceAddress || '',
+  note: item.note || '',
+  channel: item.channel,
+  pricing_mode: item.pricingMode,
+  package_id: item.packageId || null,
+  package_name: item.packageName,
+  hotel_category: item.hotelCategory,
+  travel_date: item.travelDate || null,
+  passenger_count: item.passengerCount,
+  chargeable_passenger_count: item.chargeablePassengerCount,
+  tour_leader_count: item.tourLeaderCount,
+  selling_price_per_person: item.sellingPricePerPerson,
+  total_amount: item.totalAmount,
+  pricing_input: item.pricingInput || {},
+  pricing_result: item.pricingResult || {},
+  created_by_id: item.createdById || null,
+  created_by_name: item.createdByName || '',
+  confirmed_at: item.confirmedAt || null,
+  converted_tracking_id: item.convertedTrackingId || null,
+  created_at: item.createdAt,
+  updated_at: new Date().toISOString(),
+});
+
 const mapTracking = (row: any): CustomerTracking => ({
   id: row.id,
+  sourceQuotationId: row.source_quotation_id || '',
+  sourceQuotationNo: row.source_quotation_no || '',
   opportunityName: row.opportunity_name || '',
   customerName: row.customer_name || '',
   phone: row.phone || '',
@@ -238,6 +300,8 @@ const mapTracking = (row: any): CustomerTracking => ({
 
 const trackingRow = (item: CustomerTracking) => ({
   id: item.id,
+  source_quotation_id: item.sourceQuotationId || null,
+  source_quotation_no: item.sourceQuotationNo || null,
   opportunity_name: item.opportunityName,
   customer_name: item.customerName,
   phone: item.phone,
@@ -564,6 +628,23 @@ export const database = {
   async deleteUser(id: string): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.deleteUser(id);
     await adminUserRequest({ action: 'delete', userId: id });
+  },
+
+  async getQuotations(): Promise<QuotationRecord[]> {
+    if (!isSupabaseConfigured) return mockDb.getQuotations();
+    const { data, error } = await supabase.from('quotations').select('*').order('created_at', { ascending: false });
+    if (error) { if (isMissingTable(error)) return []; fail(error, 'โหลดประวัติใบเสนอราคาไม่สำเร็จ'); }
+    return (data || []).map(mapQuotation);
+  },
+  async saveQuotation(item: QuotationRecord): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.saveQuotation(item);
+    const { error } = await supabase.from('quotations').upsert(quotationRow(item));
+    if (error) fail(error, 'บันทึกใบเสนอราคาไม่สำเร็จ กรุณารัน MIGRATE_QUOTATION_ARCHIVE_V12_10.sql ก่อน');
+  },
+  async deleteQuotation(id: string): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.deleteQuotation(id);
+    const { error } = await supabase.from('quotations').delete().eq('id', id);
+    if (error) fail(error, 'ลบใบเสนอราคาไม่สำเร็จ');
   },
 
   async getTrackings(): Promise<CustomerTracking[]> {

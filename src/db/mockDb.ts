@@ -1,4 +1,4 @@
-import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, TourPackage, User } from '../types';
+import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, User } from '../types';
 
 const DEFAULT_USERS: User[] = [
   { id: 'usr_1', name: 'OMG Experience Admin', email: 'info@omgexp.com', role: 'admin', createdAt: new Date().toISOString() },
@@ -85,6 +85,7 @@ const KEYS = {
   trackings: 'bhutan_v11_trackings',
   invoices: 'bhutan_v11_invoices',
   payments: 'bhutan_v12_payments',
+  quotations: 'bhutan_v12_10_quotations',
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -127,8 +128,21 @@ export const mockDb = {
   getSettings: () => ({ ...DEFAULT_SETTINGS, ...read<GlobalSettings>(KEYS.settings, DEFAULT_SETTINGS) }),
   saveSettings(settings: GlobalSettings) { localStorage.setItem(KEYS.settings, JSON.stringify(settings)); },
 
+  getQuotations: (): QuotationRecord[] => read<QuotationRecord[]>(KEYS.quotations, []).map((item) => ({
+    ...item, status: item.status ?? 'sent', confirmedAt: item.confirmedAt ?? '', convertedTrackingId: item.convertedTrackingId ?? '',
+  })),
+  saveQuotation(item: QuotationRecord) {
+    const list = this.getQuotations();
+    const index = list.findIndex((x) => x.id === item.id);
+    if (index >= 0) list[index] = item; else list.unshift(item);
+    localStorage.setItem(KEYS.quotations, JSON.stringify(list));
+  },
+  deleteQuotation(id: string) { localStorage.setItem(KEYS.quotations, JSON.stringify(this.getQuotations().filter((x) => x.id !== id))); },
+
   getTrackings: (): CustomerTracking[] => read<CustomerTracking[]>(KEYS.trackings, []).map((item): CustomerTracking => ({
     ...item,
+    sourceQuotationId: item.sourceQuotationId ?? '',
+    sourceQuotationNo: item.sourceQuotationNo ?? '',
     paymentPlan: item.paymentPlan ?? 'installments',
     singleRoomCount: item.singleRoomCount ?? 0,
     singleSupplementPerPerson: item.singleSupplementPerPerson ?? 0,

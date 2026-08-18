@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { database } from './db/database';
 import { fetchProfile, isSupabaseConfigured, supabaseAuth } from './lib/supabase';
-import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, TourPackage, User } from './types';
+import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, User } from './types';
 import { Login } from './components/Login';
 import { FrontOffice } from './components/FrontOffice';
 import { Admin } from './components/Admin';
@@ -21,6 +21,7 @@ export default function App() {
   const [trackings, setTrackings] = useState<CustomerTracking[]>([]);
   const [invoices, setInvoices] = useState<PaymentInvoice[]>([]);
   const [payments, setPayments] = useState<PaymentTransaction[]>([]);
+  const [quotations, setQuotations] = useState<QuotationRecord[]>([]);
   const [workspace, setWorkspace] = useState<'front' | 'tracking' | 'admin'>('front');
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -34,8 +35,8 @@ export default function App() {
   async function loadData(showLoading = true) {
     if (showLoading) setLoading(true);
     try {
-      const [nextSettings, nextHotels, nextPackages, nextUsers, nextTrackings, nextInvoices, nextPayments] = await Promise.all([
-        database.getSettings(), database.getHotels(), database.getPackages(), database.getUsers(), database.getTrackings(), database.getInvoices(), database.getPaymentTransactions(),
+      const [nextSettings, nextHotels, nextPackages, nextUsers, nextTrackings, nextInvoices, nextPayments, nextQuotations] = await Promise.all([
+        database.getSettings(), database.getHotels(), database.getPackages(), database.getUsers(), database.getTrackings(), database.getInvoices(), database.getPaymentTransactions(), database.getQuotations(),
       ]);
       setSettings(nextSettings);
       setHotels(nextHotels);
@@ -44,6 +45,7 @@ export default function App() {
       setTrackings(nextTrackings);
       setInvoices(nextInvoices);
       setPayments(nextPayments);
+      setQuotations(nextQuotations);
     } catch (error: any) {
       notify(`${t('error')}: ${error?.message || 'Unknown error'}`, 'error');
     } finally { if (showLoading) setLoading(false); }
@@ -145,6 +147,8 @@ export default function App() {
   const saveUser = async (value: User) => run(async () => { await database.saveUser(value); setUsers(await database.getUsers()); });
   const deleteUser = async (id: string) => run(async () => { await database.deleteUser(id); setUsers(await database.getUsers()); }, t('deleted'));
   const saveTracking = async (value: CustomerTracking) => run(async () => { await database.saveTracking(value); setTrackings(await database.getTrackings()); });
+  const saveQuotation = async (value: QuotationRecord) => run(async () => { await database.saveQuotation(value); setQuotations(await database.getQuotations()); }, 'บันทึกใบเสนอราคาเรียบร้อยแล้ว');
+  const deleteQuotation = async (id: string) => run(async () => { await database.deleteQuotation(id); setQuotations(await database.getQuotations()); }, t('deleted'));
   const deleteTracking = async (id: string) => run(async () => { await database.deleteTracking(id); setTrackings(await database.getTrackings()); setInvoices(await database.getInvoices()); setPayments(await database.getPaymentTransactions()); }, t('deleted'));
   const saveInvoice = async (value: PaymentInvoice) => run(async () => { await database.saveInvoice(value); setInvoices(await database.getInvoices()); });
   const deleteInvoice = async (id: string) => run(async () => { await database.deleteInvoice(id); setInvoices(await database.getInvoices()); }, t('deleted'));
@@ -169,8 +173,8 @@ export default function App() {
 
   return <>
     {!currentUser && <Login users={users} onSuccess={loginSuccess}/>} 
-    {currentUser && settings && workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onOpenTracking={() => setWorkspace('tracking')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
-    {currentUser && settings && workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} onBack={() => setWorkspace('front')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment} onUploadPaymentSlip={uploadPaymentSlip} onGetPaymentSlipUrl={getPaymentSlipUrl} onDeletePaymentSlip={deletePaymentSlip}/>} 
+    {currentUser && settings && workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onSaveQuotation={saveQuotation} onOpenTracking={() => setWorkspace('tracking')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
+    {currentUser && settings && workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} quotations={quotations} onSaveQuotation={saveQuotation} onDeleteQuotation={deleteQuotation} onBack={() => setWorkspace('front')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment} onUploadPaymentSlip={uploadPaymentSlip} onGetPaymentSlipUrl={getPaymentSlipUrl} onDeletePaymentSlip={deletePaymentSlip}/>} 
     {currentUser && settings && workspace === 'admin' && currentUser.role === 'admin' && <Admin
       settings={settings} hotels={hotels} packages={packages} users={users} trackings={trackings} invoices={invoices} payments={payments} currentUser={currentUser} mode={database.mode}
       onBack={() => setWorkspace('front')} onOpenTracking={() => setWorkspace('tracking')} onLogout={logout} onRefresh={refresh}

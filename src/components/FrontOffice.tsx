@@ -4,10 +4,10 @@ import {
   ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LogOut, Plane, RotateCcw,
   Settings2, ShieldCheck, Sparkles, Users, WalletCards,
 } from 'lucide-react';
-import { CustomerDetails, GlobalSettings, HotelCategory, PricingChannel, PricingInput, TourPackage, User } from '../types';
+import { CustomerDetails, GlobalSettings, HotelCategory, PricingChannel, PricingInput, QuotationRecord, TourPackage, User } from '../types';
 import { useI18n, LanguageSwitch } from '../i18n';
 import { calculatePrice, getPackageSingleSupplement } from '../utils/pricing';
-import { formatDate, formatNumber, formatTHB, formatUSD, makeQuotationNo } from '../utils/format';
+import { formatDate, formatNumber, formatTHB, formatUSD, makeId, makeQuotationNo } from '../utils/format';
 import { printElementAsA4 } from '../utils/printA4';
 import { Brand } from './Brand';
 import { Modal } from './Ui';
@@ -17,6 +17,7 @@ interface FrontOfficeProps {
   settings: GlobalSettings;
   packages: TourPackage[];
   currentUser: User;
+  onSaveQuotation: (item: QuotationRecord) => Promise<void>;
   onOpenTracking: () => void;
   onOpenAdmin: () => void;
   onLogout: () => void;
@@ -24,7 +25,7 @@ interface FrontOfficeProps {
 
 const emptyCustomer: CustomerDetails = { name: '', phone: '', email: '', invoiceAddress: '', note: '' };
 
-export function FrontOffice({ settings, packages, currentUser, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
+export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
   const { t, language } = useI18n();
   const firstPackage = packages[0];
   const firstCategory: HotelCategory = '3 Stars';
@@ -52,6 +53,7 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
   const [customerOpen, setCustomerOpen] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [quotationNo, setQuotationNo] = useState(makeQuotationNo());
+  const [savingQuote, setSavingQuote] = useState(false);
 
   useEffect(() => {
     if (!input.packageId && packages[0]) setInput((value) => ({ ...value, packageId: packages[0].id }));
@@ -104,10 +106,29 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
     });
   }
 
-  function openQuotation() {
-    setQuotationNo(makeQuotationNo());
-    setCustomerOpen(false);
-    setQuoteOpen(true);
+  async function openQuotation() {
+    if (!result || savingQuote || !customer.name.trim()) return;
+    const nextQuotationNo = makeQuotationNo();
+    const now = new Date().toISOString();
+    const quotation: QuotationRecord = {
+      id: makeId('quote'), quotationNo: nextQuotationNo, status: 'sent',
+      customerName: customer.name.trim(), phone: customer.phone.trim(), email: customer.email.trim(),
+      invoiceAddress: customer.invoiceAddress.trim(), note: customer.note.trim(),
+      channel: result.channel, pricingMode: result.pricingMode, packageId: input.packageId, packageName: result.packageName,
+      hotelCategory: result.hotelCategory, travelDate: result.travelDate, passengerCount: result.passengerCount,
+      chargeablePassengerCount: result.chargeablePassengerCount, tourLeaderCount: result.tourLeaderCount,
+      sellingPricePerPerson: result.sellingPricePerPerson, totalAmount: result.groupTotal,
+      pricingInput: { ...input, additionalItems: input.additionalItems.map((item) => ({ ...item })) },
+      pricingResult: { ...result, additionalItems: result.additionalItems.map((item) => ({ ...item })) },
+      createdById: currentUser.id, createdByName: currentUser.name, confirmedAt: '', convertedTrackingId: '', createdAt: now, updatedAt: now,
+    };
+    setSavingQuote(true);
+    try {
+      await onSaveQuotation(quotation);
+      setQuotationNo(nextQuotationNo);
+      setCustomerOpen(false);
+      setQuoteOpen(true);
+    } finally { setSavingQuote(false); }
   }
 
   return <div className="front-shell">
@@ -286,7 +307,7 @@ export function FrontOffice({ settings, packages, currentUser, onOpenTracking, o
         </div>
         <label className="field"><span>{language === 'th' ? 'ที่อยู่สำหรับออกเอกสาร (ไม่บังคับ)' : 'Billing / invoice address (optional)'}</span><textarea rows={3} value={customer.invoiceAddress} onChange={(event) => setCustomer((value) => ({ ...value, invoiceAddress: event.target.value }))} placeholder={language === 'th' ? 'ชื่อบริษัท ที่อยู่ เลขประจำตัวผู้เสียภาษี หรือเว้นว่างได้' : 'Company, address, tax ID, or leave blank'}/></label>
         <label className="field"><span>{t('note')}</span><textarea rows={3} value={customer.note} onChange={(event) => setCustomer((value) => ({ ...value, note: event.target.value }))}/></label>
-        <div className="modal-actions"><button className="ghost-button" onClick={() => setCustomerOpen(false)}>{t('cancel')}</button><button className="primary-button" onClick={openQuotation} disabled={!customer.name.trim()}>{t('continue')}<ArrowRight/></button></div>
+        <div className="modal-actions"><button className="ghost-button" onClick={() => setCustomerOpen(false)}>{t('cancel')}</button><button className="primary-button" onClick={() => { void openQuotation(); }} disabled={!customer.name.trim() || savingQuote}>{savingQuote ? (language === 'th' ? 'กำลังบันทึก...' : 'Saving...') : t('continue')}<ArrowRight/></button></div>
       </div>
     </Modal>
 

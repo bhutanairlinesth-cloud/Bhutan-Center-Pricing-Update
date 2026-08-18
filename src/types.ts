@@ -174,6 +174,39 @@ export interface PricingResult {
   roundingAdjustment: number;
 }
 
+
+export type QuotationStatus = 'sent' | 'confirmed' | 'converted' | 'lost';
+
+export interface QuotationRecord {
+  id: string;
+  quotationNo: string;
+  status: QuotationStatus;
+  customerName: string;
+  phone: string;
+  email: string;
+  invoiceAddress: string;
+  note: string;
+  channel: PricingChannel;
+  pricingMode: PricingMode;
+  packageId: string;
+  packageName: string;
+  hotelCategory: HotelCategory;
+  travelDate: string;
+  passengerCount: number;
+  chargeablePassengerCount: number;
+  tourLeaderCount: number;
+  sellingPricePerPerson: number;
+  totalAmount: number;
+  pricingInput: PricingInput;
+  pricingResult: PricingResult;
+  createdById: string;
+  createdByName: string;
+  confirmedAt: string;
+  convertedTrackingId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CustomerDetails {
   name: string;
   phone: string;
@@ -236,6 +269,9 @@ export interface TravelerAddition {
 
 export interface CustomerTracking {
   id: string;
+  /** Source quotation when this journey was converted from the quotation archive. */
+  sourceQuotationId: string;
+  sourceQuotationNo: string;
   opportunityName: string;
   customerName: string;
   phone: string;

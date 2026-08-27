@@ -26,7 +26,12 @@ async function adminUserRequest<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 function fail(error: any, fallback: string): never {
-  throw new Error(error?.message || fallback);
+  const message = String(error?.message || '');
+  const lower = message.toLowerCase();
+  if (error?.code === 'PGRST204' || lower.includes('schema cache') || lower.includes('could not find the') && lower.includes('column')) {
+    throw new Error(`โครงสร้าง Supabase ยังไม่ตรงกับโปรแกรมเวอร์ชันนี้ (${message || 'missing column'}). กรุณารัน supabase/REPAIR_SCHEMA_V12_11_3_RUN_THIS.sql ใน Supabase SQL Editor แล้วลองใหม่`);
+  }
+  throw new Error(message || fallback);
 }
 
 function isMissingTable(error: any): boolean {
@@ -667,8 +672,13 @@ export const database = {
   },
   async saveTracking(item: CustomerTracking): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.saveTracking(item);
-    const { error } = await supabase.from('customer_tracking').upsert(trackingRow(item));
+    const { data, error } = await supabase
+      .from('customer_tracking')
+      .upsert(trackingRow(item))
+      .select('id')
+      .single();
     if (error) fail(error, 'บันทึกข้อมูลติดตามลูกค้าไม่สำเร็จ');
+    if (!data?.id) throw new Error('บันทึก Customer Journey ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
   },
   async deleteTracking(id: string): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.deleteTracking(id);
@@ -684,10 +694,24 @@ export const database = {
   },
   async saveInvoice(item: PaymentInvoice): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.saveInvoice(item);
+
+    // Verify the FK parent exists before inserting the invoice. This turns a
+    // database FK failure into a clear application error and protects against
+    // issuing an orphan invoice when a Customer Journey save failed.
+    const { data: parent, error: parentError } = await supabase
+      .from('customer_tracking')
+      .select('id')
+      .eq('id', item.trackingId)
+      .maybeSingle();
+    if (parentError) fail(parentError, 'ตรวจสอบ Customer Journey ก่อนออก Invoice ไม่สำเร็จ');
+    if (!parent?.id) {
+      throw new Error('ยังไม่พบ Customer Journey หลักในฐานข้อมูล กรุณาบันทึกลูกค้าให้สำเร็จก่อนออก Invoice');
+    }
+
     const { error } = await supabase.from('payment_invoices').upsert(invoiceRow(item));
     if (error) {
       if (error?.code === '23503' || String(error?.message || '').includes('payment_invoices_tracking_id_fkey')) {
-        throw new Error('ยังไม่พบข้อมูล Customer Journey หลักในฐานข้อมูล ระบบจะต้องบันทึกลูกค้าก่อนออก Invoice กรุณากดบันทึก Customer Journey แล้วลองออก Invoice อีกครั้ง');
+        throw new Error('Customer Journey หลักยังไม่พร้อมสำหรับ Invoice กรุณาบันทึกลูกค้าแล้วลองอีกครั้ง');
       }
       fail(error, 'บันทึก Invoice ไม่สำเร็จ');
     }

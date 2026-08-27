@@ -925,6 +925,9 @@ export function CustomerTrackingWorkspace(props: Props) {
       updatedAt: now,
     };
 
+    // Ensure the parent Customer Journey row exists in Supabase before inserting
+    // payment_invoices, which has a foreign-key relationship to customer_tracking.
+    await props.onSaveTracking({ ...tracking, updatedAt: now });
     await props.onSaveInvoice(invoice);
     const nextTracking: CustomerTracking = {
       ...tracking,
@@ -975,6 +978,8 @@ export function CustomerTrackingWorkspace(props: Props) {
       title: draft.title.trim() || (th ? 'บริการเพิ่มเติมภายหลัง' : 'Additional services'), lineItems: lines, costAmount,
       issueDate: isoToday(), dueDate: draft.dueDate, subtotalAmount: amount, vatEnabled: false, vatRatePercent: props.settings.vatRatePercent ?? 7, vatAmount: 0, amount, ...paymentAccountSnapshot(props.settings, 'company'), status: 'invoiced', paidAt: '', note: draft.note.trim(), createdAt: now, updatedAt: now,
     };
+    // Persist the parent journey first so the invoice foreign key always has a valid target.
+    await props.onSaveTracking({ ...tracking, updatedAt: now });
     await props.onSaveInvoice(invoice);
     const nextInvoiceList = [invoice, ...props.invoices.filter((x) => x.id !== invoice.id)];
     const extraRevenue = customerSupplementalSalesTotal(tracking, nextInvoiceList);
@@ -1058,6 +1063,8 @@ export function CustomerTrackingWorkspace(props: Props) {
           : `This document is part of Invoice 1 for the added travellers' airfare and tax. Their added package value of ${formatTHB(draft.customerChargeTotal, language)} will be consolidated with the original group and collected as the total remaining balance in Invoice 2.`,
       ].filter(Boolean).join('\n'), createdAt: now, updatedAt: now,
     };
+    // Ensure the Customer Journey parent row exists before inserting the added-traveller invoice.
+    await props.onSaveTracking({ ...tracking, updatedAt: now });
     await props.onSaveInvoice(invoice);
     const nextInvoiceList = [invoice, ...props.invoices.filter((x) => x.id !== invoice.id)];
     const extraRevenue = customerSupplementalSalesTotal(trackingWithAddition, nextInvoiceList);

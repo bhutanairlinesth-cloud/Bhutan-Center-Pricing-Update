@@ -685,7 +685,12 @@ export const database = {
   async saveInvoice(item: PaymentInvoice): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.saveInvoice(item);
     const { error } = await supabase.from('payment_invoices').upsert(invoiceRow(item));
-    if (error) fail(error, 'บันทึก Invoice ไม่สำเร็จ');
+    if (error) {
+      if (error?.code === '23503' || String(error?.message || '').includes('payment_invoices_tracking_id_fkey')) {
+        throw new Error('ยังไม่พบข้อมูล Customer Journey หลักในฐานข้อมูล ระบบจะต้องบันทึกลูกค้าก่อนออก Invoice กรุณากดบันทึก Customer Journey แล้วลองออก Invoice อีกครั้ง');
+      }
+      fail(error, 'บันทึก Invoice ไม่สำเร็จ');
+    }
   },
   async deleteInvoice(id: string): Promise<void> {
     if (!isSupabaseConfigured) return void mockDb.deleteInvoice(id);

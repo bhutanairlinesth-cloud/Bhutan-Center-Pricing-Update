@@ -409,13 +409,20 @@ function buildPackageSnapshotRows(item: CustomerTracking): InvoicePackageLineSna
   const isGroupTL = item.pricingMode === 'group_tl';
   const billedPax = originalChargeablePassengerCount(item);
   const tlCount = Math.max(0, Math.max(1, item.passengerCount || 1) - billedPax);
-  add({
+  const childCount = !isGroupTL ? Math.min(billedPax, Math.max(0, Math.round(Number(item.childPassengerCount || 0)))) : 0;
+  const adultBilledPax = Math.max(0, billedPax - childCount);
+  if (adultBilledPax > 0) add({
     descriptionTh: item.packageName || 'แพ็กเกจทัวร์', descriptionEn: item.packageName || 'Tour package',
     detailTh: isGroupTL ? `${item.hotelCategory} · เดินทางจริง ${item.passengerCount} ท่าน · เรียกเก็บ ${billedPax}+${tlCount} TL` : `${item.hotelCategory}`,
     detailEn: isGroupTL ? `${item.hotelCategory} · ${item.passengerCount} actual travellers · billed ${billedPax}+${tlCount} TL` : `${item.hotelCategory}`,
-    ptc: 'ADT',
-    quantity: billedPax, unitPriceTHB: Math.max(0, item.sellingPricePerPerson || 0),
-    totalTHB: billedPax * Math.max(0, item.sellingPricePerPerson || 0),
+    ptc: 'ADT', quantity: adultBilledPax, unitPriceTHB: Math.max(0, item.sellingPricePerPerson || 0),
+    totalTHB: adultBilledPax * Math.max(0, item.sellingPricePerPerson || 0),
+  });
+  if (childCount > 0) add({
+    descriptionTh: `${item.packageName || 'แพ็กเกจทัวร์'} — เด็ก`, descriptionEn: `${item.packageName || 'Tour package'} — Child`,
+    detailTh: item.hotelCategory, detailEn: item.hotelCategory, ptc: 'CHD', quantity: childCount,
+    unitPriceTHB: Math.max(0, item.childSellingPricePerPerson || item.sellingPricePerPerson || 0),
+    totalTHB: childCount * Math.max(0, item.childSellingPricePerPerson || item.sellingPricePerPerson || 0),
   });
   if (item.businessUpgradeCount > 0 && item.businessUpgradePerPerson > 0) add({
     descriptionTh: 'อัปเกรด Business Class', descriptionEn: 'Business Class Upgrade',
@@ -470,28 +477,29 @@ function buildPackageSnapshotRows(item: CustomerTracking): InvoicePackageLineSna
 function buildOriginalTicketSnapshot(item: CustomerTracking): InvoiceTicketBatchSnapshot {
   const names = (item.passengerNames || '').split(/\r?\n/).map((name) => name.trim()).filter(Boolean);
   const pax = Math.max(1, Math.round(Number(item.passengerCount || 1)));
-  const businessCount = Math.min(pax, Math.max(0, Math.round(Number(item.businessUpgradeCount || 0))));
-  const economyCount = Math.max(0, pax - businessCount);
-  const economyFare = Math.max(0, Number(item.ticketPricePerPerson || 0));
-  const businessFare = economyFare + Math.max(0, Number(item.businessUpgradePerPerson || 0));
-  const tax = Math.max(0, Number(item.airportTaxPerPerson || 0));
-  const fareLines = item.pricingMode === 'group_tl' && businessCount > 0
-    ? [
-        ...(economyCount > 0 ? [{ cabinClass: 'Economy' as const, passengerCount: economyCount, farePerPersonTHB: economyFare, airportTaxPerPersonTHB: tax, totalPerPersonTHB: economyFare + tax, totalTHB: economyCount * (economyFare + tax) }] : []),
-        { cabinClass: 'Business' as const, passengerCount: businessCount, farePerPersonTHB: businessFare, airportTaxPerPersonTHB: tax, totalPerPersonTHB: businessFare + tax, totalTHB: businessCount * (businessFare + tax) },
-      ]
-    : undefined;
-  const cabinClass = businessCount >= pax ? 'Business' : businessCount > 0 ? 'Mixed Economy / Business' : 'Economy';
-  const fareTotalTHB = fareLines
-    ? fareLines.reduce((sum, line) => sum + line.farePerPersonTHB * line.passengerCount, 0)
-    : Math.max(0, Number(item.ticketAmount || 0));
-  const airportTaxTotalTHB = tax * pax;
+  const childCount = item.pricingMode === 'group_tl' ? 0 : Math.min(pax, Math.max(0, Math.round(Number(item.childPassengerCount || 0))));
+  const adultCount = Math.max(0, pax - childCount);
+  const businessCount = Math.min(adultCount, Math.max(0, Math.round(Number(item.businessUpgradeCount || 0))));
+  const adultEconomyCount = Math.max(0, adultCount - businessCount);
+  const adultFare = Math.max(0, Number(item.ticketPricePerPerson || 0));
+  const adultTax = Math.max(0, Number(item.airportTaxPerPerson || 0));
+  const childFare = Math.max(0, Number(item.childTicketPricePerPerson || adultFare));
+  const childTax = Math.max(0, Number(item.childAirportTaxPerPerson || adultTax));
+  const businessFare = adultFare + Math.max(0, Number(item.businessUpgradePerPerson || 0));
+  const fareLines = [
+    ...(adultEconomyCount > 0 ? [{ ptc: 'ADT' as const, cabinClass: 'Economy' as const, passengerCount: adultEconomyCount, farePerPersonTHB: adultFare, airportTaxPerPersonTHB: adultTax, totalPerPersonTHB: adultFare + adultTax, totalTHB: adultEconomyCount * (adultFare + adultTax) }] : []),
+    ...(businessCount > 0 ? [{ ptc: 'ADT' as const, cabinClass: 'Business' as const, passengerCount: businessCount, farePerPersonTHB: businessFare, airportTaxPerPersonTHB: adultTax, totalPerPersonTHB: businessFare + adultTax, totalTHB: businessCount * (businessFare + adultTax) }] : []),
+    ...(childCount > 0 ? [{ ptc: 'CHD' as const, cabinClass: 'Economy' as const, passengerCount: childCount, farePerPersonTHB: childFare, airportTaxPerPersonTHB: childTax, totalPerPersonTHB: childFare + childTax, totalTHB: childCount * (childFare + childTax) }] : []),
+  ];
+  const cabinClass = businessCount >= adultCount && adultCount > 0 ? 'Business' : businessCount > 0 ? 'Mixed Economy / Business' : 'Economy';
+  const fareTotalTHB = fareLines.reduce((sum, line) => sum + line.farePerPersonTHB * line.passengerCount, 0);
+  const airportTaxTotalTHB = fareLines.reduce((sum, line) => sum + line.airportTaxPerPersonTHB * line.passengerCount, 0);
   return {
     batchLabelTh: 'ผู้เดินทางชุดแรก', batchLabelEn: 'Original traveller group', passengerCount: pax,
     passengerNames: names, pnr: item.flightPnr || '', airline: item.airline || '', cabinClass,
-    farePerPersonTHB: economyFare, airportTaxPerPersonTHB: tax,
+    farePerPersonTHB: adultFare, airportTaxPerPersonTHB: adultTax,
     fareTotalTHB, airportTaxTotalTHB, totalDueTHB: fareTotalTHB + airportTaxTotalTHB,
-    fareLines,
+    fareLines: fareLines.length > 1 || childCount > 0 || businessCount > 0 ? fareLines : undefined,
   };
 }
 
@@ -697,7 +705,7 @@ export function CustomerTrackingWorkspace(props: Props) {
     return {
       id: makeId('crm'), sourceQuotationId: '', sourceQuotationNo: '', opportunityName: '', customerName: '', phone: '', email: '', invoiceAddress: '', leadSource: 'LINE OA', landSupplier: '', airline: 'Bhutan Airlines',
       travelStartDate: '', travelEndDate: '', packageId: first?.id || '', packageName: first?.name || '', hotelCategory: '3 Stars', passengerCount: 2,
-      chargeablePassengerCount: 2, tourLeaderCount: 0, pricingMode: 'standard', channel: 'retail', paymentPlan: 'installments', sellingPricePerPerson: 0,
+      chargeablePassengerCount: 2, tourLeaderCount: 0, pricingMode: 'standard', channel: 'retail', paymentPlan: 'installments', childPassengerCount: 0, childSellingPricePerPerson: 0, childTicketPricePerPerson: 0, childAirportTaxPerPerson: props.settings.airportTaxTHB, sellingPricePerPerson: 0,
       regularLandCostPerPerson: 0, tourLeaderLandCostPerPerson: 0, groupMarginPerTraveler: props.settings.marginTHB, groupSellingPriceOverridePerPerson: 0, groupPricingCostTotal: 0,
       singleRoomCount: 0, singleSupplementPerPerson: 0, singleSupplementTotal: 0, totalAmount: 0, supplementalInvoiceTotal: 0, supplementalCostTotal: 0, grandTotalAmount: 0, travelerAdditions: [],
       ticketPricePerPerson: props.settings.ticketPriceTHB, ticketAmount: props.settings.ticketPriceTHB * 2,
@@ -741,6 +749,10 @@ export function CustomerTrackingWorkspace(props: Props) {
       tourLeaderCount: Math.max(0, Number(quotation.tourLeaderCount || result.tourLeaderCount || 0)),
       pricingMode: quotation.pricingMode || result.pricingMode || 'standard',
       channel: quotation.channel || result.channel || 'retail',
+      childPassengerCount: Math.max(0, Number(quotation.childPassengerCount ?? result.childPassengerCount ?? 0)),
+      childSellingPricePerPerson: Math.max(0, Number(quotation.childSellingPricePerPerson ?? result.childSellingPricePerPerson ?? 0)),
+      childTicketPricePerPerson: Math.max(0, Number(result.childTicketPricePerPerson || 0)),
+      childAirportTaxPerPerson: Math.max(0, Number(result.childAirportTaxPerPerson || 0)),
       sellingPricePerPerson: Math.max(0, Number(quotation.sellingPricePerPerson || result.sellingPricePerPerson || 0)),
       regularLandCostPerPerson: Math.max(0, Number(result.regularLandCostPerPerson || 0)),
       tourLeaderLandCostPerPerson: Math.max(0, Number(result.tourLeaderLandCostPerPerson || 0)),
@@ -1184,7 +1196,7 @@ export function CustomerTrackingWorkspace(props: Props) {
           }).map((quotation) => {
             const converted = Boolean(quotation.convertedTrackingId);
             return <article className={`quotation-archive-card ${converted ? 'converted' : ''}`} key={quotation.id}>
-              <div className="quotation-archive-main"><span className="quotation-no">{quotation.quotationNo}</span><b>{quotation.customerName || '-'}</b><small>{quotation.packageName || '-'} · {quotation.passengerCount} {th ? 'ท่าน' : 'pax'} · {quotation.hotelCategory}</small><em>{quotation.travelDate ? formatDate(quotation.travelDate, language) : (th ? 'ยังไม่ระบุวันเดินทาง' : 'Travel date not set')}</em></div>
+              <div className="quotation-archive-main"><span className="quotation-no">{quotation.quotationNo}</span><b>{quotation.customerName || '-'}</b><small>{quotation.packageName || '-'} · {quotation.childPassengerCount > 0 ? (th ? `${quotation.passengerCount - quotation.childPassengerCount} ADT + ${quotation.childPassengerCount} CHD` : `${quotation.passengerCount - quotation.childPassengerCount} ADT + ${quotation.childPassengerCount} CHD`) : `${quotation.passengerCount} ${th ? 'ท่าน' : 'pax'}`} · {quotation.hotelCategory}</small><em>{quotation.travelDate ? formatDate(quotation.travelDate, language) : (th ? 'ยังไม่ระบุวันเดินทาง' : 'Travel date not set')}</em></div>
               <div className="quotation-archive-price"><small>{th ? 'ยอดเสนอราคา' : 'Quoted total'}</small><b>{formatTHB(quotation.totalAmount, language)}</b><em>{quotation.channel === 'agent' ? 'AGENT' : 'RETAIL'} · {formatDate(quotation.createdAt, language)}</em></div>
               <div className="quotation-archive-status"><span className={`quote-status quote-${quotation.status}`}>{converted ? (th ? 'สร้าง Customer Journey แล้ว' : 'Journey created') : quotation.status === 'lost' ? (th ? 'ไม่ได้ไปต่อ' : 'Lost') : (th ? 'รอลูกค้าคอนเฟิร์ม' : 'Awaiting confirmation')}</span></div>
               <div className="quotation-archive-actions">
@@ -1326,6 +1338,8 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     const next = { ...current, ...patch };
     const pax = Math.max(1, Math.round(Number(next.passengerCount || 1)));
     const pricingMode = next.pricingMode === 'group_tl' ? 'group_tl' : 'standard';
+    const childPassengerCount = pricingMode === 'standard' ? Math.min(pax, Math.max(0, Math.round(Number(next.childPassengerCount || 0)))) : 0;
+    const adultPassengerCount = Math.max(0, pax - childPassengerCount);
     const chargeablePassengerCount = pricingMode === 'group_tl'
       ? Math.min(pax, Math.max(1, Math.round(Number(next.chargeablePassengerCount || pax))))
       : pax;
@@ -1337,13 +1351,16 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     const additionalItemsTotal = additionalItems.reduce((sum, item) => sum + item.totalTHB, 0);
     const ticketPricePerPerson = Math.max(0, Number(next.ticketPricePerPerson || (next.ticketAmount && next.ticketAmount / pax) || 0));
     const airportTaxPerPerson = Math.max(0, Number(next.airportTaxPerPerson || (next.airportTaxAmount && next.airportTaxAmount / pax) || 0));
-    const businessUpgradeCount = Math.min(pax, Math.max(0, Math.round(Number(next.businessUpgradeCount || 0))));
+    const businessUpgradeCount = Math.min(pricingMode === 'standard' ? adultPassengerCount : pax, Math.max(0, Math.round(Number(next.businessUpgradeCount || 0))));
     const businessUpgradePerPerson = Math.max(0, Number(next.businessUpgradePerPerson || 0));
     const businessUpgradeTotal = businessUpgradeCount * businessUpgradePerPerson;
     const regularLandCostPerPerson = Math.max(0, Number(next.regularLandCostPerPerson || 0));
     const tourLeaderLandCostPerPerson = Math.max(0, Number(next.tourLeaderLandCostPerPerson || 0));
     const groupMarginPerTraveler = Math.max(0, Number(next.groupMarginPerTraveler || 0));
     const groupSellingPriceOverridePerPerson = Math.max(0, Number(next.groupSellingPriceOverridePerPerson || 0));
+    const childSellingPricePerPerson = pricingMode === 'standard' && childPassengerCount > 0 ? Math.max(0, Number(next.childSellingPricePerPerson || next.sellingPricePerPerson || 0)) : 0;
+    const childTicketPricePerPerson = pricingMode === 'standard' && childPassengerCount > 0 ? Math.max(0, Number(next.childTicketPricePerPerson || ticketPricePerPerson || 0)) : 0;
+    const childAirportTaxPerPerson = pricingMode === 'standard' && childPassengerCount > 0 ? Math.max(0, Number(next.childAirportTaxPerPerson || airportTaxPerPerson || 0)) : 0;
 
     let sellingPricePerPerson = Math.max(0, Number(next.sellingPricePerPerson || 0));
     let totalAmount = 0;
@@ -1369,17 +1386,17 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         + additionalItemsTotal;
       groupPricingCostTotal = group.totalBeforeAverage;
     } else {
-      totalAmount = sellingPricePerPerson * pax + singleSupplementTotal + businessUpgradeTotal + additionalItemsTotal;
+      totalAmount = sellingPricePerPerson * adultPassengerCount + childSellingPricePerPerson * childPassengerCount + singleSupplementTotal + businessUpgradeTotal + additionalItemsTotal;
     }
 
     const travelerAdditions = (next.travelerAdditions || []).map((entry) => normalizeTravelerAddition({
       ...entry,
       packagePricePerPerson: Math.max(0, Number(entry.packagePricePerPerson || sellingPricePerPerson || 0)),
     }));
-    const baseTicketAmount = ticketPricePerPerson * pax;
+    const baseTicketAmount = ticketPricePerPerson * adultPassengerCount + childTicketPricePerPerson * childPassengerCount;
     const businessFareDifferenceTotal = pricingMode === 'group_tl' ? businessUpgradeTotal : 0;
     const ticketAmount = baseTicketAmount + businessFareDifferenceTotal;
-    const airportTaxAmount = airportTaxPerPerson * pax;
+    const airportTaxAmount = airportTaxPerPerson * adultPassengerCount + childAirportTaxPerPerson * childPassengerCount;
     const depositAmount = ticketAmount + airportTaxAmount;
     const recalculatedTracking = {
       ...next,
@@ -1387,6 +1404,10 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
       passengerCount: pax,
       chargeablePassengerCount,
       tourLeaderCount,
+      childPassengerCount,
+      childSellingPricePerPerson,
+      childTicketPricePerPerson,
+      childAirportTaxPerPerson,
       sellingPricePerPerson,
       regularLandCostPerPerson,
       tourLeaderLandCostPerPerson,
@@ -1412,6 +1433,10 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
       passengerCount: pax,
       chargeablePassengerCount,
       tourLeaderCount,
+      childPassengerCount,
+      childSellingPricePerPerson,
+      childTicketPricePerPerson,
+      childAirportTaxPerPerson,
       sellingPricePerPerson,
       regularLandCostPerPerson,
       tourLeaderLandCostPerPerson,
@@ -1508,6 +1533,10 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
       singleRoomCount: Math.min(Math.max(0, currentForm.singleRoomCount || 0), Math.max(1, currentForm.passengerCount)),
       singleSupplementOverrideTHB: currentForm.singleSupplementPerPerson > 0 ? currentForm.singleSupplementPerPerson : null,
       additionalItems: currentForm.additionalItems || [],
+      childPassengerCount: currentForm.pricingMode === 'standard' ? Math.min(currentForm.passengerCount, Math.max(0, currentForm.childPassengerCount || 0)) : 0,
+      childSellingPricePerPersonTHB: currentForm.childSellingPricePerPerson > 0 ? currentForm.childSellingPricePerPerson : null,
+      childTicketPricePerPersonTHB: currentForm.childTicketPricePerPerson > 0 ? currentForm.childTicketPricePerPerson : null,
+      childAirportTaxPerPersonTHB: currentForm.childAirportTaxPerPerson > 0 ? currentForm.childAirportTaxPerPerson : null,
       regularLandCostPerPersonOverrideTHB: currentForm.regularLandCostPerPerson > 0 ? currentForm.regularLandCostPerPerson : null,
       tourLeaderLandCostPerPersonTHB: currentForm.tourLeaderLandCostPerPerson,
       groupTicketPriceOverrideTHB: currentForm.ticketPricePerPerson > 0 ? currentForm.ticketPricePerPerson : null,
@@ -1521,6 +1550,10 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
       pricingMode: result.pricingMode,
       chargeablePassengerCount: result.chargeablePassengerCount,
       tourLeaderCount: result.tourLeaderCount,
+      childPassengerCount: result.childPassengerCount,
+      childSellingPricePerPerson: result.childSellingPricePerPerson,
+      childTicketPricePerPerson: result.childTicketPricePerPerson,
+      childAirportTaxPerPerson: result.childAirportTaxPerPerson,
       sellingPricePerPerson: result.sellingPricePerPerson,
       regularLandCostPerPerson: result.regularLandCostPerPerson,
       tourLeaderLandCostPerPerson: result.tourLeaderLandCostPerPerson,
@@ -1842,7 +1875,8 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
   const combinedPackageTotal = packageSalesTotal(form);
   const combinedPassengerCount = totalPackagePassengerCount(form);
   const originalBilledPax = originalChargeablePassengerCount(form);
-  const combinedBasePackageTotal = (form.pricingMode === 'group_tl' ? Math.max(0, form.totalAmount || 0) : Math.max(0, form.sellingPricePerPerson || 0) * Math.max(0, form.passengerCount || 0)) + addedBasePackageRevenue;
+  const originalBasePackageTotal = Math.max(0, (form.totalAmount || 0) - (form.businessUpgradeTotal || 0) - (form.singleSupplementTotal || 0) - (form.additionalItemsTotal || 0));
+  const combinedBasePackageTotal = originalBasePackageTotal + addedBasePackageRevenue;
   const combinedBusinessUpgradeTotal = Math.max(0, form.businessUpgradeTotal || 0) + addedBusinessUpgradeRevenue;
   const combinedSingleSupplementTotal = Math.max(0, form.singleSupplementTotal || 0) + addedSingleSupplementRevenue;
   const combinedAdditionalItemsTotal = Math.max(0, form.additionalItemsTotal || 0) + addedExtrasRevenue;
@@ -1962,6 +1996,10 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
           {form.pricingMode === 'standard' && <MoneyField label={th ? 'ราคาขายแพ็กเกจ / ท่าน' : 'Package selling price / pax'} value={form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ sellingPricePerPerson: v })}/>} 
           {form.pricingMode === 'standard' && <MoneyField label={th ? 'ราคาตั๋วเครื่องบิน / ท่าน' : 'Airfare / pax'} value={form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ ticketPricePerPerson: v })}/>} 
           {form.pricingMode === 'standard' && <MoneyField label={th ? 'ภาษีสนามบิน / ท่าน' : 'Airport tax / pax'} value={form.airportTaxPerPerson} onChange={(v) => updatePricingFields({ airportTaxPerPerson: v })}/>} 
+          {form.pricingMode === 'standard' && <label className="field"><span>{th ? 'จำนวนเด็ก (รวมอยู่ในจำนวนผู้เดินทางแล้ว)' : 'Children (included in total travellers)'}</span><input type="number" min="0" max={form.passengerCount} value={form.childPassengerCount || 0} onChange={(e) => updatePricingFields({ childPassengerCount: Math.min(form.passengerCount, Math.max(0, Number(e.target.value))) })}/></label>}
+          {form.pricingMode === 'standard' && (form.childPassengerCount || 0) > 0 && <MoneyField label={th ? 'ราคาขายรวมเด็ก / ท่าน' : 'Child total selling / pax'} value={form.childSellingPricePerPerson || form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ childSellingPricePerPerson: v })}/>}
+          {form.pricingMode === 'standard' && (form.childPassengerCount || 0) > 0 && <MoneyField label={th ? 'ราคาตั๋วเด็ก / ท่าน' : 'Child airfare / pax'} value={form.childTicketPricePerPerson || form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ childTicketPricePerPerson: v })}/>}
+          {form.pricingMode === 'standard' && (form.childPassengerCount || 0) > 0 && <MoneyField label={th ? 'ภาษีสนามบินเด็ก / ท่าน' : 'Child airport tax / pax'} value={form.childAirportTaxPerPerson || form.airportTaxPerPerson} onChange={(v) => updatePricingFields({ childAirportTaxPerPerson: v })}/>}
           <MoneyField label={form.pricingMode === 'group_tl' ? (th ? 'ส่วนต่างค่าโดยสาร Business Class / ท่าน' : 'Business Class fare difference / pax') : (th ? 'ส่วนเพิ่มราคาขาย Business Class / ท่าน' : 'Business Class selling surcharge / pax')} value={form.businessUpgradePerPerson} onChange={(v) => updatePricingFields({ businessUpgradePerPerson: v })}/>
           <label className="field"><span>{form.pricingMode === 'group_tl'
             ? (th ? `จำนวน Business Class (จากผู้เดินทางจริง ${form.passengerCount} ท่าน)` : `Business Class pax (of ${form.passengerCount} actual travellers)`)
@@ -1972,7 +2010,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         <div className="automatic-totals-panel">
           <div className="automatic-totals-head"><div><b>{th ? 'สรุปราคาอัตโนมัติ' : 'Automatic price summary'}</b><span>{th ? 'รวมผู้เดินทางชุดแรกและผู้เดินทางที่เพิ่มทุกชุดโดยอัตโนมัติ' : 'Automatically combines the original group and every added-traveller batch.'}</span></div><strong>{formatTHB(combinedPackageTotal, language)}</strong></div>
           <div className="automatic-totals-grid">
-            <AutoTotal label={form.pricingMode === 'group_tl' ? (th ? `ราคาเฉลี่ยกรุ๊ป ${form.passengerCount} ท่าน (${originalBilledPax}+${form.tourLeaderCount} TL)` : `Averaged group price — ${form.passengerCount} travellers (${originalBilledPax}+${form.tourLeaderCount} TL)`) : (th ? `แพ็กเกจพื้นฐานรวม ${combinedPassengerCount} ท่าน` : `Base package — ${combinedPassengerCount} pax`)} formula={form.pricingMode === 'group_tl' ? `${formatTHB(form.sellingPricePerPerson, language)} × ${originalBilledPax}` : (addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม` : `${form.passengerCount} original + ${addedPassengerCount(form)} added`) : `${formatTHB(form.sellingPricePerPerson, language)} × ${form.passengerCount}`)} value={combinedBasePackageTotal} language={language}/>
+            <AutoTotal label={form.pricingMode === 'group_tl' ? (th ? `ราคาเฉลี่ยกรุ๊ป ${form.passengerCount} ท่าน (${originalBilledPax}+${form.tourLeaderCount} TL)` : `Averaged group price — ${form.passengerCount} travellers (${originalBilledPax}+${form.tourLeaderCount} TL)`) : (th ? `แพ็กเกจพื้นฐานรวม ${combinedPassengerCount} ท่าน` : `Base package — ${combinedPassengerCount} pax`)} formula={form.pricingMode === 'group_tl' ? `${formatTHB(form.sellingPricePerPerson, language)} × ${originalBilledPax}` : (addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม` : `${form.passengerCount} original + ${addedPassengerCount(form)} added`) : (form.childPassengerCount || 0) > 0 ? (th ? `${form.passengerCount - form.childPassengerCount} ADT + ${form.childPassengerCount} CHD` : `${form.passengerCount - form.childPassengerCount} ADT + ${form.childPassengerCount} CHD`) : `${formatTHB(form.sellingPricePerPerson, language)} × ${form.passengerCount}`)} value={combinedBasePackageTotal} language={language}/>
             {addedPassengerCount(form) > 0 && <AutoTotal label={th ? 'มูลค่าแพ็กเกจของผู้เดินทางเพิ่ม' : 'Added-traveller package value'} formula={`${addedPassengerCount(form)} ${th ? 'ท่าน' : 'pax'}`} value={addedPackageRevenue} language={language}/>} 
             {combinedBusinessUpgradeTotal > 0 && <AutoTotal label={form.pricingMode === 'group_tl' ? (th ? `Business Class ${form.businessUpgradeCount} จากผู้เดินทางจริง ${form.passengerCount} ท่าน` : `Business Class ${form.businessUpgradeCount} of ${form.passengerCount} actual travellers`) : (th ? 'ส่วนเพิ่ม Business Class รวมทุกชุด' : 'Business Class surcharge — all groups')} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedBusinessUpgradeTotal} language={language}/>} 
             {combinedSingleSupplementTotal > 0 && <AutoTotal label={th ? 'พักเดี่ยวรวมทุกชุด' : 'Single supplements — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedSingleSupplementTotal} language={language}/>} 
@@ -2540,8 +2578,8 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
           <h3>{th ? 'การชำระงวดที่ 1 — ค่าตั๋วเครื่องบิน' : 'Payment 1 — airfare'}</h3>
           {ticketBatch.fareLines?.length ? <div className="ticket-fare-lines">
             <div className="ticket-fare-head"><span>{th ? 'ชั้นโดยสาร' : 'Cabin'}</span><span>QTY</span><span>{th ? 'ค่าโดยสาร' : 'Fare'}</span><span>{th ? 'ภาษี' : 'Tax'}</span><span>{th ? 'รวม/ท่าน' : 'Total/pax'}</span><span>{th ? 'รวม' : 'Total'}</span></div>
-            {ticketBatch.fareLines.map((line) => <div className="ticket-fare-row" key={line.cabinClass}>
-              <span><b>{line.cabinClass}</b><small>{line.cabinClass === 'Business' && th ? 'ผู้โดยสารที่อัปเกรดภายในกรุ๊ป' : ''}</small></span>
+            {ticketBatch.fareLines.map((line) => <div className="ticket-fare-row" key={`${line.ptc || 'ADT'}-${line.cabinClass}`}>
+              <span><b>{line.ptc || 'ADT'} · {line.cabinClass}</b><small>{line.ptc === 'CHD' ? (th ? 'เด็ก' : 'Child') : line.cabinClass === 'Business' && th ? 'ผู้โดยสารที่อัปเกรดภายในกรุ๊ป' : ''}</small></span>
               <span>{line.passengerCount}</span>
               <span>{formatNumber(line.farePerPersonTHB, 2)}</span>
               <span>{formatNumber(line.airportTaxPerPersonTHB, 2)}</span>

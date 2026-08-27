@@ -41,6 +41,10 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     businessUpgradePriceOverrideTHB: null,
     singleRoomCount: 0,
     singleSupplementOverrideTHB: null,
+    childPassengerCount: 0,
+    childSellingPricePerPersonTHB: null,
+    childTicketPricePerPersonTHB: null,
+    childAirportTaxPerPersonTHB: null,
     additionalItems: [],
     regularLandCostPerPersonOverrideTHB: null,
     tourLeaderLandCostPerPersonTHB: null,
@@ -77,6 +81,8 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
   const isGroupTL = input.pricingMode === 'group_tl';
   const chargeablePax = Math.min(input.passengerCount, Math.max(1, input.chargeablePassengerCount || input.passengerCount));
   const tourLeaderCount = Math.max(0, input.passengerCount - chargeablePax);
+  const childPax = !isGroupTL ? Math.min(input.passengerCount, Math.max(0, input.childPassengerCount || 0)) : 0;
+  const adultPax = Math.max(0, input.passengerCount - childPax);
   const defaultRegularLand = result?.regularLandCostPerPerson || 0;
   const effectiveRegularLand = input.regularLandCostPerPersonOverrideTHB ?? defaultRegularLand;
   const effectiveTlLand = input.tourLeaderLandCostPerPersonTHB ?? 0;
@@ -100,6 +106,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
           chargeablePassengerCount: chargeable,
           businessUpgradeCount: Math.min(current.businessUpgradeCount, actual),
           singleRoomCount: Math.min(current.singleRoomCount, actual),
+          childPassengerCount: 0,
         };
       }
       return { ...current, pricingMode: mode, chargeablePassengerCount: current.passengerCount };
@@ -117,7 +124,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
       channel: result.channel, pricingMode: result.pricingMode, packageId: input.packageId, packageName: result.packageName,
       hotelCategory: result.hotelCategory, travelDate: result.travelDate, passengerCount: result.passengerCount,
       chargeablePassengerCount: result.chargeablePassengerCount, tourLeaderCount: result.tourLeaderCount,
-      sellingPricePerPerson: result.sellingPricePerPerson, totalAmount: result.groupTotal,
+      sellingPricePerPerson: result.sellingPricePerPerson, childPassengerCount: result.childPassengerCount, childSellingPricePerPerson: result.childSellingPricePerPerson, totalAmount: result.groupTotal,
       pricingInput: { ...input, additionalItems: input.additionalItems.map((item) => ({ ...item })) },
       pricingResult: { ...result, additionalItems: result.additionalItems.map((item) => ({ ...item })) },
       createdById: currentUser.id, createdByName: currentUser.name, confirmedAt: '', convertedTrackingId: '', createdAt: now, updatedAt: now,
@@ -173,11 +180,20 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
             <div className="form-grid">
               <label className="field span-2"><span>{t('package')}</span><div className="select-wrap"><Plane/><select value={input.packageId} onChange={(event) => setInput((value) => ({ ...value, packageId: event.target.value, singleSupplementOverrideTHB: null }))}>{packages.map((pkg) => <option value={pkg.id} key={pkg.id}>{pkg.name}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{isGroupTL ? (language === 'th' ? 'ผู้เดินทางทั้งหมด (รวม TL)' : 'Total travellers (incl. TL)') : t('passengers')}</span><div className="select-wrap"><Users/><select value={input.passengerCount} onChange={(event) => {
-                const pax = Number(event.target.value); setInput((value) => ({ ...value, passengerCount: pax, chargeablePassengerCount: value.pricingMode === 'group_tl' ? Math.min(pax, Math.max(1, value.chargeablePassengerCount)) : pax, businessUpgradeCount: Math.min(value.businessUpgradeCount, pax), singleRoomCount: Math.min(value.singleRoomCount, pax) }));
+                const pax = Number(event.target.value); setInput((value) => ({ ...value, passengerCount: pax, chargeablePassengerCount: value.pricingMode === 'group_tl' ? Math.min(pax, Math.max(1, value.chargeablePassengerCount)) : pax, businessUpgradeCount: Math.min(value.businessUpgradeCount, Math.max(0, pax - Math.min(pax, value.childPassengerCount || 0))), singleRoomCount: Math.min(value.singleRoomCount, pax), childPassengerCount: Math.min(value.childPassengerCount || 0, pax) }));
               }}>{Array.from({ length: 50 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{!isGroupTL && pax >= groupDiscountMinPax && groupDiscountPercent > 0 ? ` · ${groupDiscountLabel}` : ''}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{t('travelDate')}</span><div className="input-with-icon simple"><CalendarDays/><input type="date" value={input.travelDate} onChange={(event) => update('travelDate', event.target.value)}/></div></label>
               <label className="field span-2"><span>{t('hotelLevel')}</span><div className="select-wrap"><Building2/><select value={input.hotelCategory} onChange={(event) => setInput((value) => ({ ...value, hotelCategory: event.target.value as HotelCategory, singleSupplementOverrideTHB: null }))}><option value="3 Stars">3 Stars</option><option value="4 Stars">4 Stars</option><option value="5 Stars">5 Stars</option></select><ChevronDown/></div></label>
             </div>
+            {!isGroupTL && <div className={`child-pricing-panel ${childPax > 0 ? 'active' : ''}`}>
+              <div className="child-pricing-head"><div><Users/><span><b>{language === 'th' ? 'ราคาสำหรับเด็ก (CHD)' : 'Child pricing (CHD)'}</b><small>{language === 'th' ? 'จำนวนผู้เดินทางรวมด้านบนรวมเด็กแล้ว ระบบจะแยกราคา ADT / CHD ในใบเสนอราคาและ Invoice' : 'The total headcount above already includes children. ADT / CHD prices are split on quotations and invoices.'}</small></span></div><label><span>{language === 'th' ? 'จำนวนเด็ก' : 'Children'}</span><input type="number" min="0" max={input.passengerCount} value={childPax} onChange={(event) => { const count = Math.min(input.passengerCount, Math.max(0, Number(event.target.value))); setInput((value) => ({ ...value, childPassengerCount: count, businessUpgradeCount: Math.min(value.businessUpgradeCount, Math.max(0, value.passengerCount - count)) })); }}/></label></div>
+              {childPax > 0 && <div className="child-pricing-grid">
+                <label className="field money-input"><span>{language === 'th' ? 'ราคาขายรวมเด็ก / ท่าน' : 'Child total selling / pax'}</span><div><input type="number" min="0" step="1" value={input.childSellingPricePerPersonTHB ?? result?.sellingPricePerPerson ?? 0} onChange={(event) => update('childSellingPricePerPersonTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{language === 'th' ? 'ราคาที่แจ้งลูกค้า รวมตั๋ว + ภาษี + ค่าแพ็กเกจ' : 'Customer price including airfare, tax and package balance'}</small></label>
+                <label className="field money-input"><span>{language === 'th' ? 'ราคาตั๋วเด็ก / ท่าน' : 'Child airfare / pax'}</span><div><input type="number" min="0" step="1" value={input.childTicketPricePerPersonTHB ?? result?.airTicketPerPerson ?? 0} onChange={(event) => update('childTicketPricePerPersonTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
+                <label className="field money-input"><span>{language === 'th' ? 'ภาษีสนามบินเด็ก / ท่าน' : 'Child airport tax / pax'}</span><div><input type="number" min="0" step="1" value={input.childAirportTaxPerPersonTHB ?? result?.airportTaxPerPerson ?? 0} onChange={(event) => update('childAirportTaxPerPersonTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
+                <div className="child-price-balance"><span>{language === 'th' ? 'ส่วนค่าแพ็กเกจเด็กหลังหักตั๋ว+ภาษี' : 'Child package balance after airfare + tax'}</span><strong>{formatTHB(Math.max(0, (result?.childSellingPricePerPerson || 0) - (result?.childTicketPricePerPerson || 0) - (result?.childAirportTaxPerPerson || 0)), language)}</strong><small>{language === 'th' ? `${adultPax} ผู้ใหญ่ + ${childPax} เด็ก = ${input.passengerCount} ท่าน` : `${adultPax} adults + ${childPax} children = ${input.passengerCount} travellers`}</small></div>
+              </div>}
+            </div>}
             {isGroupTL && <div className="group-tl-pricing-panel">
               <div className="group-tl-head">
                 <div><BadgePercent/><span><b>{language === 'th' ? 'คำนวณกรุ๊ปใหญ่แบบ TL' : 'Tour-leader group pricing'}</b><small>{language === 'th' ? 'รวมต้นทุนผู้เดินทางทุกคน แล้วเฉลี่ยเรียกเก็บเฉพาะผู้ชำระ' : 'Pool every traveller cost, then average across paying travellers.'}</small></span></div>
@@ -232,7 +248,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
               </div>
               <div className="business-upgrade-count"><label>{isGroupTL
                 ? (language === 'th' ? `จำนวน BC (จาก ${input.passengerCount} ท่าน)` : `BC pax (of ${input.passengerCount})`)
-                : (language === 'th' ? 'จำนวนผู้โดยสาร' : 'Passengers')}</label><div className="stepper"><button type="button" onClick={() => update('businessUpgradeCount', Math.max(0, input.businessUpgradeCount - 1))}>−</button><strong>{input.businessUpgradeCount}</strong><button type="button" onClick={() => update('businessUpgradeCount', Math.min(input.passengerCount, input.businessUpgradeCount + 1))}>+</button></div></div>
+                : (language === 'th' ? 'จำนวนผู้โดยสาร' : 'Passengers')}</label><div className="stepper"><button type="button" onClick={() => update('businessUpgradeCount', Math.max(0, input.businessUpgradeCount - 1))}>−</button><strong>{input.businessUpgradeCount}</strong><button type="button" onClick={() => update('businessUpgradeCount', Math.min(isGroupTL ? input.passengerCount : adultPax, input.businessUpgradeCount + 1))}>+</button></div></div>
             </div>
           </div>
 
@@ -255,7 +271,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
             <strong>{formatTHB(result?.sellingPricePerPerson || 0, language)}</strong>
             <small>{isGroupTL
               ? (language === 'th' ? `เดินทาง ${input.passengerCount} · เรียกเก็บ ${chargeablePax} · TL ${tourLeaderCount}` : `${input.passengerCount} travel · ${chargeablePax} billed · ${tourLeaderCount} TL`)
-              : `${selectedPackage?.nights || 0} ${t('nights')} · ${input.passengerCount} ${t('people')}`}</small>
+              : childPax > 0 ? (language === 'th' ? `${adultPax} ผู้ใหญ่ · ${childPax} เด็ก · เด็ก ${formatTHB(result?.childSellingPricePerPerson || 0, language)}/ท่าน` : `${adultPax} adults · ${childPax} children · child ${formatTHB(result?.childSellingPricePerPerson || 0, language)}/pax`) : `${selectedPackage?.nights || 0} ${t('nights')} · ${input.passengerCount} ${t('people')}`}</small>
           </div>
           <div className="summary-lines">
             {isGroupTL && <PriceLine icon={<HotelIcon/>} label={language === 'th' ? 'LAND ผู้ชำระรวม' : 'Regular LAND total'} value={formatTHB(result?.regularLandTotal || 0, language)} note={`${formatTHB(result?.regularLandCostPerPerson || 0, language)} × ${chargeablePax}`}/>}
@@ -284,7 +300,8 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
           <div className="auto-total-breakdown">
             <div><span>{isGroupTL
               ? (language === 'th' ? `แพ็กเกจพื้นฐาน × ผู้ชำระ ${chargeablePax} ท่าน` : `Base package × ${chargeablePax} paying travellers`)
-              : (language === 'th' ? 'แพ็กเกจพื้นฐาน' : 'Base package')}</span><b>{formatTHB(result?.groupSubtotal || 0, language)}</b></div>
+              : (language === 'th' ? 'แพ็กเกจพื้นฐานรวม ADT / CHD' : 'Base package ADT / CHD')}</span><b>{formatTHB(result?.groupSubtotal || 0, language)}</b></div>
+            {!isGroupTL && childPax > 0 && <><div><span>{language === 'th' ? `ผู้ใหญ่ ${adultPax} ท่าน` : `Adults ${adultPax}`}</span><b>{formatTHB(result?.adultSubtotal || 0, language)}</b></div><div><span>{language === 'th' ? `เด็ก ${childPax} ท่าน` : `Children ${childPax}`}</span><b>{formatTHB(result?.childSubtotal || 0, language)}</b></div></>}
             {(result?.businessUpgradeTotal || 0) > 0 && <div><span>{isGroupTL
               ? (language === 'th' ? `Business Class ${result?.businessUpgradeCount || 0} จาก ${input.passengerCount} ท่าน` : `Business Class ${result?.businessUpgradeCount || 0} of ${input.passengerCount}`)
               : 'Business Class'}</span><b>+ {formatTHB(result?.businessUpgradeTotal || 0, language)}</b></div>}
@@ -403,7 +420,7 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
         <div><span>{t('package')}</span><strong>{result.packageName}</strong></div>
         <div><span>{t('travelDate')}</span><strong>{result.travelDate ? formatDate(result.travelDate, language) : '-'}</strong></div>
         <div><span>{t('hotelLevel')}</span><strong>{result.hotelCategory}</strong><small>{result.nights} {t('nights')}</small></div>
-        <div><span>{t('passengers')}</span><strong>{result.passengerCount} {t('people')}</strong><small>{result.pricingMode === 'group_tl' ? (language === 'th' ? `เรียกเก็บ ${result.chargeablePassengerCount} · TL ${result.tourLeaderCount}` : `${result.chargeablePassengerCount} billed · ${result.tourLeaderCount} TL`) : `${result.nights} ${t('nights')}`}</small></div>
+        <div><span>{t('passengers')}</span><strong>{result.passengerCount} {t('people')}</strong><small>{result.pricingMode === 'group_tl' ? (language === 'th' ? `เรียกเก็บ ${result.chargeablePassengerCount} · TL ${result.tourLeaderCount}` : `${result.chargeablePassengerCount} billed · ${result.tourLeaderCount} TL`) : result.childPassengerCount > 0 ? (language === 'th' ? `${result.adultPassengerCount} ผู้ใหญ่ · ${result.childPassengerCount} เด็ก` : `${result.adultPassengerCount} adults · ${result.childPassengerCount} children`) : `${result.nights} ${t('nights')}`}</small></div>
       </section>
       <section className="quote-price-table quote-passenger-table">
         <div className="quote-table-head quote-six-columns">
@@ -414,20 +431,22 @@ function QuotationPreview({ open, onClose, result, customer, currentUser, quotat
           <span>{language === 'th' ? 'เพิ่มเติม' : 'Additional'}</span>
           <span>{language === 'th' ? 'รวม (บาท)' : 'Total (THB)'}</span>
         </div>
-        <div className="quote-table-row quote-six-columns quote-passenger-row">
+        {result.adultPassengerCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row">
           <span className="quote-service-cell">
             <b className="quote-travel-period">{formatTravelPeriod(result.travelDate, result.nights, language)}</b>
-            <strong>{language === 'th'
-              ? `แพ็กเกจ ${result.nights + 1} วัน ${result.nights} คืน โรงแรม ${result.hotelCategory}`
-              : `Package ${result.nights + 1}D${result.nights}N ${result.hotelCategory} Hotel`}</strong>
-            <small>{result.packageName}{result.hasGroupFlightDiscount ? ` · ${t('groupDiscount')} ${formatNumber(result.groupDiscountPercentApplied, 2)}%` : ''}{result.pricingMode === 'group_tl' ? (language === 'th' ? ` · เดินทางจริง ${result.passengerCount} ท่าน (${result.chargeablePassengerCount}+${result.tourLeaderCount} TL)` : ` · ${result.passengerCount} actual travellers (${result.chargeablePassengerCount}+${result.tourLeaderCount} TL)`) : ''}</small>
+            <strong>{language === 'th' ? `แพ็กเกจ ${result.nights + 1} วัน ${result.nights} คืน โรงแรม ${result.hotelCategory}` : `Package ${result.nights + 1}D${result.nights}N ${result.hotelCategory} Hotel`}</strong>
+            <small>{result.packageName}{result.hasGroupFlightDiscount ? ` · ${t('groupDiscount')} ${formatNumber(result.groupDiscountPercentApplied, 2)}%` : ''}</small>
           </span>
-          <span className="quote-center-cell"><b>ADT</b></span>
-          <span className="quote-center-cell"><b>{result.chargeablePassengerCount}</b></span>
-          <span className="quote-number-cell"><b>{formatNumber(result.sellingPricePerPerson, 2)}</b></span>
-          <span className="quote-number-cell"><b>—</b></span>
-          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.groupSubtotal, 2)}</b></span>
-        </div>
+          <span className="quote-center-cell"><b>ADT</b></span><span className="quote-center-cell"><b>{result.pricingMode === 'group_tl' ? result.chargeablePassengerCount : result.adultPassengerCount}</b></span>
+          <span className="quote-number-cell"><b>{formatNumber(result.sellingPricePerPerson, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
+          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.pricingMode === 'group_tl' ? result.groupSubtotal : result.adultSubtotal, 2)}</b></span>
+        </div>}
+        {result.childPassengerCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-child-row">
+          <span className="quote-service-cell"><strong>{language === 'th' ? `แพ็กเกจเด็ก ${result.nights + 1} วัน ${result.nights} คืน` : `Child package ${result.nights + 1}D${result.nights}N`}</strong><small>{result.hotelCategory} · {result.packageName}</small></span>
+          <span className="quote-center-cell"><b>CHD</b></span><span className="quote-center-cell"><b>{result.childPassengerCount}</b></span>
+          <span className="quote-number-cell"><b>{formatNumber(result.childSellingPricePerPerson, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
+          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.childSubtotal, 2)}</b></span>
+        </div>}
         {result.businessUpgradeCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row">
           <span className="quote-service-cell"><strong>Business Class Upgrade</strong><small>{result.pricingMode === 'group_tl'
             ? (language === 'th' ? `${result.businessUpgradeCount} ท่าน จากผู้เดินทางจริง ${result.passengerCount} ท่าน` : `${result.businessUpgradeCount} of ${result.passengerCount} actual travellers`)

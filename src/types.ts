@@ -112,6 +112,14 @@ export interface PricingInput {
   singleSupplementOverrideTHB?: number | null;
   /** Flexible extra services such as hotel upgrades, mask dance, baggage vehicle, etc. */
   additionalItems: AdditionalCharge[];
+  /** Child pricing for standard groups. passengerCount remains the total headcount. */
+  childPassengerCount: number;
+  /** Full child selling price per child, including airfare/tax/package. null uses the adult selling price. */
+  childSellingPricePerPersonTHB?: number | null;
+  /** Child airfare per child. null uses the adult airfare. */
+  childTicketPricePerPersonTHB?: number | null;
+  /** Child airport tax per child. null uses the adult airport tax. */
+  childAirportTaxPerPersonTHB?: number | null;
   /** Large-group / TL pricing inputs. All values are THB per traveller. */
   regularLandCostPerPersonOverrideTHB?: number | null;
   tourLeaderLandCostPerPersonTHB?: number | null;
@@ -127,8 +135,10 @@ export interface PricingResult {
   pricingMode: PricingMode;
   packageName: string;
   nights: number;
-  /** Actual travellers, including TL. */
+  /** Actual travellers, including TL and children. */
   passengerCount: number;
+  adultPassengerCount: number;
+  childPassengerCount: number;
   /** Travellers who are billed. */
   chargeablePassengerCount: number;
   tourLeaderCount: number;
@@ -146,6 +156,11 @@ export interface PricingResult {
   marginPerPerson: number;
   sellingPricePerPerson: number;
   recommendedSellingPricePerPerson: number;
+  childSellingPricePerPerson: number;
+  childTicketPricePerPerson: number;
+  childAirportTaxPerPerson: number;
+  adultSubtotal: number;
+  childSubtotal: number;
   profitPerPerson: number;
   businessUpgradeCount: number;
   businessUpgradePerPerson: number;
@@ -196,6 +211,8 @@ export interface QuotationRecord {
   chargeablePassengerCount: number;
   tourLeaderCount: number;
   sellingPricePerPerson: number;
+  childPassengerCount: number;
+  childSellingPricePerPerson: number;
   totalAmount: number;
   pricingInput: PricingInput;
   pricingResult: PricingResult;
@@ -295,6 +312,11 @@ export interface CustomerTracking {
   channel: PricingChannel;
   /** How this customer will be billed: normal 2-stage, one-time full payment, or manual/custom. */
   paymentPlan: PaymentPlan;
+  /** Total travellers includes children; these fields split the original group into ADT / CHD. */
+  childPassengerCount: number;
+  childSellingPricePerPerson: number;
+  childTicketPricePerPerson: number;
+  childAirportTaxPerPerson: number;
   sellingPricePerPerson: number;
   regularLandCostPerPerson: number;
   tourLeaderLandCostPerPerson: number;
@@ -402,6 +424,7 @@ export interface InvoicePackageLineSnapshot {
 }
 
 export interface InvoiceTicketFareLineSnapshot {
+  ptc?: 'ADT' | 'CHD';
   cabinClass: 'Economy' | 'Business';
   passengerCount: number;
   farePerPersonTHB: number;

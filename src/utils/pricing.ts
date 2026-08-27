@@ -155,6 +155,12 @@ export function calculatePrice(
 
   const pax = Math.max(1, Math.round(input.passengerCount || 1));
   const pricingMode = input.pricingMode || 'standard';
+  // Child pricing is intentionally a standard-group feature. Large TL groups keep
+  // the existing averaged formula to avoid mixing two pricing models.
+  const childPassengerCount = pricingMode === 'standard'
+    ? Math.min(pax, Math.max(0, Math.round(Number(input.childPassengerCount || 0))))
+    : 0;
+  const adultPassengerCount = Math.max(0, pax - childPassengerCount);
   const chargeablePassengerCount = pricingMode === 'group_tl'
     ? Math.min(pax, Math.max(1, Math.round(input.chargeablePassengerCount || pax)))
     : pax;
@@ -188,7 +194,7 @@ export function calculatePrice(
     ? numberOr(input.groupMarginPerTravelerOverrideTHB, standardMargin)
     : standardMargin;
 
-  const upgradeCount = Math.min(Math.max(0, Math.round(input.businessUpgradeCount || 0)), pax);
+  const upgradeCount = Math.min(Math.max(0, Math.round(input.businessUpgradeCount || 0)), pricingMode === 'standard' ? adultPassengerCount : pax);
   const businessUpgradePerPerson = numberOr(input.businessUpgradePriceOverrideTHB, Number(settings.businessUpgradeTHB ?? 15000));
   const businessUpgradeTotal = businessUpgradePerPerson * upgradeCount;
 
@@ -226,6 +232,8 @@ export function calculatePrice(
       packageName: pkg.name,
       nights: pkg.nights,
       passengerCount: pax,
+      adultPassengerCount: pax,
+      childPassengerCount: 0,
       chargeablePassengerCount,
       tourLeaderCount,
       hotelCategory: input.hotelCategory,
@@ -242,6 +250,11 @@ export function calculatePrice(
       marginPerPerson: margin,
       sellingPricePerPerson: selling,
       recommendedSellingPricePerPerson: recommendedSelling,
+      childSellingPricePerPerson: 0,
+      childTicketPricePerPerson: 0,
+      childAirportTaxPerPerson: 0,
+      adultSubtotal: baseCustomerTotal,
+      childSubtotal: 0,
       profitPerPerson: groupProfit / chargeablePassengerCount,
       businessUpgradeCount: upgradeCount,
       businessUpgradePerPerson,
@@ -273,12 +286,19 @@ export function calculatePrice(
 
   const baseCost = airTicket + tax + groundTHB + visaTHB;
   const selling = roundUpToStep(baseCost + margin, 500);
+  const childSellingPricePerPerson = numberOr(input.childSellingPricePerPersonTHB, selling);
+  const childTicketPricePerPerson = numberOr(input.childTicketPricePerPersonTHB, airTicket);
+  const childAirportTaxPerPerson = numberOr(input.childAirportTaxPerPersonTHB, tax);
   const profit = selling - baseCost;
-  const groupSubtotal = selling * pax;
-  const flightTotal = airTicket * pax;
-  const airportTaxTotal = tax * pax;
+  const adultSubtotal = selling * adultPassengerCount;
+  const childSubtotal = childSellingPricePerPerson * childPassengerCount;
+  const groupSubtotal = adultSubtotal + childSubtotal;
+  const flightTotal = airTicket * adultPassengerCount + childTicketPricePerPerson * childPassengerCount;
+  const airportTaxTotal = tax * adultPassengerCount + childAirportTaxPerPerson * childPassengerCount;
+  const childEstimatedCostPerPerson = childTicketPricePerPerson + childAirportTaxPerPerson + groundTHB + visaTHB;
+  const operatingCostTotal = baseCost * adultPassengerCount + childEstimatedCostPerPerson * childPassengerCount + businessUpgradeTotal + singleSupplementTotal + additionalItemsTotal;
   const groupTotal = groupSubtotal + businessUpgradeTotal + singleSupplementTotal + additionalItemsTotal;
-  const operatingCostTotal = baseCost * pax + businessUpgradeTotal + singleSupplementTotal + additionalItemsTotal;
+  const groupProfit = groupTotal - operatingCostTotal;
 
   return {
     channel: input.channel,
@@ -286,6 +306,8 @@ export function calculatePrice(
     packageName: pkg.name,
     nights: pkg.nights,
     passengerCount: pax,
+    adultPassengerCount,
+    childPassengerCount,
     chargeablePassengerCount: pax,
     tourLeaderCount: 0,
     hotelCategory: input.hotelCategory,
@@ -302,7 +324,12 @@ export function calculatePrice(
     marginPerPerson: margin,
     sellingPricePerPerson: selling,
     recommendedSellingPricePerPerson: selling,
-    profitPerPerson: profit,
+    childSellingPricePerPerson,
+    childTicketPricePerPerson,
+    childAirportTaxPerPerson,
+    adultSubtotal,
+    childSubtotal,
+    profitPerPerson: adultPassengerCount > 0 ? profit : 0,
     businessUpgradeCount: upgradeCount,
     businessUpgradePerPerson,
     groupSubtotal,
@@ -315,7 +342,7 @@ export function calculatePrice(
     flightTotal,
     airportTaxTotal,
     groupTotal,
-    groupProfit: profit * pax,
+    groupProfit,
     hasGroupFlightDiscount,
     groupDiscountPercentApplied: hasGroupFlightDiscount ? groupDiscountPercent : 0,
     regularLandCostPerPerson: groundTHB + visaTHB,

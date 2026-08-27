@@ -3152,3 +3152,76 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 .tracking-passenger-pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.tracking-passenger-price-card{padding:16px;border:1px solid #dce7e2;border-radius:17px;background:#fff;display:grid;grid-template-columns:1fr;gap:11px}.tracking-passenger-price-card.child{background:#fcfbf7}.tracking-passenger-price-card.child.active{border-color:#dfc27d;background:#fffdf7}.tracking-passenger-price-head{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid #edf2ef}.tracking-passenger-price-head>div{display:flex;flex-direction:column;gap:2px}.tracking-passenger-price-head b{font-size:15px;color:#1b3d32}.tracking-passenger-price-head small{font-size:11px;color:#7b8a84}.ptc-badge{display:inline-grid;place-items:center;min-width:45px;height:30px;padding:0 9px;border-radius:999px;background:#e8f4ef;color:#0c684f;font-weight:900;font-size:12px;letter-spacing:.05em}.tracking-passenger-price-card.child .ptc-badge{background:#fff0cb;color:#986313}.tracking-passenger-price-head.child-head label{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;color:#4d635a}.tracking-passenger-price-head.child-head input{width:72px;height:38px;border:1px solid #cad8d2;border-radius:11px;padding:0 10px;font:inherit;font-weight:850;background:#fff}.tracking-child-empty{min-height:92px;display:grid;place-items:center;text-align:center;border:1px dashed #d9e2dd;border-radius:13px;padding:16px;color:#7d8c85;font-size:12px;line-height:1.5}.tracking-child-total-preview{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border-radius:13px;background:#f7f3e8;border:1px solid #ead9ad}.tracking-child-total-preview span{font-size:11px;font-weight:800;color:#7c681f}.tracking-child-total-preview strong{font-size:20px;color:#6f5914}.tracking-child-total-preview small{font-size:11px;color:#8b7a47}
 .child-invoice-price-preview{margin:14px 0 18px;border:1px solid #d8e5df;border-radius:17px;overflow:hidden;background:#fff}.child-invoice-price-preview-head{padding:13px 15px;background:#f4faf7;border-bottom:1px solid #dfe9e4}.child-invoice-price-preview-head>div{display:flex;align-items:center;gap:10px}.child-invoice-price-preview-head svg{width:20px;color:#116d55}.child-invoice-price-preview-head span{display:flex;flex-direction:column;gap:2px}.child-invoice-price-preview-head b{font-size:14px;color:#1c4235}.child-invoice-price-preview-head small{font-size:11px;color:#75867e}.child-invoice-price-table{display:flex;flex-direction:column}.child-invoice-price-row{display:grid;grid-template-columns:.7fr .6fr 1fr 1fr 1.1fr;align-items:center;min-height:43px;border-bottom:1px solid #edf1ef}.child-invoice-price-row:last-child{border-bottom:0}.child-invoice-price-row>span{padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums}.child-invoice-price-row>span:first-child{text-align:left}.child-invoice-price-row.head{min-height:34px;background:#fbfcfb;color:#6c7d75;font-size:10px;font-weight:850;text-transform:uppercase}.child-invoice-price-row.child{background:#fffdf8}.child-invoice-price-row.child>span:first-child b{color:#9b6815}
 @media(max-width:850px){.tracking-passenger-pricing-grid{grid-template-columns:1fr}.tracking-passenger-price-head.child-head{flex-wrap:wrap}.tracking-passenger-price-head.child-head label{margin-left:55px}.child-invoice-price-row{grid-template-columns:.7fr .6fr 1fr 1fr 1.1fr;font-size:11px}.child-invoice-price-row>span{padding:8px 6px}}
+
+/* =========================================================
+   v12.11.4 — Invoice 1 fare table layout repair
+   The generic .journey-payment-breakdown > div rule used flex
+   on .ticket-fare-lines, causing the header/ADT/CHD rows to
+   line up horizontally and overflow the A4 preview. Reset the
+   fare-table container so all fare rows stack vertically.
+   ========================================================= */
+.journey-payment-breakdown > .ticket-fare-lines {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 8px 0 4px !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  align-items: initial !important;
+  justify-content: initial !important;
+  border: 1px solid #cfdad5 !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  background: #fff !important;
+  box-sizing: border-box !important;
+}
+
+.journey-payment-breakdown > .ticket-fare-lines > .ticket-fare-head,
+.journey-payment-breakdown > .ticket-fare-lines > .ticket-fare-row {
+  display: grid !important;
+  grid-template-columns: minmax(118px,1.45fr) minmax(42px,.52fr) minmax(76px,.82fr) minmax(70px,.72fr) minmax(84px,.9fr) minmax(92px,.95fr) !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.journey-payment-breakdown > .ticket-fare-lines > .ticket-fare-head > span,
+.journey-payment-breakdown > .ticket-fare-lines > .ticket-fare-row > span {
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.journey-payment-breakdown > .ticket-fare-lines > .ticket-fare-head > span:not(:first-child),
+.journey-payment-breakdown > .ticket-fare-lines > .ticket-fare-row > span:not(:first-child) {
+  white-space: nowrap;
+}
+
+/* Keep ADT/CHD fare rows readable inside the on-screen A4 preview. */
+@media (max-width: 760px) {
+  .journey-payment-breakdown > .ticket-fare-lines {
+    overflow-x: auto !important;
+  }
+  .journey-payment-breakdown > .ticket-fare-lines > .ticket-fare-head,
+  .journey-payment-breakdown > .ticket-fare-lines > .ticket-fare-row {
+    min-width: 620px !important;
+  }
+}
+
+@media print {
+  .journey-payment-breakdown > .ticket-fare-lines {
+    display: block !important;
+    width: 100% !important;
+    overflow: hidden !important;
+    border: 1px solid #777 !important;
+    border-radius: 0 !important;
+    break-inside: avoid !important;
+  }
+  .journey-payment-breakdown > .ticket-fare-lines > .ticket-fare-head,
+  .journey-payment-breakdown > .ticket-fare-lines > .ticket-fare-row {
+    display: grid !important;
+    grid-template-columns: minmax(112px,1.45fr) 42px minmax(70px,.82fr) minmax(66px,.72fr) minmax(80px,.9fr) minmax(88px,.95fr) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}

@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/server-supabase';
 
-const ALLOWED = new Set(['page_view','package_view','line_click','lead_submit','contact_click']);
+const ALLOWED = new Set(['page_view','package_view','line_click','lead_submit','contact_click','heartbeat']);
+
+function tagsForEvent(eventName:string, packageSlug:string){
+  const tags:string[]=[];
+  if(eventName==='page_view') tags.push('Website Visitor');
+  if(eventName==='package_view') {
+    tags.push('Package Interest');
+    if(packageSlug) tags.push(`Package:${packageSlug}`);
+  }
+  if(eventName==='line_click') tags.push('LINE Intent');
+  if(eventName==='lead_submit') tags.push('Website Lead');
+  return tags;
+}
 
 export async function POST(request: NextRequest) {
   const supabase = getServerSupabase();
@@ -9,12 +21,14 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const eventName = String(body.event_name || '');
   if (!ALLOWED.has(eventName)) return NextResponse.json({ ok: false }, { status: 400 });
+  const visitorId=String(body.visitor_id || '').slice(0,120);
+  const packageSlug=String(body.package_slug || '').slice(0,120);
   const row = {
-    visitor_id: String(body.visitor_id || '').slice(0, 120),
+    visitor_id: visitorId,
     session_id: String(body.session_id || '').slice(0, 120),
     event_name: eventName,
     page_path: String(body.page_path || '').slice(0, 400),
-    package_slug: String(body.package_slug || '').slice(0, 120) || null,
+    package_slug: packageSlug || null,
     source: String(body.source || '').slice(0, 160) || null,
     campaign: String(body.campaign || '').slice(0, 160) || null,
     metadata: typeof body.metadata === 'object' && body.metadata ? body.metadata : {},
@@ -22,5 +36,15 @@ export async function POST(request: NextRequest) {
   };
   const { error } = await supabase.from('website_events').insert(row);
   if (error) return NextResponse.json({ ok: true, stored: false, error: error.code });
+
+  // Optional V13.5 tag persistence. Gracefully ignored until the additive SQL is installed.
+  if(visitorId){
+    const now=new Date().toISOString();
+    for(const tag of tagsForEvent(eventName,packageSlug)){
+      await supabase.from('website_visitor_tags').upsert({
+        visitor_id:visitorId, tag, source:'website', last_seen_at:now,
+      },{onConflict:'visitor_id,tag'});
+    }
+  }
   return NextResponse.json({ ok: true, stored: true });
 }

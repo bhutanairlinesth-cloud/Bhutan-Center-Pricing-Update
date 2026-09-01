@@ -1,14 +1,28 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, CheckCircle2, CircleDot, Globe2, MousePointerClick,
-  RefreshCw, Save, Send, Server, Settings2, Target, UserCheck, UsersRound,
+  Activity, CheckCircle2, CircleDot, Eye, Globe2, MonitorSmartphone, MousePointerClick,
+  Megaphone, Radio, RefreshCw, Save, Send, Server, Settings2, Tags, Target, UserCheck, UsersRound, Wifi,
 } from 'lucide-react';
 import { CustomerTracking, QuotationRecord, TourPackage, User } from '../types';
 import { supabaseAuth } from '../lib/supabase';
 
+interface LiveVisitor {
+  sessionId:string|null;
+  visitorId:string|null;
+  pagePath:string;
+  packageSlug:string;
+  source:string;
+  campaign:string;
+  device:'Mobile'|'Desktop'|string;
+  lastSeenAt:string;
+  lastSeenSeconds:number;
+  eventName:string;
+}
 interface Summary {
   periodDays:number;
   liveSessions:number;
+  liveVisitors:LiveVisitor[];
+  liveWindowSeconds:number;
   uniqueVisitors:number;
   pageViews:number;
   packageViews:number;
@@ -30,10 +44,14 @@ interface Summary {
   metaPixelIdMasked:string|null;
 }
 interface PriceRow { id:string; name:string; nights:number; override:null|{visible:boolean;price_override_thb:number|null}; }
+interface AudiencePreset { id:string; name:string; count:number; source:string; intent:string; futureMeta:string; description:string; }
+interface AudienceData { days:number; tagStorageReady:boolean; sources:{website:boolean;line:boolean;crm:boolean;meta:boolean}; audiences:AudiencePreset[]; tags:{tag:string;count:number;source:'website'|'line'}[]; note:string; }
 
-type MarketingTab = 'overview' | 'funnel' | 'meta' | 'website' | 'line' | 'seo';
+type MarketingTab = 'overview' | 'realtime' | 'audience' | 'funnel' | 'meta' | 'website' | 'line' | 'seo';
 const MARKETING_TAB_PATHS: Record<MarketingTab, string> = {
   overview: '/admin/marketing',
+  realtime: '/admin/marketing/realtime',
+  audience: '/admin/marketing/audience',
   funnel: '/admin/marketing/funnel',
   meta: '/admin/marketing/meta',
   website: '/admin/marketing/website',
@@ -42,6 +60,8 @@ const MARKETING_TAB_PATHS: Record<MarketingTab, string> = {
 };
 function marketingTabFromPath(pathname:string): MarketingTab {
   const path=pathname.replace(/\/+$/,'');
+  if(path.startsWith('/admin/marketing/realtime')) return 'realtime';
+  if(path.startsWith('/admin/marketing/audience')) return 'audience';
   if(path.startsWith('/admin/marketing/funnel')) return 'funnel';
   if(path.startsWith('/admin/marketing/meta')) return 'meta';
   if(path.startsWith('/admin/marketing/website')) return 'website';
@@ -56,12 +76,13 @@ async function authHeaders(){
 }
 
 const titleByTab:Record<MarketingTab,string> = {
-  overview:'ภาพรวมการตลาด', funnel:'Funnel & Retargeting', meta:'Facebook Pixel', website:'เว็บไซต์', line:'LINE OA', seo:'SEO',
+  overview:'ภาพรวมการตลาด', realtime:'ผู้เข้าชมเรียลไทม์', audience:'Audience & Tags', funnel:'Funnel & Retargeting', meta:'Facebook Pixel', website:'เว็บไซต์', line:'LINE OA', seo:'SEO',
 };
 
 export function GrowthWorkspace({ currentUser, packages, trackings, quotations, onBack, onLogout }:{ currentUser:User; packages:TourPackage[]; trackings:CustomerTracking[]; quotations:QuotationRecord[]; onBack:()=>void; onLogout:()=>void; }){
   const [tab,setTab]=useState<MarketingTab>(()=>marketingTabFromPath(typeof window!=='undefined'?window.location.pathname:'/admin/marketing'));
   const [summary,setSummary]=useState<Summary|null>(null);
+  const [audience,setAudience]=useState<AudienceData|null>(null);
   const [prices,setPrices]=useState<PriceRow[]>([]);
   const [loading,setLoading]=useState(false);
   const [message,setMessage]=useState('');
@@ -81,15 +102,22 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
     setLoading(true); setNotice('');
     try {
       const headers=await authHeaders();
-      const [a,b]=await Promise.all([
+      const [a,b,c]=await Promise.all([
         fetch(`/api/marketing/summary?days=${periodDays}`,{headers}),
         fetch('/api/website/prices',{headers}),
+        fetch(`/api/marketing/audiences?days=${periodDays}`,{headers}),
       ]);
       if(a.ok)setSummary(await a.json());
       if(b.ok){const j=await b.json();setPrices(j.packages||[]);}
+      if(c.ok)setAudience(await c.json());
     } finally { setLoading(false); }
   }
   useEffect(()=>{ refresh(); },[periodDays]);
+  useEffect(()=>{
+    if(tab!=='realtime') return;
+    const timer=window.setInterval(()=>{ refresh(); },15_000);
+    return()=>window.clearInterval(timer);
+  },[tab,periodDays]);
 
   const sales=useMemo(()=>{
     const cutoff=Date.now()-(periodDays*24*60*60*1000);
@@ -134,7 +162,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
     <div className="workspace-pagebar growth-pagebar">
       <div className="workspace-pagebar-title"><span>MARKETING / CRM</span><strong>{titleByTab[tab]}</strong></div>
       <div className="growth-pagebar-actions">
-        {(tab==='overview'||tab==='funnel') && <div className="marketing-period-switch" aria-label="ช่วงเวลารายงาน">
+        {(tab==='overview'||tab==='funnel'||tab==='audience') && <div className="marketing-period-switch" aria-label="ช่วงเวลารายงาน">
           {([7,30,90] as const).map((days)=><button key={days} className={periodDays===days?'active':''} onClick={()=>setPeriodDays(days)}>{days}D</button>)}
         </div>}
         <button className="workspace-refresh-button" onClick={refresh}><RefreshCw className={loading?'spin':''}/><span>รีเฟรช</span></button>
@@ -167,6 +195,48 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
             <article><Target/><div><small>META READY</small><strong>Facebook Pixel</strong><span>{summary?.metaPixelConfigured?'เชื่อม Browser Pixel แล้ว':'เตรียมระบบไว้แล้ว · รอ Pixel ID'}</span></div></article>
             <article><UserCheck/><div><small>KNOWN CUSTOMER</small><strong>{summary?.lineFriends??0} LINE Friends</strong><span>พร้อมต่อยอด Tag / Broadcast / CRM</span></div></article>
           </div>
+        </>}
+
+        {tab==='realtime' && <>
+          <section className="growth-title realtime-title"><span>LIVE WEBSITE</span><h1>ตอนนี้มีคนอยู่บนเว็บ<br/>และกำลังดูอะไรอยู่</h1><p>ระบบส่ง heartbeat ทุก 30 วินาทีจากหน้า Public และหน้านี้รีเฟรชอัตโนมัติทุก 15 วินาที โดยนับเฉพาะ session ที่ยัง active ในช่วงประมาณ {summary?.liveWindowSeconds??90} วินาทีล่าสุด</p></section>
+          <div className="realtime-hero-grid">
+            <article className="realtime-online-card"><div className="live-pulse"><i/><Radio/></div><small>ONLINE NOW</small><strong>{summary?.liveSessions??0}</strong><span>คนกำลังอยู่บนเว็บไซต์</span><p>อัปเดตอัตโนมัติ · ไม่ต้องรู้ชื่อผู้เข้าชม</p></article>
+            <article><Wifi/><div><small>TRACKING</small><strong>Heartbeat 30s</strong><span>เห็นคนที่ยังเปิดเว็บอยู่จริง ไม่ใช่แค่ PageView ล่าสุด</span></div></article>
+            <article><MonitorSmartphone/><div><small>DEVICE</small><strong>Desktop / Mobile</strong><span>ดูได้ว่าผู้ชมกำลังเข้าจากอุปกรณ์แบบไหน</span></div></article>
+            <article><Eye/><div><small>LIVE PAGE</small><strong>Page + Package</strong><span>เห็นหน้าที่กำลังดูและแพ็กเกจที่สนใจ</span></div></article>
+          </div>
+          <section className="realtime-table-card">
+            <div className="realtime-table-head"><div><span>ACTIVE SESSIONS</span><h2>ผู้เข้าชมที่กำลังอยู่บนเว็บ</h2></div><small><i/> LIVE · AUTO REFRESH 15s</small></div>
+            {(summary?.liveVisitors?.length??0)>0 ? <div className="realtime-table">
+              <div className="realtime-row realtime-row--head"><span>ผู้เข้าชม</span><span>หน้าที่กำลังดู</span><span>ที่มา</span><span>อุปกรณ์</span><span>ล่าสุด</span></div>
+              {(summary?.liveVisitors||[]).map((visitor,index)=><LiveVisitorRow key={`${visitor.sessionId}-${index}`} visitor={visitor}/>) }
+            </div> : <div className="realtime-empty"><Radio/><strong>ตอนนี้ยังไม่มี Active Session</strong><span>เมื่อมีคนเปิดหน้าเว็บไซต์ ระบบจะแสดงที่นี่ภายในไม่กี่วินาที</span></div>}
+          </section>
+        </>}
+
+        {tab==='audience' && <>
+          <section className="growth-title"><span>AUDIENCE & TAGS</span><h1>แบ่งกลุ่มคนจาก Website + LINE<br/>ไว้เล่นการตลาดต่อภายหลัง</h1><p>Audience ในหน้านี้เป็น First-party Audience ของ Bhutan Center ก่อน ยังไม่ส่งข้อมูลไป Facebook จนกว่าจะเชื่อม Meta จริง คุณสามารถใช้ข้อมูลเว็บและ LINE มาช่วยบอกระดับความสนใจของลูกค้าได้</p></section>
+          <div className="audience-source-grid">
+            <article className="ready"><Globe2/><div><small>DATA SOURCE</small><strong>Website</strong><span>PageView · Package · Returning · LINE Click</span></div><b>พร้อม</b></article>
+            <article className={audience?.sources.line?'ready':''}><Megaphone/><div><small>DATA SOURCE</small><strong>LINE OA</strong><span>Friend · Message · Tags · Website Match</span></div><b>{audience?.sources.line?'พร้อม':'รอข้อมูล'}</b></article>
+            <article className="ready"><UsersRound/><div><small>DATA SOURCE</small><strong>Customer Tracking</strong><span>Quotation · Confirmed · Paid · Exclusion</span></div><b>พร้อม</b></article>
+            <article><Target/><div><small>DESTINATION</small><strong>Meta / Facebook</strong><span>เตรียมไว้ · ยังไม่ Sync Audience ออก</span></div><b>รอเชื่อม</b></article>
+          </div>
+          <section className="audience-library">
+            <div className="retargeting-section-title"><div><span>AUDIENCE LIBRARY</span><h2>กลุ่มที่ระบบสร้างให้จากพฤติกรรม</h2></div><small>{periodDays} DAYS</small></div>
+            <div className="audience-preset-grid">
+              {(audience?.audiences||[]).map((item)=><AudiencePresetCard key={item.id} item={item}/>) }
+              <AudiencePresetCard item={{id:'tracking_no_quote',name:'Tracking · ยังไม่ Quote',count:sales.trackingNoQuote,source:'CRM',intent:'Hot',futureMeta:'Sales Follow-up',description:'มีข้อมูลลูกค้าแล้ว แต่ยังไม่ส่งใบเสนอราคา'}}/>
+              <AudiencePresetCard item={{id:'quote_no_confirm',name:'Quote · ยังไม่ Confirm',count:sales.quoteNoConfirm,source:'CRM',intent:'Hot',futureMeta:'Retarget / Reminder',description:'ส่งใบเสนอราคาแล้ว แต่ยังไม่ยืนยัน'}}/>
+              <AudiencePresetCard item={{id:'paid_exclusion',name:'Confirmed / Paid',count:sales.paid,source:'CRM',intent:'Exclude',futureMeta:'Exclude from acquisition',description:'ใช้เป็นกลุ่มตัดออกจากโฆษณาหาลูกค้าใหม่'}}/>
+            </div>
+          </section>
+          <section className="tag-center-card">
+            <div className="tag-center-head"><div><span>RETARGETING TAGS</span><h2>Tag ที่ระบบรู้จักแล้ว</h2></div><small>{audience?.tagStorageReady?'TAG STORAGE READY':'รัน SQL V13.5 เพื่อเก็บ Tag ถาวร'}</small></div>
+            <div className="tag-cloud">{(audience?.tags||[]).length ? (audience?.tags||[]).map((item)=><span key={item.tag} className={`tag-chip tag-chip--${item.source}`}><Tags/><b>{item.tag}</b><em>{item.count}</em><small>{item.source}</small></span>) : <span className="tag-empty">Tag จะเริ่มเพิ่มเมื่อมีคนเข้าเว็บ ดูแพ็กเกจ กด LINE หรือมี LINE Interaction</span>}</div>
+            <div className="tag-rule-grid"><article><strong>Website Visitor</strong><span>เข้าเว็บอย่างน้อย 1 ครั้ง</span></article><article><strong>Package Interest</strong><span>ดูหน้าแพ็กเกจ</span></article><article><strong>LINE Intent</strong><span>กด CTA ไป LINE</span></article><article><strong>LINE Friend</strong><span>เพิ่มเพื่อน OA</span></article><article><strong>LINE Engaged</strong><span>เคยส่งข้อความ</span></article><article><strong>Website ↔ LINE Matched</strong><span>จับคู่ Visitor กับ LINE ได้แล้ว</span></article></div>
+          </section>
+          <section className="audience-note"><Target/><div><strong>เรื่องสำคัญตอนเชื่อม Facebook ภายหลัง</strong><span>{audience?.note||'LINE userId ใช้แบ่งกลุ่มใน CRM ของเราได้ ส่วน Meta Retargeting จะใช้ Pixel/CAPI และข้อมูลติดต่อที่ได้รับอนุญาตในการ Match Audience'}</span></div></section>
         </>}
 
         {tab==='funnel' && <>
@@ -273,6 +343,17 @@ function MetaStatusCard({icon:Icon,label,ready,detail}:{icon:React.ComponentType
 
 function MetaEvent({source,meta,trigger,state}:{source:string;meta:string;trigger:string;state:'ready'|'reserved'}){
   return <div className="meta-event-row"><code>{source}</code><span>→</span><strong>{meta}</strong><p>{trigger}</p><b className={state}>{state==='ready'?'พร้อม':'เตรียมไว้'}</b></div>;
+}
+
+function LiveVisitorRow({visitor}:{visitor:LiveVisitor}){
+  const page=visitor.packageSlug ? `แพ็กเกจ: ${visitor.packageSlug}` : visitor.pagePath || '/';
+  const ago=visitor.lastSeenSeconds<=5?'เมื่อสักครู่':`${visitor.lastSeenSeconds} วิ.`;
+  return <div className="realtime-row"><span><i className="live-dot"/><strong>{visitor.visitorId||'Anonymous'}</strong><small>{visitor.sessionId||'Session'}</small></span><span><strong>{page}</strong><small>{visitor.pagePath}</small></span><span><strong>{visitor.source||'Direct'}</strong><small>{visitor.campaign||'—'}</small></span><span><strong>{visitor.device}</strong><small>{visitor.eventName==='heartbeat'?'Active':'Interacting'}</small></span><span><strong>{ago}</strong><small>Live</small></span></div>;
+}
+
+function AudiencePresetCard({item}:{item:AudiencePreset}){
+  const tone=item.intent.toLowerCase().replace(/\s+/g,'-');
+  return <article className={`audience-preset audience-preset--${tone}`}><div className="audience-preset-top"><small>{item.source}</small><b>{item.intent}</b></div><strong>{item.count}</strong><h3>{item.name}</h3><p>{item.description}</p><span>อนาคต: {item.futureMeta}</span></article>;
 }
 
 function WebsitePriceRow({row,onSave}:{row:PriceRow;onSave:(row:PriceRow,price:string,visible:boolean)=>void}){

@@ -34,11 +34,16 @@ export async function POST(request: NextRequest) {
     const profile = await lineProfile(lineUserId);
     const now = new Date().toISOString();
     const status = event.type === 'unfollow' ? 'blocked' : 'friend';
+    const { data: existingContact } = await supabase.from('line_contacts').select('tags,visitor_id').eq('line_user_id',lineUserId).maybeSingle();
+    const baseTags = new Set<string>(Array.isArray(existingContact?.tags) ? existingContact.tags : []);
+    if(event.type==='follow') baseTags.add('LINE Friend');
+    if(event.type==='message') baseTags.add('LINE Engaged');
     await supabase.from('line_contacts').upsert({
       line_user_id: lineUserId,
       display_name: String(profile?.displayName || ''),
       picture_url: String(profile?.pictureUrl || ''),
       status,
+      tags:[...baseTags],
       last_event_type: String(event.type || ''),
       last_seen_at: now,
       updated_at: now,
@@ -49,7 +54,11 @@ export async function POST(request: NextRequest) {
     const refMatch = messageText.match(/Ref:\s*([A-Za-z0-9_-]+)/i);
     const visitorId = refMatch?.[1] || null;
     if (visitorId) {
-      await supabase.from('line_contacts').update({ visitor_id: visitorId, updated_at: now }).eq('line_user_id', lineUserId);
+      const tagResult = await supabase.from('website_visitor_tags').select('tag').eq('visitor_id',visitorId);
+      const mergedTags = new Set<string>([...baseTags]);
+      if(!tagResult.error) for(const row of tagResult.data||[]) if(row.tag) mergedTags.add(String(row.tag));
+      mergedTags.add('Website ↔ LINE Matched');
+      await supabase.from('line_contacts').update({ visitor_id: visitorId, tags:[...mergedTags], updated_at: now }).eq('line_user_id', lineUserId);
     }
     await supabase.from('line_events').insert({
       line_user_id: lineUserId,

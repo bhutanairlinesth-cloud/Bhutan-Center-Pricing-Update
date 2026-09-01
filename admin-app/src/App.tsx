@@ -44,6 +44,7 @@ export default function App() {
   const [payments, setPayments] = useState<PaymentTransaction[]>([]);
   const [quotations, setQuotations] = useState<QuotationRecord[]>([]);
   const [workspace, setWorkspace] = useState<Workspace>(() => workspaceFromPath(typeof window !== 'undefined' ? window.location.pathname : '/admin'));
+  const [currentPath, setCurrentPath] = useState(() => typeof window !== 'undefined' ? window.location.pathname : '/admin');
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
@@ -53,21 +54,31 @@ export default function App() {
     window.setTimeout(() => setToasts((list) => list.filter((item) => item.id !== id)), 3600);
   }
 
-  function navigateWorkspace(next: Workspace, historyMode: 'push' | 'replace' = 'push') {
-    if (next === 'admin' && currentUser?.role !== 'admin') next = 'dashboard';
+  function navigateWorkspace(next: Workspace, targetPath?: string, historyMode: 'push' | 'replace' = 'push') {
+    if (next === 'admin' && currentUser?.role !== 'admin') {
+      next = 'dashboard';
+      targetPath = WORKSPACE_PATHS.dashboard;
+    }
     setWorkspace(next);
     if (typeof window === 'undefined') return;
-    const target = WORKSPACE_PATHS[next];
-    if (window.location.pathname === target) return;
+    const target = targetPath || WORKSPACE_PATHS[next];
+    if (window.location.pathname === target) {
+      setCurrentPath(target);
+      return;
+    }
     const method = historyMode === 'replace' ? 'replaceState' : 'pushState';
     window.history[method]({ workspace: next }, '', target);
+    setCurrentPath(target);
+    window.dispatchEvent(new PopStateEvent('popstate', { state: { workspace: next } }));
   }
 
   useEffect(() => {
     function handlePopState() {
       const next = workspaceFromPath(window.location.pathname);
+      setCurrentPath(window.location.pathname);
       if (next === 'admin' && currentUser?.role !== 'admin') {
         setWorkspace('dashboard');
+        setCurrentPath(WORKSPACE_PATHS.dashboard);
         window.history.replaceState({ workspace: 'dashboard' }, '', WORKSPACE_PATHS.dashboard);
         return;
       }
@@ -115,10 +126,12 @@ export default function App() {
             const requested = workspaceFromPath(window.location.pathname);
             if (requested === 'admin' && sessionUser.role !== 'admin') {
               setWorkspace('dashboard');
+              setCurrentPath(WORKSPACE_PATHS.dashboard);
               window.history.replaceState({ workspace: 'dashboard' }, '', WORKSPACE_PATHS.dashboard);
             } else {
               setWorkspace(requested);
-              window.history.replaceState({ workspace: requested }, '', WORKSPACE_PATHS[requested]);
+              setCurrentPath(window.location.pathname);
+              window.history.replaceState({ workspace: requested }, '', window.location.pathname);
             }
             await loadData(false);
           }
@@ -146,14 +159,17 @@ export default function App() {
     await loadData(false);
     const requested = workspaceFromPath(window.location.pathname);
     const allowed = requested === 'admin' && user.role !== 'admin' ? 'dashboard' : requested;
+    const allowedPath = allowed === requested ? window.location.pathname : WORKSPACE_PATHS.dashboard;
     setWorkspace(allowed);
-    window.history.replaceState({ workspace: allowed }, '', WORKSPACE_PATHS[allowed]);
+    setCurrentPath(allowedPath);
+    window.history.replaceState({ workspace: allowed }, '', allowedPath);
   }
 
   async function logout() {
     await supabaseAuth.signOut();
     setCurrentUser(null);
     setWorkspace('dashboard');
+    setCurrentPath('/admin');
     if (typeof window !== 'undefined') window.history.replaceState({}, '', '/admin');
   }
 
@@ -232,7 +248,7 @@ export default function App() {
 
   return <>
     {!currentUser && <Login users={users} onSuccess={loginSuccess}/>} 
-    {currentUser && settings && <UnifiedBackOfficeShell currentUser={currentUser} settings={settings} workspace={workspace} onNavigate={navigateWorkspace} onLogout={logout}>
+    {currentUser && settings && <UnifiedBackOfficeShell currentUser={currentUser} settings={settings} workspace={workspace} currentPath={currentPath} onNavigate={(next, path) => navigateWorkspace(next, path)} onLogout={logout}>
       {workspace === 'dashboard' && <UnifiedDashboard currentUser={currentUser} trackings={trackings} quotations={quotations} onOpenPricing={() => navigateWorkspace('front')} onOpenTracking={() => navigateWorkspace('tracking')} onOpenGrowth={() => navigateWorkspace('growth')} onOpenAdmin={() => navigateWorkspace('admin')} onLogout={logout}/>} 
       {workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onSaveQuotation={saveQuotation} onOpenDashboard={() => navigateWorkspace('dashboard')} onOpenTracking={() => navigateWorkspace('tracking')} onOpenAdmin={() => navigateWorkspace('admin')} onLogout={logout}/>} 
       {workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} quotations={quotations} onSaveQuotation={saveQuotation} onDeleteQuotation={deleteQuotation} onBack={() => navigateWorkspace('dashboard')} onOpenAdmin={() => navigateWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment} onUploadPaymentSlip={uploadPaymentSlip} onGetPaymentSlipUrl={getPaymentSlipUrl} onDeletePaymentSlip={deletePaymentSlip}/>} 

@@ -1,8 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft, BadgePercent, Building2, CheckCircle2, ChevronRight, CircleDollarSign, Copy, Database,
-  Eye, EyeOff, Gauge, Hotel as HotelIcon, KeyRound, LayoutDashboard, LogOut, Mail, Menu, PackageOpen, Pencil,
-  Plane, Plus, RefreshCw, Save, Settings2, ShieldCheck, Trash2, UserPlus, Users, WandSparkles, X,
+  BadgePercent, Building2, CheckCircle2, ChevronRight, CircleDollarSign, Copy, Database,
+  Eye, EyeOff, Gauge, Hotel as HotelIcon, KeyRound, LayoutDashboard, Mail, PackageOpen, Pencil,
+  Plane, Plus, RefreshCw, Save, Settings2, ShieldCheck, Trash2, UserPlus, Users, WandSparkles,
 } from 'lucide-react';
 import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, HotelCategory, PaymentInvoice, PaymentTransaction, TourPackage, User } from '../types';
 import { useI18n, LanguageSwitch } from '../i18n';
@@ -63,14 +63,13 @@ interface AdminProps {
 export function Admin({ embedded = false, settings, hotels, packages, users, trackings, invoices, payments, currentUser, mode, onBack, onOpenTracking, onLogout, onRefresh, onSaveSettings, onUploadLogo, onResetLogo, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onCreateUser, onSaveUser, onDeleteUser }: AdminProps) {
   const { t, language } = useI18n();
   const [page, setPage] = useState<AdminPage>(() => adminPageFromPath(typeof window !== 'undefined' ? window.location.pathname : '/admin/settings'));
-  const [menuOpen, setMenuOpen] = useState(false);
   const nav = [
-    { id: 'dashboard' as const, label: language === 'th' ? 'Dashboard รายงาน' : 'Sales dashboard', icon: LayoutDashboard },
-    { id: 'overview' as const, label: language === 'th' ? 'ข้อมูลราคาและระบบ' : 'Pricing & system data', icon: Database },
-    { id: 'packages' as const, label: t('packages'), icon: PackageOpen },
-    { id: 'hotels' as const, label: t('hotels'), icon: HotelIcon },
-    { id: 'settings' as const, label: t('pricingSettings'), icon: Settings2 },
-    { id: 'users' as const, label: t('users'), icon: Users },
+    { id: 'dashboard' as const, label: language === 'th' ? 'รายงานยอดขาย' : 'Sales dashboard', icon: LayoutDashboard },
+    { id: 'overview' as const, label: language === 'th' ? 'ข้อมูลระบบ' : 'Pricing & system data', icon: Database },
+    { id: 'packages' as const, label: language === 'th' ? 'โปรแกรมทัวร์' : t('packages'), icon: PackageOpen },
+    { id: 'hotels' as const, label: language === 'th' ? 'โรงแรม' : t('hotels'), icon: HotelIcon },
+    { id: 'settings' as const, label: language === 'th' ? 'ราคาและค่าบริการ' : t('pricingSettings'), icon: Settings2 },
+    { id: 'users' as const, label: language === 'th' ? 'ผู้ใช้งาน' : t('users'), icon: Users },
   ];
   const active = nav.find((item) => item.id === page) || nav[0];
 
@@ -80,6 +79,7 @@ export function Admin({ embedded = false, settings, hotels, packages, users, tra
     const target = ADMIN_PAGE_PATHS[next];
     if (window.location.pathname === target) return;
     window.history[mode === 'replace' ? 'replaceState' : 'pushState']({ workspace: 'admin', adminPage: next }, '', target);
+    window.dispatchEvent(new PopStateEvent('popstate', { state: { workspace: 'admin', adminPage: next } }));
   }
 
   React.useEffect(() => {
@@ -92,20 +92,13 @@ export function Admin({ embedded = false, settings, hotels, packages, users, tra
     return () => window.removeEventListener('popstate', handlePopState);
   }, [embedded]);
 
-  return <div className={`admin-shell ${embedded ? 'admin-shell--embedded' : ''}`}>
-    <aside className={`admin-sidebar ${menuOpen ? 'open' : ''}`}>
-      <div className="admin-brand-row"><Brand light logoUrl={settings.logoUrl}/><button className="sidebar-close" onClick={() => setMenuOpen(false)}><X/></button></div>
-      <div className="workspace-label"><span>{t('backOffice')}</span><small>{mode === 'supabase' ? t('online') : t('local')}</small></div>
-      <nav className="admin-nav">{nav.map((item) => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => { openPage(item.id); setMenuOpen(false); }}><item.icon/><span>{item.label}</span><ChevronRight/></button>)}</nav>
-      <div className="sidebar-footer"><button onClick={onBack}><ArrowLeft/>{t('backToCalculator')}</button><button onClick={onLogout}><LogOut/>{t('logout')}</button></div>
-    </aside>
-    {menuOpen && <button className="admin-overlay" onClick={() => setMenuOpen(false)}/>} 
-    <main className="admin-main">
-      <header className="admin-header">
-        <div className="admin-header-title"><button className="menu-button" onClick={() => setMenuOpen(true)}><Menu/></button><div><span>BACK OFFICE</span><h1>{active.label}</h1></div></div>
+  return <div className={`admin-shell ${embedded ? 'admin-shell--embedded admin-shell--single-nav' : ''}`}>
+    <main className="admin-main admin-main--single-nav">
+      <header className="admin-header admin-header--single-nav">
+        <div className="admin-header-title"><div><span>BACK OFFICE</span><h1>{active.label}</h1></div></div>
         <div className="admin-header-actions"><LanguageSwitch compact/><button className="ghost-button" onClick={onRefresh}><RefreshCw/>{t('syncNow')}</button><span className="admin-user"><i>{currentUser.name?.[0]?.toUpperCase()}</i><b>{currentUser.name}</b></span></div>
       </header>
-      <div className="admin-content">
+      <div className="admin-content admin-content--single-nav">
         {page === 'dashboard' && <SalesDashboard trackings={trackings} invoices={invoices} payments={payments} onOpenTracking={onOpenTracking}/>} 
         {page === 'overview' && <AdminOverview settings={settings} hotels={hotels} packages={packages} users={users} language={language} onOpen={openPage}/>} 
         {page === 'packages' && <PackagesManager items={packages} onSave={onSavePackage} onDelete={onDeletePackage}/>} 

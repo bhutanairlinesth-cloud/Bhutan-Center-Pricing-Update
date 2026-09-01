@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Globe2, LineChart, Megaphone, RefreshCw, Save, Send, Settings2, Users } from 'lucide-react';
+import { CheckCircle2, Globe2, RefreshCw, Save, Send, Settings2 } from 'lucide-react';
 import { CustomerTracking, QuotationRecord, TourPackage, User } from '../types';
 import { supabaseAuth } from '../lib/supabase';
 
@@ -43,6 +43,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
     const target=MARKETING_TAB_PATHS[next];
     if(window.location.pathname===target)return;
     window.history[mode==='replace'?'replaceState':'pushState']({workspace:'growth',marketingTab:next},'',target);
+    window.dispatchEvent(new PopStateEvent('popstate',{state:{workspace:'growth',marketingTab:next}}));
   }
   useEffect(()=>{
     function handlePopState(){
@@ -91,22 +92,12 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
 
   return <div className="growth-shell unified-module-view">
     <div className="workspace-pagebar growth-pagebar">
-      <button className="workspace-back-button" onClick={onBack}><ArrowLeft/>กลับ Dashboard</button>
-      <div className="workspace-pagebar-title"><span>WEBSITE / LINE / CRM</span><strong>เว็บไซต์ & การตลาด</strong></div>
+      <div className="workspace-pagebar-title"><span>WEBSITE / LINE / CRM</span><strong>{tab==='overview'?'ภาพรวมการตลาด':tab==='website'?'เว็บไซต์':tab==='line'?'LINE OA':'SEO'}</strong></div>
       <button className="workspace-refresh-button" onClick={refresh}><RefreshCw className={loading?'spin':''}/><span>รีเฟรช</span></button>
     </div>
 
-    <div className="growth-layout">
-      <aside className="growth-subnav">
-        <div className="growth-subnav-label">MARKETING</div>
-        <button className={tab==='overview'?'active':''} onClick={()=>openTab('overview')}><LineChart/><span><strong>ภาพรวม</strong><small>Funnel & Visitors</small></span></button>
-        <button className={tab==='website'?'active':''} onClick={()=>openTab('website')}><Globe2/><span><strong>เว็บไซต์</strong><small>ราคา & Public</small></span></button>
-        <button className={tab==='line'?'active':''} onClick={()=>openTab('line')}><Megaphone/><span><strong>LINE & Funnel</strong><small>OA & Broadcast</small></span></button>
-        <button className={tab==='seo'?'active':''} onClick={()=>openTab('seo')}><Settings2/><span><strong>SEO</strong><small>Migration & Indexing</small></span></button>
-        <div className="growth-subnav-note"><span>ผู้ใช้งาน</span><strong>{currentUser.name}</strong></div>
-      </aside>
-
-      <main className="growth-main">
+    <div className="growth-layout growth-layout--single-nav">
+      <main className="growth-main growth-main--single-nav">
         {notice && <div className="growth-notice">{notice}</div>}
         {tab==='overview' && <>
           <section className="growth-title"><span>MARKETING OVERVIEW</span><h1>จากคนเข้าเว็บ<br/>ไปจนถึงลูกค้า</h1><p>ข้อมูลเว็บไซต์จะเริ่มเก็บหลังรัน Migration V13 ส่วนข้อมูล Sales ใช้ Customer Tracking เดิมทันที</p></section>

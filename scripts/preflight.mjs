@@ -17,4 +17,4 @@ if (missing.length) {
   console.error('Unified preflight failed. Missing:', missing.join(', '));
   process.exit(1);
 }
-console.log('Unified V13.1 preflight OK');
+console.log('Unified V13.2 preflight OK');

@@ -3297,3 +3297,55 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 }
 .admin-shell--embedded .sidebar-footer{display:none}
 .admin-shell--embedded .admin-sidebar{transform:none!important;transition:none!important}.admin-shell--embedded .menu-button{display:none!important}
+
+/* ===== V13.2 · One navigation system ===== */
+@media (min-width: 981px){
+  .unified-backoffice-shell--single-nav .unified-sidebar{width:274px;padding:16px 14px 14px}
+  .unified-backoffice-shell--single-nav .unified-workspace{width:calc(100% - 274px);margin-left:274px}
+}
+.unified-sidebar-caption--compact{margin:10px 5px 7px;padding:10px 12px;border-radius:14px}
+.unified-sidebar-caption--compact span{font-size:8px}
+.unified-sidebar-caption--compact strong{font-size:16px;margin-top:2px}
+.unified-sidebar-caption--compact small{font-size:8px;margin-top:2px}
+.unified-sidebar-nav--organized{gap:2px;padding-bottom:10px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.12) transparent}
+.unified-sidebar-nav--organized .unified-nav-group{position:relative;margin:10px 8px 4px;padding-top:8px;border-top:1px solid rgba(255,255,255,.055);font-size:7.5px;letter-spacing:.16em;color:rgba(255,255,255,.34)}
+.unified-sidebar-nav--organized .unified-nav-group:first-child{margin-top:2px;padding-top:2px;border-top:0}
+.unified-sidebar-nav--organized button{min-height:47px;padding:5px 8px;border-radius:13px;grid-template-columns:32px minmax(0,1fr) 13px;gap:8px}
+.unified-sidebar-nav--organized button>i{width:32px;height:32px;border-radius:9px}
+.unified-sidebar-nav--organized button>i svg{width:16px;height:16px}
+.unified-sidebar-nav--organized button>span strong{font-size:11px;font-weight:650}
+.unified-sidebar-nav--organized button>span small{font-size:7.5px;margin-top:1px}
+.unified-sidebar-nav--organized button>svg{width:12px;height:12px}
+.unified-sidebar-nav--organized button.active{box-shadow:inset 3px 0 0 #e0b45d,0 7px 18px rgba(0,0,0,.08)}
+
+/* Admin pages no longer render a second sidebar. */
+.admin-shell--embedded.admin-shell--single-nav{display:block!important;min-height:auto!important;padding:22px 28px 70px!important;background:transparent!important}
+.admin-shell--single-nav .admin-main--single-nav{width:100%!important;min-width:0!important;margin:0!important;min-height:auto!important}
+.admin-shell--single-nav .admin-header--single-nav{position:relative!important;top:auto!important;width:100%!important;height:70px!important;padding:0 20px!important;border:1px solid #e1e8e4!important;border-radius:18px!important;background:rgba(255,255,255,.94)!important;box-shadow:0 8px 28px rgba(31,70,56,.035)}
+.admin-shell--single-nav .admin-content--single-nav{width:100%!important;padding:22px 0 0!important;margin:0!important}
+.admin-shell--single-nav .admin-header-title{gap:0}
+.admin-shell--single-nav .admin-header-title>div>span{font-size:8px;letter-spacing:.16em;color:#9a7a44}
+.admin-shell--single-nav .admin-header-title h1{font-size:20px;margin-top:2px}
+
+/* Marketing tabs are now in the main left navigation. */
+.growth-layout--single-nav{display:block!important;grid-template-columns:none!important;width:min(1540px,calc(100% - 56px))!important;margin:0 auto!important;padding:22px 0 70px!important}
+.unified-backoffice-shell .growth-main--single-nav{max-width:none!important;width:100%!important;margin:0!important;padding:0!important}
+.growth-layout--single-nav .growth-subnav{display:none!important}
+.growth-pagebar{justify-content:space-between}
+.growth-pagebar .workspace-pagebar-title{margin-left:0}
+
+@media (max-width: 980px){
+  .unified-backoffice-shell--single-nav .unified-workspace{width:100%;margin-left:0}
+  .unified-sidebar-caption--compact{margin-top:8px}
+  .unified-sidebar-nav--organized button{min-height:50px}
+  .admin-shell--embedded.admin-shell--single-nav{padding:14px 14px 50px!important}
+  .admin-shell--single-nav .admin-header--single-nav{min-height:64px!important;height:auto!important;padding:10px 12px!important}
+  .growth-layout--single-nav{width:calc(100% - 28px)!important;padding-top:12px!important}
+}
+
+@media (max-width: 620px){
+  .unified-sidebar-nav--organized button{grid-template-columns:34px minmax(0,1fr) 12px;min-height:52px}
+  .unified-sidebar-nav--organized button>span strong{font-size:12px}
+  .unified-sidebar-nav--organized button>span small{font-size:8px}
+  .admin-shell--single-nav .admin-header-actions .ghost-button{display:none}
+}

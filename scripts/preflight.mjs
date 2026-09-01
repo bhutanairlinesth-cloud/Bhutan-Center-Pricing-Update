@@ -9,6 +9,7 @@ const required = [
   'admin-app/src/components/FrontOffice.tsx',
   'admin-app/src/components/UnifiedDashboard.tsx',
   'admin-app/src/components/GrowthWorkspace.tsx',
+  'admin-app/src/components/UnifiedBackOfficeShell.tsx',
   'supabase/UNIFIED_V13_WEBSITE_LINE_MARKETING.sql',
 ];
 const missing = required.filter((file) => !fs.existsSync(path.resolve(file)));
@@ -16,4 +17,4 @@ if (missing.length) {
   console.error('Unified preflight failed. Missing:', missing.join(', '));
   process.exit(1);
 }
-console.log('Unified V13 preflight OK');
+console.log('Unified V13.1 preflight OK');

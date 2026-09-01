@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowRight, BadgePercent, BedDouble, BriefcaseBusiness, Building2, CalendarDays, Check, ClipboardList,
+  ArrowLeft, ArrowRight, BadgePercent, BedDouble, BriefcaseBusiness, Building2, CalendarDays, Check, ClipboardList,
   ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LayoutDashboard, LogOut, Plane, RotateCcw,
   Settings2, ShieldCheck, Sparkles, Users, WalletCards,
 } from 'lucide-react';
@@ -139,23 +139,15 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     } finally { setSavingQuote(false); }
   }
 
-  return <div className="front-shell">
-    <header className="front-header">
-      <Brand/>
-      <div className="front-header-actions">
-        <button className="ghost-button desktop-only" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button>
-        <LanguageSwitch compact/>
-        <button className="ghost-button desktop-only" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>
-        <span className="user-chip"><i>{currentUser.name?.[0]?.toUpperCase() || 'U'}</i><span><b>{currentUser.name}</b><small>{currentUser.role}</small></span></span>
-        {currentUser.role === 'admin' && <button className="ghost-button desktop-only" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}
-        <button className="icon-button" onClick={onLogout} title={t('logout')}><LogOut/></button>
-      </div>
-    </header>
-
+  return <div className="front-shell unified-module-view">
     <main className="front-main">
+      <div className="workspace-pagebar">
+        <button className="workspace-back-button" onClick={onOpenDashboard}><ArrowLeft/>{language === 'th' ? 'กลับ Dashboard' : 'Back to dashboard'}</button>
+        <div className="workspace-pagebar-title"><span>PRICING DESK</span><strong>{language === 'th' ? 'คำนวณราคาและสร้างใบเสนอราคา' : 'Pricing & quotation'}</strong></div>
+        <LanguageSwitch compact/>
+      </div>
       <section className="page-intro">
         <div><span className="eyebrow"><Sparkles/> LIVE PRICING</span><h1>{t('calculatorTitle')}</h1><p>{t('calculatorSubtitle')}</p></div>
-        <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
       </section>
 
       <div className="calculator-layout">

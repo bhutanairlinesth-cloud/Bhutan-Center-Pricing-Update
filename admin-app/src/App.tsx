@@ -12,6 +12,25 @@ import { useI18n } from './i18n';
 import { LOGO_CACHE_KEY } from './components/Brand';
 import { UnifiedDashboard } from './components/UnifiedDashboard';
 import { GrowthWorkspace } from './components/GrowthWorkspace';
+import { UnifiedBackOfficeShell, Workspace } from './components/UnifiedBackOfficeShell';
+
+
+const WORKSPACE_PATHS: Record<Workspace, string> = {
+  dashboard: '/admin',
+  front: '/admin/pricing',
+  tracking: '/admin/customers',
+  growth: '/admin/marketing',
+  admin: '/admin/settings',
+};
+
+function workspaceFromPath(pathname: string): Workspace {
+  const path = pathname.replace(/\/+$/, '') || '/admin';
+  if (path.startsWith('/admin/pricing')) return 'front';
+  if (path.startsWith('/admin/customers')) return 'tracking';
+  if (path.startsWith('/admin/marketing')) return 'growth';
+  if (path.startsWith('/admin/settings')) return 'admin';
+  return 'dashboard';
+}
 
 export default function App() {
   const { t } = useI18n();
@@ -24,7 +43,7 @@ export default function App() {
   const [invoices, setInvoices] = useState<PaymentInvoice[]>([]);
   const [payments, setPayments] = useState<PaymentTransaction[]>([]);
   const [quotations, setQuotations] = useState<QuotationRecord[]>([]);
-  const [workspace, setWorkspace] = useState<'dashboard' | 'front' | 'tracking' | 'admin' | 'growth'>('dashboard');
+  const [workspace, setWorkspace] = useState<Workspace>(() => workspaceFromPath(typeof window !== 'undefined' ? window.location.pathname : '/admin'));
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
@@ -33,6 +52,31 @@ export default function App() {
     setToasts((list) => [...list, { id, message, kind }]);
     window.setTimeout(() => setToasts((list) => list.filter((item) => item.id !== id)), 3600);
   }
+
+  function navigateWorkspace(next: Workspace, historyMode: 'push' | 'replace' = 'push') {
+    if (next === 'admin' && currentUser?.role !== 'admin') next = 'dashboard';
+    setWorkspace(next);
+    if (typeof window === 'undefined') return;
+    const target = WORKSPACE_PATHS[next];
+    if (window.location.pathname === target) return;
+    const method = historyMode === 'replace' ? 'replaceState' : 'pushState';
+    window.history[method]({ workspace: next }, '', target);
+  }
+
+  useEffect(() => {
+    function handlePopState() {
+      const next = workspaceFromPath(window.location.pathname);
+      if (next === 'admin' && currentUser?.role !== 'admin') {
+        setWorkspace('dashboard');
+        window.history.replaceState({ workspace: 'dashboard' }, '', WORKSPACE_PATHS.dashboard);
+        return;
+      }
+      setWorkspace(next);
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentUser?.role]);
+
 
   async function loadData(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -60,13 +104,22 @@ export default function App() {
           const session = await supabaseAuth.getSession();
           if (session?.user) {
             const profile = await fetchProfile(session.user.id);
-            setCurrentUser({
+            const sessionUser: User = {
               id: profile.id,
               name: profile.name || session.user.email?.split('@')[0] || 'User',
               email: profile.email || session.user.email || '',
               role: profile.role,
               createdAt: profile.created_at,
-            });
+            };
+            setCurrentUser(sessionUser);
+            const requested = workspaceFromPath(window.location.pathname);
+            if (requested === 'admin' && sessionUser.role !== 'admin') {
+              setWorkspace('dashboard');
+              window.history.replaceState({ workspace: 'dashboard' }, '', WORKSPACE_PATHS.dashboard);
+            } else {
+              setWorkspace(requested);
+              window.history.replaceState({ workspace: requested }, '', WORKSPACE_PATHS[requested]);
+            }
             await loadData(false);
           }
         } else {
@@ -91,13 +144,17 @@ export default function App() {
       try { await database.saveUser(user); } catch { /* profile already exists in most cases */ }
     }
     await loadData(false);
-    setWorkspace('dashboard');
+    const requested = workspaceFromPath(window.location.pathname);
+    const allowed = requested === 'admin' && user.role !== 'admin' ? 'dashboard' : requested;
+    setWorkspace(allowed);
+    window.history.replaceState({ workspace: allowed }, '', WORKSPACE_PATHS[allowed]);
   }
 
   async function logout() {
     await supabaseAuth.signOut();
     setCurrentUser(null);
     setWorkspace('dashboard');
+    if (typeof window !== 'undefined') window.history.replaceState({}, '', '/admin');
   }
 
   async function run(action: () => Promise<void>, success = t('saved')) {
@@ -175,16 +232,18 @@ export default function App() {
 
   return <>
     {!currentUser && <Login users={users} onSuccess={loginSuccess}/>} 
-    {currentUser && settings && workspace === 'dashboard' && <UnifiedDashboard currentUser={currentUser} trackings={trackings} quotations={quotations} onOpenPricing={() => setWorkspace('front')} onOpenTracking={() => setWorkspace('tracking')} onOpenGrowth={() => setWorkspace('growth')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
-    {currentUser && settings && workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onSaveQuotation={saveQuotation} onOpenDashboard={() => setWorkspace('dashboard')} onOpenTracking={() => setWorkspace('tracking')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
-    {currentUser && settings && workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} quotations={quotations} onSaveQuotation={saveQuotation} onDeleteQuotation={deleteQuotation} onBack={() => setWorkspace('dashboard')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment} onUploadPaymentSlip={uploadPaymentSlip} onGetPaymentSlipUrl={getPaymentSlipUrl} onDeletePaymentSlip={deletePaymentSlip}/>} 
-    {currentUser && settings && workspace === 'admin' && currentUser.role === 'admin' && <Admin
-      settings={settings} hotels={hotels} packages={packages} users={users} trackings={trackings} invoices={invoices} payments={payments} currentUser={currentUser} mode={database.mode}
-      onBack={() => setWorkspace('dashboard')} onOpenTracking={() => setWorkspace('tracking')} onLogout={logout} onRefresh={refresh}
-      onSaveSettings={saveSettings} onUploadLogo={uploadLogo} onResetLogo={resetLogo} onSaveHotel={saveHotel} onDeleteHotel={deleteHotel}
-      onSavePackage={savePackage} onDeletePackage={deletePackage} onCreateUser={createUser} onSaveUser={saveUser} onDeleteUser={deleteUser}
-    />}
-    {currentUser && settings && workspace === 'growth' && <GrowthWorkspace currentUser={currentUser} packages={packages} trackings={trackings} quotations={quotations} onBack={() => setWorkspace('dashboard')} onLogout={logout}/>}
+    {currentUser && settings && <UnifiedBackOfficeShell currentUser={currentUser} settings={settings} workspace={workspace} onNavigate={navigateWorkspace} onLogout={logout}>
+      {workspace === 'dashboard' && <UnifiedDashboard currentUser={currentUser} trackings={trackings} quotations={quotations} onOpenPricing={() => navigateWorkspace('front')} onOpenTracking={() => navigateWorkspace('tracking')} onOpenGrowth={() => navigateWorkspace('growth')} onOpenAdmin={() => navigateWorkspace('admin')} onLogout={logout}/>} 
+      {workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onSaveQuotation={saveQuotation} onOpenDashboard={() => navigateWorkspace('dashboard')} onOpenTracking={() => navigateWorkspace('tracking')} onOpenAdmin={() => navigateWorkspace('admin')} onLogout={logout}/>} 
+      {workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} quotations={quotations} onSaveQuotation={saveQuotation} onDeleteQuotation={deleteQuotation} onBack={() => navigateWorkspace('dashboard')} onOpenAdmin={() => navigateWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment} onUploadPaymentSlip={uploadPaymentSlip} onGetPaymentSlipUrl={getPaymentSlipUrl} onDeletePaymentSlip={deletePaymentSlip}/>} 
+      {workspace === 'admin' && currentUser.role === 'admin' && <Admin
+        embedded settings={settings} hotels={hotels} packages={packages} users={users} trackings={trackings} invoices={invoices} payments={payments} currentUser={currentUser} mode={database.mode}
+        onBack={() => navigateWorkspace('dashboard')} onOpenTracking={() => navigateWorkspace('tracking')} onLogout={logout} onRefresh={refresh}
+        onSaveSettings={saveSettings} onUploadLogo={uploadLogo} onResetLogo={resetLogo} onSaveHotel={saveHotel} onDeleteHotel={deleteHotel}
+        onSavePackage={savePackage} onDeletePackage={deletePackage} onCreateUser={createUser} onSaveUser={saveUser} onDeleteUser={deleteUser}
+      />}
+      {workspace === 'growth' && <GrowthWorkspace currentUser={currentUser} packages={packages} trackings={trackings} quotations={quotations} onBack={() => navigateWorkspace('dashboard')} onLogout={logout}/>}
+    </UnifiedBackOfficeShell>}
     <ToastStack items={toasts} onDismiss={(id) => setToasts((list) => list.filter((item) => item.id !== id))}/>
   </>;
 }

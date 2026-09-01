@@ -1138,13 +1138,13 @@ export function CustomerTrackingWorkspace(props: Props) {
     setEditing({ ...draft.data });
   }
 
-  return <div className="tracking-shell journey-shell">
-    <header className="tracking-header">
-      <Brand/>
-      <div className="tracking-header-actions"><LanguageSwitch compact/><button className="ghost-button" onClick={props.onBack}><ArrowLeft/>{th ? 'หน้าคำนวณราคา' : 'Price calculator'}</button>{props.currentUser.role === 'admin' && <button className="ghost-button desktop-only" onClick={props.onOpenAdmin}><Settings2/>{th ? 'หลังบ้าน' : 'Back office'}</button>}<button className="icon-button" onClick={props.onLogout}><LogOut/></button></div>
-    </header>
-
+  return <div className="tracking-shell journey-shell unified-module-view">
     <main className="tracking-main journey-main">
+      <div className="workspace-pagebar">
+        <button className="workspace-back-button" onClick={props.onBack}><ArrowLeft/>{th ? 'กลับ Dashboard' : 'Back to dashboard'}</button>
+        <div className="workspace-pagebar-title"><span>CRM / SALES</span><strong>{th ? 'ติดตามลูกค้าและสถานะการเดินทาง' : 'Customer tracking & journey'}</strong></div>
+        <LanguageSwitch compact/>
+      </div>
       <section className="tracking-page-head journey-page-head">
         <div><span className="eyebrow"><Sparkles/> CUSTOMER JOURNEY</span><h1>{th ? 'ติดตามลูกค้าตั้งแต่เสนอราคา ถึงปิดจบทริป' : 'Track every customer from quotation to trip closure'}</h1><p>{th ? 'เห็นขั้นตอนปัจจุบัน งานถัดไป เอกสาร การชำระเงิน วีซ่า และ Feedback ในหน้าจอเดียว' : 'Manage next actions, documents, payments, visas, travel readiness and feedback in one workspace.'}</p></div>
         <div className="tracking-head-actions">

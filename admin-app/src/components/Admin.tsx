@@ -13,7 +13,28 @@ import { SalesDashboard } from './SalesDashboard';
 
 type AdminPage = 'dashboard' | 'overview' | 'packages' | 'hotels' | 'settings' | 'users';
 
+
+const ADMIN_PAGE_PATHS: Record<AdminPage, string> = {
+  dashboard: '/admin/settings',
+  overview: '/admin/settings/data',
+  packages: '/admin/settings/packages',
+  hotels: '/admin/settings/hotels',
+  settings: '/admin/settings/pricing',
+  users: '/admin/settings/users',
+};
+
+function adminPageFromPath(pathname: string): AdminPage {
+  const path = pathname.replace(/\/+$/, '');
+  if (path.startsWith('/admin/settings/packages')) return 'packages';
+  if (path.startsWith('/admin/settings/hotels')) return 'hotels';
+  if (path.startsWith('/admin/settings/pricing')) return 'settings';
+  if (path.startsWith('/admin/settings/users')) return 'users';
+  if (path.startsWith('/admin/settings/data')) return 'overview';
+  return 'dashboard';
+}
+
 interface AdminProps {
+  embedded?: boolean;
   settings: GlobalSettings;
   hotels: Hotel[];
   packages: TourPackage[];
@@ -39,9 +60,9 @@ interface AdminProps {
   onDeleteUser: (id: string) => Promise<void>;
 }
 
-export function Admin({ settings, hotels, packages, users, trackings, invoices, payments, currentUser, mode, onBack, onOpenTracking, onLogout, onRefresh, onSaveSettings, onUploadLogo, onResetLogo, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onCreateUser, onSaveUser, onDeleteUser }: AdminProps) {
+export function Admin({ embedded = false, settings, hotels, packages, users, trackings, invoices, payments, currentUser, mode, onBack, onOpenTracking, onLogout, onRefresh, onSaveSettings, onUploadLogo, onResetLogo, onSaveHotel, onDeleteHotel, onSavePackage, onDeletePackage, onCreateUser, onSaveUser, onDeleteUser }: AdminProps) {
   const { t, language } = useI18n();
-  const [page, setPage] = useState<AdminPage>('dashboard');
+  const [page, setPage] = useState<AdminPage>(() => adminPageFromPath(typeof window !== 'undefined' ? window.location.pathname : '/admin/settings'));
   const [menuOpen, setMenuOpen] = useState(false);
   const nav = [
     { id: 'dashboard' as const, label: language === 'th' ? 'Dashboard รายงาน' : 'Sales dashboard', icon: LayoutDashboard },
@@ -53,11 +74,29 @@ export function Admin({ settings, hotels, packages, users, trackings, invoices, 
   ];
   const active = nav.find((item) => item.id === page) || nav[0];
 
-  return <div className="admin-shell">
+  function openPage(next: AdminPage, mode: 'push' | 'replace' = 'push') {
+    setPage(next);
+    if (!embedded || typeof window === 'undefined') return;
+    const target = ADMIN_PAGE_PATHS[next];
+    if (window.location.pathname === target) return;
+    window.history[mode === 'replace' ? 'replaceState' : 'pushState']({ workspace: 'admin', adminPage: next }, '', target);
+  }
+
+  React.useEffect(() => {
+    if (!embedded) return;
+    function handlePopState() {
+      if (!window.location.pathname.startsWith('/admin/settings')) return;
+      setPage(adminPageFromPath(window.location.pathname));
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [embedded]);
+
+  return <div className={`admin-shell ${embedded ? 'admin-shell--embedded' : ''}`}>
     <aside className={`admin-sidebar ${menuOpen ? 'open' : ''}`}>
       <div className="admin-brand-row"><Brand light logoUrl={settings.logoUrl}/><button className="sidebar-close" onClick={() => setMenuOpen(false)}><X/></button></div>
       <div className="workspace-label"><span>{t('backOffice')}</span><small>{mode === 'supabase' ? t('online') : t('local')}</small></div>
-      <nav className="admin-nav">{nav.map((item) => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => { setPage(item.id); setMenuOpen(false); }}><item.icon/><span>{item.label}</span><ChevronRight/></button>)}</nav>
+      <nav className="admin-nav">{nav.map((item) => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => { openPage(item.id); setMenuOpen(false); }}><item.icon/><span>{item.label}</span><ChevronRight/></button>)}</nav>
       <div className="sidebar-footer"><button onClick={onBack}><ArrowLeft/>{t('backToCalculator')}</button><button onClick={onLogout}><LogOut/>{t('logout')}</button></div>
     </aside>
     {menuOpen && <button className="admin-overlay" onClick={() => setMenuOpen(false)}/>} 
@@ -68,7 +107,7 @@ export function Admin({ settings, hotels, packages, users, trackings, invoices, 
       </header>
       <div className="admin-content">
         {page === 'dashboard' && <SalesDashboard trackings={trackings} invoices={invoices} payments={payments} onOpenTracking={onOpenTracking}/>} 
-        {page === 'overview' && <AdminOverview settings={settings} hotels={hotels} packages={packages} users={users} language={language} onOpen={setPage}/>} 
+        {page === 'overview' && <AdminOverview settings={settings} hotels={hotels} packages={packages} users={users} language={language} onOpen={openPage}/>} 
         {page === 'packages' && <PackagesManager items={packages} onSave={onSavePackage} onDelete={onDeletePackage}/>} 
         {page === 'hotels' && <HotelsManager items={hotels} onSave={onSaveHotel} onDelete={onDeleteHotel}/>} 
         {page === 'settings' && <SettingsManager initial={settings} onSave={onSaveSettings} onUploadLogo={onUploadLogo} onResetLogo={onResetLogo}/>} 

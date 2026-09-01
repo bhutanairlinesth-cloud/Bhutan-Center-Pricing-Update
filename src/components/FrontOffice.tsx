@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight, BadgePercent, BedDouble, BriefcaseBusiness, Building2, CalendarDays, Check, ClipboardList,
-  ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LogOut, Plane, RotateCcw,
+  ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LayoutDashboard, LogOut, Plane, RotateCcw,
   Settings2, ShieldCheck, Sparkles, Users, WalletCards,
 } from 'lucide-react';
 import { CustomerDetails, GlobalSettings, HotelCategory, PricingChannel, PricingInput, QuotationRecord, TourPackage, User } from '../types';
@@ -18,6 +18,7 @@ interface FrontOfficeProps {
   packages: TourPackage[];
   currentUser: User;
   onSaveQuotation: (item: QuotationRecord) => Promise<void>;
+  onOpenDashboard: () => void;
   onOpenTracking: () => void;
   onOpenAdmin: () => void;
   onLogout: () => void;
@@ -25,7 +26,7 @@ interface FrontOfficeProps {
 
 const emptyCustomer: CustomerDetails = { name: '', phone: '', email: '', invoiceAddress: '', note: '' };
 
-export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
+export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, onOpenDashboard, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
   const { t, language } = useI18n();
   const firstPackage = packages[0];
   const firstCategory: HotelCategory = '3 Stars';
@@ -142,6 +143,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     <header className="front-header">
       <Brand/>
       <div className="front-header-actions">
+        <button className="ghost-button desktop-only" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button>
         <LanguageSwitch compact/>
         <button className="ghost-button desktop-only" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>
         <span className="user-chip"><i>{currentUser.name?.[0]?.toUpperCase() || 'U'}</i><span><b>{currentUser.name}</b><small>{currentUser.role}</small></span></span>
@@ -153,7 +155,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     <main className="front-main">
       <section className="page-intro">
         <div><span className="eyebrow"><Sparkles/> LIVE PRICING</span><h1>{t('calculatorTitle')}</h1><p>{t('calculatorSubtitle')}</p></div>
-        <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
+        <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
       </section>
 
       <div className="calculator-layout">

@@ -10,6 +10,8 @@ import { CustomerTrackingWorkspace } from './components/CustomerTracking';
 import { ToastItem, ToastStack } from './components/Ui';
 import { useI18n } from './i18n';
 import { LOGO_CACHE_KEY } from './components/Brand';
+import { UnifiedDashboard } from './components/UnifiedDashboard';
+import { GrowthWorkspace } from './components/GrowthWorkspace';
 
 export default function App() {
   const { t } = useI18n();
@@ -22,7 +24,7 @@ export default function App() {
   const [invoices, setInvoices] = useState<PaymentInvoice[]>([]);
   const [payments, setPayments] = useState<PaymentTransaction[]>([]);
   const [quotations, setQuotations] = useState<QuotationRecord[]>([]);
-  const [workspace, setWorkspace] = useState<'front' | 'tracking' | 'admin'>('front');
+  const [workspace, setWorkspace] = useState<'dashboard' | 'front' | 'tracking' | 'admin' | 'growth'>('dashboard');
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
@@ -89,13 +91,13 @@ export default function App() {
       try { await database.saveUser(user); } catch { /* profile already exists in most cases */ }
     }
     await loadData(false);
-    setWorkspace('front');
+    setWorkspace('dashboard');
   }
 
   async function logout() {
     await supabaseAuth.signOut();
     setCurrentUser(null);
-    setWorkspace('front');
+    setWorkspace('dashboard');
   }
 
   async function run(action: () => Promise<void>, success = t('saved')) {
@@ -173,14 +175,16 @@ export default function App() {
 
   return <>
     {!currentUser && <Login users={users} onSuccess={loginSuccess}/>} 
-    {currentUser && settings && workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onSaveQuotation={saveQuotation} onOpenTracking={() => setWorkspace('tracking')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
-    {currentUser && settings && workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} quotations={quotations} onSaveQuotation={saveQuotation} onDeleteQuotation={deleteQuotation} onBack={() => setWorkspace('front')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment} onUploadPaymentSlip={uploadPaymentSlip} onGetPaymentSlipUrl={getPaymentSlipUrl} onDeletePaymentSlip={deletePaymentSlip}/>} 
+    {currentUser && settings && workspace === 'dashboard' && <UnifiedDashboard currentUser={currentUser} trackings={trackings} quotations={quotations} onOpenPricing={() => setWorkspace('front')} onOpenTracking={() => setWorkspace('tracking')} onOpenGrowth={() => setWorkspace('growth')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
+    {currentUser && settings && workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onSaveQuotation={saveQuotation} onOpenDashboard={() => setWorkspace('dashboard')} onOpenTracking={() => setWorkspace('tracking')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout}/>} 
+    {currentUser && settings && workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} quotations={quotations} onSaveQuotation={saveQuotation} onDeleteQuotation={deleteQuotation} onBack={() => setWorkspace('dashboard')} onOpenAdmin={() => setWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment} onUploadPaymentSlip={uploadPaymentSlip} onGetPaymentSlipUrl={getPaymentSlipUrl} onDeletePaymentSlip={deletePaymentSlip}/>} 
     {currentUser && settings && workspace === 'admin' && currentUser.role === 'admin' && <Admin
       settings={settings} hotels={hotels} packages={packages} users={users} trackings={trackings} invoices={invoices} payments={payments} currentUser={currentUser} mode={database.mode}
-      onBack={() => setWorkspace('front')} onOpenTracking={() => setWorkspace('tracking')} onLogout={logout} onRefresh={refresh}
+      onBack={() => setWorkspace('dashboard')} onOpenTracking={() => setWorkspace('tracking')} onLogout={logout} onRefresh={refresh}
       onSaveSettings={saveSettings} onUploadLogo={uploadLogo} onResetLogo={resetLogo} onSaveHotel={saveHotel} onDeleteHotel={deleteHotel}
       onSavePackage={savePackage} onDeletePackage={deletePackage} onCreateUser={createUser} onSaveUser={saveUser} onDeleteUser={deleteUser}
     />}
+    {currentUser && settings && workspace === 'growth' && <GrowthWorkspace currentUser={currentUser} packages={packages} trackings={trackings} quotations={quotations} onBack={() => setWorkspace('dashboard')} onLogout={logout}/>}
     <ToastStack items={toasts} onDismiss={(id) => setToasts((list) => list.filter((item) => item.id !== id))}/>
   </>;
 }

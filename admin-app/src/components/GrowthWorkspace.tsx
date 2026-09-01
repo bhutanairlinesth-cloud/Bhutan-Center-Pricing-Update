@@ -20,6 +20,10 @@ interface LiveVisitor {
 }
 interface Summary {
   periodDays:number;
+  trackingConfigured:boolean;
+  trackingStorageReady:boolean;
+  trackingMode:'service_role'|'rls_fallback'|'missing'|string;
+  trackingError?:{code:string;message:string}|null;
   liveSessions:number;
   liveVisitors:LiveVisitor[];
   liveWindowSeconds:number;
@@ -107,7 +111,12 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
         fetch('/api/website/prices',{headers}),
         fetch(`/api/marketing/audiences?days=${periodDays}`,{headers}),
       ]);
-      if(a.ok)setSummary(await a.json());
+      if(a.ok){
+        setSummary(await a.json());
+      }else{
+        const j=await a.json().catch(()=>({}));
+        setNotice(`Realtime API ยังไม่พร้อม: ${j.error||`HTTP ${a.status}`}`);
+      }
       if(b.ok){const j=await b.json();setPrices(j.packages||[]);}
       if(c.ok)setAudience(await c.json());
     } finally { setLoading(false); }
@@ -199,6 +208,10 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
 
         {tab==='realtime' && <>
           <section className="growth-title realtime-title"><span>LIVE WEBSITE</span><h1>ตอนนี้มีคนอยู่บนเว็บ<br/>และกำลังดูอะไรอยู่</h1><p>ระบบส่ง heartbeat ทุก 30 วินาทีจากหน้า Public และหน้านี้รีเฟรชอัตโนมัติทุก 15 วินาที โดยนับเฉพาะ session ที่ยัง active ในช่วงประมาณ {summary?.liveWindowSeconds??90} วินาทีล่าสุด</p></section>
+          {summary && (!summary.trackingConfigured || !summary.trackingStorageReady) && <div className="tracking-health tracking-health--error">
+            <Wifi/><div><strong>Realtime Tracking ยังไม่พร้อม</strong><span>{!summary.trackingConfigured ? 'ยังไม่พบค่า Supabase สำหรับ Server API ใน Vercel' : summary.trackingError?.code==='42P01' ? 'ยังไม่มีตาราง website_events — ให้รัน SQL V13.5.1 Realtime Repair' : summary.trackingError?.code==='42501' ? 'RLS ยังไม่อนุญาตให้ระบบอ่าน Realtime — ให้รัน SQL V13.5.1 Realtime Repair' : `Database: ${summary.trackingError?.code||'not ready'} ${summary.trackingError?.message||''}`}</span></div>
+          </div>}
+          {summary?.trackingStorageReady && <div className="tracking-health tracking-health--ok"><CheckCircle2/><span>Tracking พร้อม · {summary.trackingMode==='service_role'?'Service Role':'RLS fallback'} · หน้า /admin ไม่นับเป็นผู้เข้าชมเว็บไซต์</span></div>}
           <div className="realtime-hero-grid">
             <article className="realtime-online-card"><div className="live-pulse"><i/><Radio/></div><small>ONLINE NOW</small><strong>{summary?.liveSessions??0}</strong><span>คนกำลังอยู่บนเว็บไซต์</span><p>อัปเดตอัตโนมัติ · ไม่ต้องรู้ชื่อผู้เข้าชม</p></article>
             <article><Wifi/><div><small>TRACKING</small><strong>Heartbeat 30s</strong><span>เห็นคนที่ยังเปิดเว็บอยู่จริง ไม่ใช่แค่ PageView ล่าสุด</span></div></article>

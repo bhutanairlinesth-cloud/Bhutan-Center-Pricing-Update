@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/admin-auth';
+import { serverSupabaseMode } from '@/lib/server-supabase';
 
 function maskId(value:string){
   const clean=String(value||'').trim();
@@ -28,6 +29,8 @@ export async function GET(request: NextRequest) {
     const sincePeriod = new Date(now - periodDays*24*60*60*1000).toISOString();
     const sinceLive = new Date(now - 90*1000).toISOString();
 
+    const trackingMode = serverSupabaseMode();
+
     const eventsResult = await supabase
       .from('website_events')
       .select('visitor_id,session_id,event_name,created_at,page_path,package_slug,source,campaign,user_agent,metadata')
@@ -35,6 +38,8 @@ export async function GET(request: NextRequest) {
       .order('created_at',{ascending:false})
       .limit(12000);
     const events = eventsResult.error ? [] : (eventsResult.data || []);
+    const trackingStorageReady = !eventsResult.error;
+    const trackingError = eventsResult.error ? { code:String(eventsResult.error.code||''), message:String(eventsResult.error.message||'') } : null;
 
     const pageVisitorIds = new Set(events.filter((e:any)=>e.event_name==='page_view').map((e:any)=>e.visitor_id).filter(Boolean));
     const packageVisitorIds = new Set(events.filter((e:any)=>e.event_name==='package_view').map((e:any)=>e.visitor_id).filter(Boolean));
@@ -82,6 +87,10 @@ export async function GET(request: NextRequest) {
     const pixelId=String(process.env.NEXT_PUBLIC_META_PIXEL_ID || process.env.META_PIXEL_ID || '').trim();
     return NextResponse.json({
       periodDays,
+      trackingConfigured: trackingMode !== 'missing',
+      trackingStorageReady,
+      trackingMode,
+      trackingError,
       liveSessions: liveVisitors.length,
       liveVisitors,
       liveWindowSeconds:90,

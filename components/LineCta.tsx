@@ -1,0 +1,21 @@
+"use client";
+
+import { MouseEvent, useMemo } from 'react';
+import { getVisitorIds } from './AnalyticsTracker';
+
+export default function LineCta({ packageSlug='', className='line-button', children }:{ packageSlug?:string; className?:string; children?:React.ReactNode }){
+  const href = useMemo(()=>'/go/line',[]);
+  function click(e:MouseEvent<HTMLAnchorElement>){
+    e.preventDefault();
+    const { visitorId, sessionId } = getVisitorIds();
+    const params=new URLSearchParams({ visitor:visitorId, session:sessionId, page:window.location.pathname });
+    if(packageSlug) params.set('package',packageSlug);
+    window.location.href=`${href}?${params.toString()}`;
+    const w=window as any; if(w.fbq) w.fbq('trackCustom','LineClick',{package:packageSlug||undefined});
+  }
+  return <a href={href} onClick={click} className={className}>{children || <>LINE คุยกับทีม Bhutan Center <span>→</span></>}</a>;
+}
+
+export function FloatingLineButton(){
+  return <LineCta className="floating-line-button"><span className="floating-line-dot">LINE</span><strong>คุยกับเรา</strong></LineCta>;
+}

@@ -1,13 +1,13 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+# Bhutan Center Unified V13
 
+One repository for the public Bhutan Center website and the existing Bhutan Pricing production system.
+
+- Public website: `/`
+- Pricing / CRM / Documents back office: `/admin`
+- Shared Supabase: existing production project
+- Unified Dashboard after admin login
+- Website price sync from existing Pricing data
+- LINE + Funnel + Broadcast foundation
+- Wix SEO migration protection retained
+
+Read `README_UNIFIED_V13_TH.md` before deployment.

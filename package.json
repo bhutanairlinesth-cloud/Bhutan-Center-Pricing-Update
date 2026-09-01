@@ -1,24 +1,27 @@
 {
-  "name": "bhutan-center-pricing",
+  "name": "bhutan-center-unified",
+  "version": "13.0.0",
   "private": true,
-  "version": "12.11.4",
-  "type": "module",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "dev": "next dev",
+    "dev:admin": "vite --config admin-app/vite.config.ts",
+    "build:admin": "vite build --config admin-app/vite.config.ts",
+    "build": "npm run preflight && npm run build:admin && next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p admin-app/tsconfig.json",
+    "preflight": "node scripts/preflight.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.78.0",
     "lucide-react": "0.546.0",
-    "react": "19.0.1",
-    "react-dom": "19.0.1"
+    "next": "^16.3.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "@types/node": "22.14.0",
-    "@types/react": "19.0.0",
-    "@types/react-dom": "19.0.0",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "5.0.4",
     "typescript": "5.8.2",
     "vite": "6.2.3"

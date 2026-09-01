@@ -1,0 +1,11 @@
+import Link from "next/link";
+import { metadataForPath } from "@/lib/seo-config";
+import { loadSeoState } from "@/lib/seo-store";
+export async function generateMetadata(){const seo=await loadSeoState();return metadataForPath("/destinations",seo.pages)}
+const cities=[
+  {en:"Paro",th:"พาโร",desc:"ประตูสู่ภูฏานและเมืองของวัดทักซัง มีทั้งธรรมชาติ วัดเก่า และสถาปัตยกรรมสำคัญ",places:"Tiger’s Nest · Paro Dzong · National Museum",image:"https://upload.wikimedia.org/wikipedia/commons/0/0c/Paro_Taktsang%2C_Taktsang_Palphug_Monastery%2C_Tiger%27s_Nest_-views_from_the_trekking_path-_during_LGFC_-_Bhutan_2019_%28210%29.jpg"},
+  {en:"Thimphu",th:"ทิมพู",desc:"เมืองหลวงที่ผสมความร่วมสมัยกับวิถีภูฏานได้อย่างเป็นธรรมชาติ",places:"Buddha Dordenma · Memorial Chorten · Tashichho Dzong",image:"https://upload.wikimedia.org/wikipedia/commons/7/76/Tashichho_Dzong%2C_Bhutan_19.jpg"},
+  {en:"Punakha",th:"พูนาคา",desc:"อดีตเมืองหลวงในหุบเขาอากาศอบอุ่น โดดเด่นด้วยป้อมพูนาคาและวิวแม่น้ำสองสาย",places:"Punakha Dzong · Dochula Pass · Chimi Lhakhang",image:"https://upload.wikimedia.org/wikipedia/commons/5/58/Punakha_dzong.jpg"},
+  {en:"Gangtey",th:"กังเต",desc:"เส้นทางธรรมชาติที่สงบกว่าเมืองหลัก เหมาะกับคนที่อยากเห็นหุบเขาและวิถีชนบทของภูฏาน",places:"Phobjikha Valley · Gangtey Goenpa · Nature Trail",image:"/images/hero-bhutan.png"},
+];
+export default function DestinationsPage(){return <><section className="inner-hero"><div className="page-container inner-hero-grid"><div><span className="section-label">DISCOVER BHUTAN</span><h1>4 เมืองหลัก<br/><em>ค่อย ๆ รู้จักทีละเมือง</em></h1></div><p>เวอร์ชันนี้เน้นการอ่านและภาพก่อน แผนที่สามารถเพิ่มกลับมาในภายหลังได้โดยไม่ต้องเปลี่ยนโครงสร้างเนื้อหาหลัก</p></div></section><section className="section"><div className="page-container destination-editorial-list">{cities.map((city,index)=><article className="destination-editorial" key={city.en}><div className="destination-editorial-media"><img src={city.image} alt={city.en}/><span>0{index+1}</span></div><div className="destination-editorial-copy"><small>{city.en.toUpperCase()}</small><h2>{city.th}</h2><p>{city.desc}</p><strong>{city.places}</strong><Link href="/packagetour-bhutan-new" className="text-link">ดูแพ็กเกจที่ไปเมืองนี้ <span>→</span></Link></div></article>)}</div></section></>}

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   BarChart3, Calculator, ChevronRight, ClipboardList, Database, Globe2, Hotel,
   LayoutDashboard, LineChart, LogOut, Megaphone, Menu, PackageOpen, Search,
-  Settings2, Users, X,
+  Settings2, Target, Users, X,
 } from 'lucide-react';
 import { GlobalSettings, User } from '../types';
 import { Brand } from './Brand';
@@ -44,7 +44,9 @@ export function UnifiedBackOfficeShell({ currentUser, settings, workspace, curre
     { workspace: 'admin', path: '/admin/settings/hotels', label: 'โรงแรม', detail: 'Hotels', icon: Hotel, group: 'ข้อมูลทัวร์', adminOnly: true },
     { workspace: 'admin', path: '/admin/settings/pricing', label: 'ราคาและค่าบริการ', detail: 'Flight · Visa · Margin', icon: Settings2, group: 'ข้อมูลทัวร์', adminOnly: true },
 
-    { workspace: 'growth', path: '/admin/marketing', label: 'ภาพรวมการตลาด', detail: 'Funnel · Visitors', icon: LineChart, group: 'การตลาด' },
+    { workspace: 'growth', path: '/admin/marketing', label: 'ภาพรวมการตลาด', detail: 'Visitors · LINE · Sales', icon: LineChart, group: 'การตลาด' },
+    { workspace: 'growth', path: '/admin/marketing/funnel', label: 'Funnel & Retargeting', detail: 'Journey · Audience · Drop-off', icon: Target, group: 'การตลาด' },
+    { workspace: 'growth', path: '/admin/marketing/meta', label: 'Facebook Pixel', detail: 'Meta Pixel · CAPI · Events', icon: Target, group: 'การตลาด' },
     { workspace: 'growth', path: '/admin/marketing/website', label: 'เว็บไซต์', detail: 'Public · Price · Publish', icon: Globe2, group: 'การตลาด' },
     { workspace: 'growth', path: '/admin/marketing/line', label: 'LINE OA', detail: 'Contacts · Broadcast', icon: Megaphone, group: 'การตลาด' },
     { workspace: 'growth', path: '/admin/marketing/seo', label: 'SEO', detail: 'Search · Migration', icon: Search, group: 'การตลาด' },

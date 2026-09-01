@@ -10,8 +10,8 @@ export default function LineCta({ packageSlug='', className='line-button', child
     const { visitorId, sessionId } = getVisitorIds();
     const params=new URLSearchParams({ visitor:visitorId, session:sessionId, page:window.location.pathname });
     if(packageSlug) params.set('package',packageSlug);
+    const w=window as any; if(w.fbq) w.fbq('trackCustom','LineAddFriendClick',{package:packageSlug||undefined});
     window.location.href=`${href}?${params.toString()}`;
-    const w=window as any; if(w.fbq) w.fbq('trackCustom','LineClick',{package:packageSlug||undefined});
   }
   return <a href={href} onClick={click} className={className}>{children || <>LINE คุยกับทีม Bhutan Center <span>→</span></>}</a>;
 }

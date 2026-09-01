@@ -88,3 +88,40 @@ Meta Pixel:
 - Mobile
 
 เมื่อทุกอย่างผ่านจึงค่อยทำ Domain migration
+
+## V13.3 — Facebook Pixel + Funnel & Retargeting (เตรียมระบบก่อนเชื่อม)
+
+เพิ่มเมนูหลังบ้านในหมวด **การตลาด**:
+
+- `Funnel & Retargeting` — `/admin/marketing/funnel`
+- `Facebook Pixel` — `/admin/marketing/meta`
+
+Funnel สำหรับธุรกิจทัวร์:
+
+`Visitors → Package View → LINE Click → LINE Friend → Customer Tracking → Quotation → Confirmed → Paid`
+
+Retargeting Center เตรียมกลุ่ม First-party ไว้ เช่น:
+
+- เข้าเว็บแต่ยังไม่กด LINE
+- ดูแพ็กเกจแต่ยังไม่กด LINE
+- กด LINE แต่ยังจับคู่ Friend ไม่ได้
+- LINE Friend แต่ยังไม่มี Customer Tracking
+- Tracking แต่ยังไม่ส่ง Quotation
+- Quotation แล้วแต่ยังไม่ Confirm
+
+Facebook / Meta **ยังไม่ต้องเชื่อมตอนอัป V13.3** ระบบจะแสดงสถานะ `รอเชื่อม` และทำงานปกติ เมื่อพร้อมค่อยใส่ Vercel Environment Variables:
+
+- `NEXT_PUBLIC_META_PIXEL_ID`
+- `META_CONVERSIONS_API_TOKEN` (เตรียมไว้สำหรับ CAPI phase)
+- `META_TEST_EVENT_CODE` (optional)
+
+Browser event mapping ที่เตรียมแล้ว:
+
+- `page_view` → `PageView`
+- `package_view` → `ViewContent`
+- `line_click` → `LineAddFriendClick`
+- `lead_submit` → `Lead`
+
+`QuoteSent` และ `Purchase` ถูกวางไว้ใน UI เป็น Server/CRM event สำหรับเชื่อมใน Phase ถัดไป โดย Purchase จะต้องยึดการรับชำระเงินจริง ไม่ใช่เพียงกด LINE หรือส่งใบเสนอราคา
+
+รอบนี้ **ไม่ต้องรัน SQL ใหม่** หาก V13 Website/LINE migration เดิมถูกติดตั้งอยู่แล้ว

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
 
 :root {
   font-family: 'DM Sans', 'Noto Sans Thai', system-ui, sans-serif;
@@ -3363,3 +3363,253 @@ input::placeholder, textarea::placeholder { color: #a2aaa6; }
 .meta-connect-card{display:grid;grid-template-columns:1fr 390px;gap:28px;align-items:center}.meta-connect-card p{max-width:800px;margin:8px 0 0;color:#7b8982;font-size:9px;line-height:1.65}.meta-env-list{display:grid;gap:8px}.meta-env-list code{padding:11px 13px;border-radius:10px;background:#173d32;color:#d9bc7b;font-size:9px;overflow:auto}
 @media(max-width:1180px){.funnel-stage-grid{grid-template-columns:repeat(2,1fr)}.retargeting-audience-grid{grid-template-columns:1fr 1fr}.meta-status-grid{grid-template-columns:1fr 1fr}.meta-connect-card{grid-template-columns:1fr}.marketing-shortcuts{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.growth-pagebar-actions{width:100%;justify-content:flex-end}.marketing-period-switch{height:36px}.marketing-period-switch button{height:28px;min-width:36px}.growth-funnel--tour{grid-template-columns:repeat(13,auto)}.funnel-stage-grid,.retargeting-audience-grid,.meta-status-grid,.marketing-shortcuts{grid-template-columns:1fr}.retargeting-panel-head,.retargeting-section-title,.meta-event-head{align-items:flex-start;flex-direction:column}.retargeting-ready-card{grid-template-columns:48px 1fr}.retargeting-ready-card>b{grid-column:2}.meta-event-table{overflow:auto}.meta-event-row{min-width:720px}.retargeting-funnel-panel,.retargeting-section,.retargeting-ready-card,.meta-event-panel,.meta-connect-card{padding:18px}}
+
+
+/* =========================================================
+   V13.4 · Bhutan Center Website-aligned Back Office Theme
+   Design language mirrors the public site: Champagne Gold,
+   Warm Ivory, Cream and soft brown. Function/state colors
+   remain available for success/warning/error semantics.
+   ========================================================= */
+:root{
+  font-family:'Prompt','Leelawadee UI',Arial,sans-serif;
+  color:#3a332b;
+  background:#fbf8f3;
+  --ink:#3a332b;
+  --muted:#756b61;
+  --line:#e6dccd;
+  --surface:#fffdf9;
+  --surface-soft:#f7f1e7;
+  --green-950:#332c26;
+  --green-900:#3a3129;
+  --green-800:#5a493a;
+  --green-700:#8f6a36;
+  --green-100:#f3ecdf;
+  --gold:#b58a49;
+  --gold-soft:#efe2c9;
+  --orange:#c58c43;
+  --danger:#b75b55;
+  --shadow-sm:0 10px 30px rgba(70,53,33,.07);
+  --shadow-md:0 24px 64px rgba(70,53,33,.12);
+}
+html,body{background:#fbf8f3;color:#3a332b}
+body{font-family:'Prompt','Leelawadee UI',Arial,sans-serif}
+
+/* Workspace canvas */
+.unified-backoffice-shell,
+.unified-workspace,
+.unified-workspace-content{background:#fbf8f3;color:#3a332b}
+.unified-workspace-content{
+  background:
+    radial-gradient(circle at 90% 5%,rgba(216,187,134,.14),transparent 24%),
+    linear-gradient(180deg,#fffdf9 0,#fbf8f3 260px,#fbf8f3 100%);
+}
+.unified-backoffice-shell .unified-shell,
+.unified-backoffice-shell .front-shell,
+.unified-backoffice-shell .tracking-shell,
+.unified-backoffice-shell .growth-shell{color:#3a332b}
+
+/* One permanent navigation language: dark soft brown + champagne */
+.unified-sidebar{
+  color:#fffaf1;
+  background:
+    radial-gradient(circle at 12% 7%,rgba(216,187,134,.16),transparent 22%),
+    linear-gradient(180deg,#332c26 0%,#3b3027 55%,#2e2823 100%);
+  box-shadow:16px 0 46px rgba(64,47,31,.10);
+  border-right:1px solid rgba(239,226,201,.16);
+}
+.unified-sidebar-caption{
+  border-color:rgba(239,226,201,.14);
+  background:rgba(255,253,249,.055);
+}
+.unified-sidebar-caption span{color:#d8bb86}
+.unified-sidebar-caption small{color:rgba(255,250,241,.48)}
+.unified-nav-group,
+.unified-sidebar-nav--organized .unified-nav-group{color:rgba(255,250,241,.38);border-top-color:rgba(239,226,201,.08)}
+.unified-sidebar-nav button{color:rgba(255,250,241,.68)}
+.unified-sidebar-nav button>i{background:rgba(239,226,201,.07);color:#d8bb86}
+.unified-sidebar-nav button>span small{color:rgba(255,250,241,.36)}
+.unified-sidebar-nav button:hover{color:#fffdf9;background:rgba(255,253,249,.065)}
+.unified-sidebar-nav button.active{
+  color:#332c26;
+  border-color:#e4cfa9;
+  background:linear-gradient(135deg,#f4e8d4,#e9d3ad);
+  box-shadow:inset 3px 0 0 #b58a49,0 10px 24px rgba(31,24,18,.16);
+}
+.unified-sidebar-nav button.active>i{background:#fffaf1;color:#8f6a36;box-shadow:0 5px 14px rgba(98,70,38,.10)}
+.unified-sidebar-nav button.active>span small{color:#7c6b58}
+.unified-sidebar-nav button.active>svg{opacity:.58;color:#8f6a36}
+.unified-sidebar-footer{border-top-color:rgba(239,226,201,.10)}
+.unified-sidebar-footer>a{color:rgba(255,250,241,.72);background:rgba(255,253,249,.045);border-color:rgba(239,226,201,.08)}
+.unified-sidebar-footer>a:hover{background:rgba(255,253,249,.08);color:#fffdf9}
+.unified-sidebar-user{background:rgba(255,253,249,.055);border-color:rgba(239,226,201,.08)}
+.unified-sidebar-user>i{background:linear-gradient(135deg,#c49a58,#a67b3d);color:#fff}
+.unified-sidebar-user small{color:rgba(255,250,241,.42)}
+
+/* Header / pagebar */
+.workspace-pagebar,
+.admin-shell--single-nav .admin-header--single-nav,
+.growth-pagebar{
+  border-color:#eadfce!important;
+  background:rgba(255,253,249,.92)!important;
+  box-shadow:0 10px 28px rgba(70,53,33,.045)!important;
+  backdrop-filter:blur(18px);
+}
+.workspace-pagebar-title small,
+.admin-shell--single-nav .admin-header-title>div>span,
+.unified-eyebrow,.growth-title>span{color:#8f6a36!important}
+.workspace-pagebar-title strong,
+.admin-shell--single-nav .admin-header-title h1{color:#3a332b!important}
+.unified-mobile-topbar{background:rgba(255,253,249,.96)!important;border-color:#e6dccd!important}
+.unified-mobile-topbar>button{background:#f3ecdf!important;color:#8f6a36!important}
+.unified-mobile-topbar>span{background:#332c26!important}
+
+/* Core typography */
+.unified-hero h1,.growth-title h1,.admin-hero h2,
+.dashboard-panel-head h2,.panel-heading h2,.journey-page-head h1,
+.tracking-page-head h1{color:#3a332b}
+.unified-hero p,.growth-title p,.muted{color:#756b61}
+
+/* Public-site-style cards */
+.unified-stat-grid article,.growth-kpi-grid article,
+.unified-modules>button,.growth-funnel-card,.website-price-list article,
+.line-status-grid article,.broadcast-card,.seo-check-grid article,
+.dashboard-panel,.panel-card,.settings-card,.stat-card,
+.tracking-stat,.tracking-panel,.journey-panel,.journey-card,
+.retargeting-funnel-panel,.retargeting-section,.meta-event-panel,.meta-connect-card,
+.marketing-shortcuts article,.meta-status-grid article{
+  background:#fffdf9!important;
+  border-color:#e6dccd!important;
+  box-shadow:0 12px 34px rgba(70,53,33,.055)!important;
+}
+.unified-stat-grid article:hover,.growth-kpi-grid article:hover,
+.unified-modules>button:hover,.tracking-stat:hover,
+.marketing-shortcuts article:hover,.retargeting-audience:hover{
+  border-color:#d8c09a!important;
+  box-shadow:0 18px 40px rgba(70,53,33,.09)!important;
+}
+.unified-stat-grid strong,.growth-kpi-grid strong,
+.dashboard-kpi-grid strong,.tracking-stat strong,
+.funnel-stage-grid article>strong,.retargeting-audience-top b,
+.retargeting-panel-head h2,.retargeting-section-title h2,.meta-event-head h2,.meta-connect-card h2{color:#3a332b!important}
+.unified-stat-grid span,.growth-kpi-grid small,.tracking-stat small,
+.funnel-stage-grid article>span,.retargeting-audience p,.meta-status-grid span{color:#756b61!important}
+
+/* Dashboard hero/feature blocks */
+.unified-site-link,.unified-flow-card,.retargeting-ready-card,
+.admin-hero{
+  background:
+    radial-gradient(circle at 85% 18%,rgba(216,187,134,.22),transparent 30%),
+    linear-gradient(135deg,#332c26,#493a2e)!important;
+  color:#fffdf9!important;
+  box-shadow:0 20px 46px rgba(70,53,33,.16)!important;
+}
+.unified-site-link small,.retargeting-ready-card span,.admin-hero .eyebrow{color:#dfc79e!important}
+.unified-flow-card p,.retargeting-ready-card p,.admin-hero p{color:rgba(255,253,249,.62)!important}
+.unified-flow>b,.retargeting-ready-icon{color:#d8bb86!important}
+
+/* Module icons, pills and accents */
+.unified-modules i,.tracking-stat>span,
+.marketing-shortcuts>article>svg,.retargeting-audience-top i,
+.dashboard-kpi-icon,.stat-icon{
+  background:#f1e5d1!important;
+  color:#8f6a36!important;
+}
+.unified-modules small,.website-price-list small,
+.marketing-shortcuts small,.retargeting-panel-head span,.retargeting-section-title span,
+.meta-event-head span,.meta-connect-card>div>span{color:#8f6a36!important}
+.unified-modules>b,.city-arrow{color:#b58a49!important}
+
+/* Buttons share the public website's pill / champagne feel */
+.primary-button,
+.website-price-list button,.broadcast-card button{
+  color:#fff!important;
+  background:linear-gradient(135deg,#c49a58,#a67b3d)!important;
+  box-shadow:0 10px 24px rgba(181,138,73,.18)!important;
+  border-radius:999px!important;
+}
+.primary-button:hover,.website-price-list button:hover,.broadcast-card button:hover{
+  transform:translateY(-1px);
+  box-shadow:0 15px 30px rgba(181,138,73,.24)!important;
+}
+.ghost-button,.icon-button,.menu-button,
+.workspace-back-button,.workspace-refresh-button{
+  color:#66594c!important;
+  background:#fffdf9!important;
+  border-color:#e6dccd!important;
+}
+.ghost-button:hover,.icon-button:hover,.menu-button:hover,
+.workspace-back-button:hover,.workspace-refresh-button:hover{background:#f7f1e7!important;border-color:#d8c09a!important;color:#8f6a36!important}
+.language-toggle,.marketing-period-switch{background:#f3ecdf!important;border-color:#e6dccd!important}
+.language-toggle button.active,.marketing-period-switch button.active{background:#fffdf9!important;color:#8f6a36!important;box-shadow:0 4px 12px rgba(70,53,33,.08)!important}
+
+/* Forms */
+.field>span{color:#66594c}
+.field input,.field select,.field textarea,
+.website-price-list input[type=number],.broadcast-card textarea,
+.tracking-search input,.tracking-filter select{
+  border-color:#dfd2c0!important;
+  background:#fffdf9!important;
+  color:#3a332b!important;
+}
+.field input:focus,.field select:focus,.field textarea:focus,
+.website-price-list input:focus,.broadcast-card textarea:focus,
+.tracking-search input:focus,.tracking-filter select:focus{
+  border-color:#c9a365!important;
+  box-shadow:0 0 0 4px rgba(181,138,73,.11)!important;
+}
+input::placeholder,textarea::placeholder{color:#a89989}
+
+/* Funnel + Retargeting */
+.growth-notice{background:#fff7e8!important;border-color:#ecd9b8!important;color:#775c32!important}
+.growth-funnel>div,.funnel-stage-grid article,.retargeting-audience{background:#f8f2e8!important;border-color:#eadfce!important}
+.growth-funnel span,.growth-funnel-head small{color:#8e8175!important}
+.growth-funnel i{color:#c8b69f!important}
+.funnel-detail-track{background:#e9dfd0!important}
+.funnel-detail-track i{background:linear-gradient(90deg,#b58a49,#d8bb86)!important}
+.funnel-detail-top b{background:#efe2c9!important;color:#8f6a36!important}
+.retargeting-audience-top i{background:#f1e5d1!important;color:#8f6a36!important}
+.retargeting-audience>span{background:#fffdf9!important;border-color:#e6dccd!important;color:#756b61!important}
+.retargeting-audience:after{background:rgba(181,138,73,.06)!important}
+.retargeting-audience--warm .retargeting-audience-top i{background:#f7e7c8!important;color:#9a6b25!important}
+.retargeting-audience--hot .retargeting-audience-top i{background:#f5ddd2!important;color:#9e5f43!important}
+.retargeting-audience--known .retargeting-audience-top i{background:#eee7dd!important;color:#796b5c!important}
+.meta-status-grid article>i{background:#f3ecdf!important;color:#8b7a67!important}
+.meta-status-grid article.ready{border-color:#d9c69f!important}
+.meta-status-grid article.ready>i{background:#efe2c9!important;color:#8f6a36!important}
+.meta-status-grid article.ready>b{background:#f3ead8!important;color:#8f6a36!important}
+.meta-event-row{background:#fffdf9!important;border-color:#eee5d9!important}
+.meta-event-row code{background:#f3ecdf!important;color:#715b43!important}
+.meta-env-list code{background:#332c26!important;color:#e4c992!important}
+
+/* Sales/finance visual hierarchy: preserve semantic states but remove green dominance */
+.dashboard-status-pill,
+.connection-pill,.secure-label{border-color:#e5d6bf}
+.dashboard-status-pill.success,.status-success,.paid{color:#5d745f}
+.dashboard-status-pill.warning,.status-warning{color:#9a7028}
+
+/* Login becomes part of the same brand family */
+.login-shell,.login-page{background:#fbf8f3!important}
+.login-visual,.login-showcase{
+  background:
+    radial-gradient(circle at 82% 15%,rgba(216,187,134,.30),transparent 28%),
+    radial-gradient(circle at 18% 78%,rgba(196,154,88,.12),transparent 34%),
+    linear-gradient(145deg,#332c26 0%,#43362b 62%,#2f2924 100%)!important;
+}
+.login-copy .eyebrow{color:#d8bb86!important}
+.login-form-panel,.login-panel{background:#fffdf9!important}
+.secure-label{color:#8f6a36!important;background:#f3ecdf!important}
+.login-button{border-radius:999px!important}
+
+/* Softer tables and separators */
+.dashboard-table th,.dashboard-table td,
+.journey-list>* ,.tracking-panel>*{border-color:#eee5d9}
+.dashboard-table thead,.quote-table-head{background:#f7f1e7!important}
+
+/* Scrollbar subtly follows brand */
+.unified-sidebar-nav{scrollbar-color:rgba(216,187,134,.36) transparent}
+.unified-sidebar-nav::-webkit-scrollbar-thumb{background:rgba(216,187,134,.34);border-radius:999px}
+
+@media(max-width:980px){
+  .unified-sidebar-overlay{background:rgba(51,44,38,.46)!important}
+}

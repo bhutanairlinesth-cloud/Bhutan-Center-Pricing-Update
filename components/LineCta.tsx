@@ -1,7 +1,7 @@
 "use client";
 
 import { MouseEvent, useMemo } from 'react';
-import { getVisitorIds } from './AnalyticsTracker';
+import { getVisitorIds, trackGoogleLineClick } from './AnalyticsTracker';
 
 export default function LineCta({ packageSlug='', className='line-button', children }:{ packageSlug?:string; className?:string; children?:React.ReactNode }){
   const href = useMemo(()=>'/go/line',[]);
@@ -11,7 +11,9 @@ export default function LineCta({ packageSlug='', className='line-button', child
     const params=new URLSearchParams({ visitor:visitorId, session:sessionId, page:window.location.pathname });
     if(packageSlug) params.set('package',packageSlug);
     const w=window as any; if(w.fbq) w.fbq('trackCustom','LineAddFriendClick',{package:packageSlug||undefined});
-    window.location.href=`${href}?${params.toString()}`;
+    const target=`${href}?${params.toString()}`;
+    const navigated=trackGoogleLineClick(packageSlug,()=>{ window.location.href=target; });
+    if(!navigated) window.location.href=target;
   }
   return <a href={href} onClick={click} className={className}>{children || <>LINE คุยกับทีม Bhutan Center <span>→</span></>}</a>;
 }

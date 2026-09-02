@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import LineCta from "./LineCta";
-import { trackPublicEvent } from "./AnalyticsTracker";
+import { trackGoogleLead, trackPublicEvent } from "./AnalyticsTracker";
 
 export default function BookingForm({ compact = false, defaultPackage = "" }: { compact?: boolean; defaultPackage?: string }) {
   const [status, setStatus] = useState<"idle"|"sending"|"sent"|"error">("idle");
@@ -19,6 +19,7 @@ export default function BookingForm({ compact = false, defaultPackage = "" }: { 
       trackPublicEvent("lead_submit", { package_slug: packageSlug || undefined });
       const w = window as any;
       if (w.fbq) w.fbq("track", "Lead", packageSlug ? { content_name: packageSlug } : undefined);
+      trackGoogleLead(packageSlug);
       setStatus("sent");
       form.reset();
     } catch {

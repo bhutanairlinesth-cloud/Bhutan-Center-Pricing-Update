@@ -44,6 +44,13 @@ export async function GET(request: NextRequest) {
     const pageVisitorIds = new Set(events.filter((e:any)=>e.event_name==='page_view').map((e:any)=>e.visitor_id).filter(Boolean));
     const packageVisitorIds = new Set(events.filter((e:any)=>e.event_name==='package_view').map((e:any)=>e.visitor_id).filter(Boolean));
     const lineClickVisitorIds = new Set(events.filter((e:any)=>e.event_name==='line_click').map((e:any)=>e.visitor_id).filter(Boolean));
+    const googleAdsVisitorIds = new Set(events.filter((e:any)=>{
+      if(e.event_name!=='page_view') return false;
+      const meta=(e.metadata||{}) as Record<string,unknown>;
+      const source=String(e.source||'').toLowerCase();
+      const medium=String(meta.medium||'').toLowerCase();
+      return Boolean(meta.gclid || meta.gbraid || meta.wbraid || meta.dclid || (source.includes('google') && ['cpc','ppc','paid','paidsearch','paid_search'].includes(medium)));
+    }).map((e:any)=>e.visitor_id).filter(Boolean));
 
     const [lineResult, leadResult] = await Promise.all([
       supabase.from('line_contacts').select('line_user_id,status,visitor_id,tracking_id,first_seen_at,tags,last_seen_at').eq('status','friend'),
@@ -85,6 +92,11 @@ export async function GET(request: NextRequest) {
     const liveVisitors=[...liveMap.values()].slice(0,40);
 
     const pixelId=String(process.env.NEXT_PUBLIC_META_PIXEL_ID || process.env.META_PIXEL_ID || '').trim();
+    const googleTagId=String(process.env.NEXT_PUBLIC_GOOGLE_TAG_ID || '').trim();
+    const ga4Id=String(process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID || '').trim();
+    const googleAdsId=String(process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || '').trim();
+    const googleAdsLineLabel=String(process.env.NEXT_PUBLIC_GOOGLE_ADS_LINE_CONVERSION_LABEL || '').trim();
+    const googleAdsLeadLabel=String(process.env.NEXT_PUBLIC_GOOGLE_ADS_LEAD_CONVERSION_LABEL || '').trim();
     return NextResponse.json({
       periodDays,
       trackingConfigured: trackingMode !== 'missing',
@@ -107,6 +119,15 @@ export async function GET(request: NextRequest) {
       visitorsNoLineClick,
       packageVisitorsNoLineClick,
       lineClickVisitorsNoFriend,
+      googleAdsVisitors: googleAdsVisitorIds.size,
+      googleTagConfigured: Boolean(googleTagId || ga4Id || googleAdsId),
+      ga4Configured: Boolean(ga4Id || googleTagId.startsWith('G-')),
+      googleAdsConfigured: Boolean(googleAdsId || googleTagId.startsWith('AW-')),
+      googleAdsLineConversionConfigured: Boolean(googleAdsLineLabel && (googleAdsId || googleTagId.startsWith('AW-') || googleAdsLineLabel.includes('/'))),
+      googleAdsLeadConversionConfigured: Boolean(googleAdsLeadLabel && (googleAdsId || googleTagId.startsWith('AW-') || googleAdsLeadLabel.includes('/'))),
+      googleTagIdMasked: maskId(googleTagId),
+      ga4IdMasked: maskId(ga4Id),
+      googleAdsIdMasked: maskId(googleAdsId),
       lineConfigured: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_CHANNEL_SECRET),
       lineBasicIdConfigured: Boolean(process.env.LINE_OA_BASIC_ID || process.env.LINE_OA_URL),
       metaPixelConfigured: Boolean(pixelId),

@@ -3677,3 +3677,7 @@ input::placeholder,textarea::placeholder{color:#a89989}
 .tracking-health div{display:grid;gap:2px}.tracking-health strong{font-weight:650}.tracking-health span{color:var(--muted,#786d61);line-height:1.45}
 .tracking-health--ok{border-color:#ddd0b8;background:#fffaf0}.tracking-health--ok svg{color:#a77a35}
 .tracking-health--error{border-color:#e9c8bd;background:#fff8f5}.tracking-health--error svg{color:#a8513c}
+
+
+/* ===== V13.6 · Google Analytics + Ads foundation ===== */
+@media (min-width:1181px){.marketing-shortcuts{grid-template-columns:repeat(4,1fr)}}

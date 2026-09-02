@@ -49,6 +49,7 @@ export function UnifiedBackOfficeShell({ currentUser, settings, workspace, curre
     { workspace: 'growth', path: '/admin/marketing/audience', label: 'Audience & Tags', detail: 'Website · LINE · CRM', icon: Tags, group: 'การตลาด' },
     { workspace: 'growth', path: '/admin/marketing/funnel', label: 'Funnel & Retargeting', detail: 'Journey · Drop-off · Retarget', icon: Target, group: 'การตลาด' },
     { workspace: 'growth', path: '/admin/marketing/meta', label: 'Facebook Pixel', detail: 'Meta Pixel · CAPI · Events', icon: Target, group: 'การตลาด' },
+    { workspace: 'growth', path: '/admin/marketing/google', label: 'Google Analytics & Ads', detail: 'Google Tag · GA4 · Remarketing', icon: BarChart3, group: 'การตลาด' },
     { workspace: 'growth', path: '/admin/marketing/website', label: 'เว็บไซต์', detail: 'Public · Price · Publish', icon: Globe2, group: 'การตลาด' },
     { workspace: 'growth', path: '/admin/marketing/line', label: 'LINE OA', detail: 'Contacts · Broadcast', icon: Megaphone, group: 'การตลาด' },
     { workspace: 'growth', path: '/admin/marketing/seo', label: 'SEO', detail: 'Search · Migration', icon: Search, group: 'การตลาด' },

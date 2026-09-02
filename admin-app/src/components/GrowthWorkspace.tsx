@@ -46,18 +46,28 @@ interface Summary {
   metaCapiConfigured:boolean;
   metaTestEventConfigured:boolean;
   metaPixelIdMasked:string|null;
+  googleAdsVisitors:number;
+  googleTagConfigured:boolean;
+  ga4Configured:boolean;
+  googleAdsConfigured:boolean;
+  googleAdsLineConversionConfigured:boolean;
+  googleAdsLeadConversionConfigured:boolean;
+  googleTagIdMasked:string|null;
+  ga4IdMasked:string|null;
+  googleAdsIdMasked:string|null;
 }
 interface PriceRow { id:string; name:string; nights:number; override:null|{visible:boolean;price_override_thb:number|null}; }
 interface AudiencePreset { id:string; name:string; count:number; source:string; intent:string; futureMeta:string; description:string; }
 interface AudienceData { days:number; tagStorageReady:boolean; sources:{website:boolean;line:boolean;crm:boolean;meta:boolean}; audiences:AudiencePreset[]; tags:{tag:string;count:number;source:'website'|'line'}[]; note:string; }
 
-type MarketingTab = 'overview' | 'realtime' | 'audience' | 'funnel' | 'meta' | 'website' | 'line' | 'seo';
+type MarketingTab = 'overview' | 'realtime' | 'audience' | 'funnel' | 'meta' | 'google' | 'website' | 'line' | 'seo';
 const MARKETING_TAB_PATHS: Record<MarketingTab, string> = {
   overview: '/admin/marketing',
   realtime: '/admin/marketing/realtime',
   audience: '/admin/marketing/audience',
   funnel: '/admin/marketing/funnel',
   meta: '/admin/marketing/meta',
+  google: '/admin/marketing/google',
   website: '/admin/marketing/website',
   line: '/admin/marketing/line',
   seo: '/admin/marketing/seo',
@@ -68,6 +78,7 @@ function marketingTabFromPath(pathname:string): MarketingTab {
   if(path.startsWith('/admin/marketing/audience')) return 'audience';
   if(path.startsWith('/admin/marketing/funnel')) return 'funnel';
   if(path.startsWith('/admin/marketing/meta')) return 'meta';
+  if(path.startsWith('/admin/marketing/google')) return 'google';
   if(path.startsWith('/admin/marketing/website')) return 'website';
   if(path.startsWith('/admin/marketing/line')) return 'line';
   if(path.startsWith('/admin/marketing/seo')) return 'seo';
@@ -80,7 +91,7 @@ async function authHeaders(){
 }
 
 const titleByTab:Record<MarketingTab,string> = {
-  overview:'ภาพรวมการตลาด', realtime:'ผู้เข้าชมเรียลไทม์', audience:'Audience & Tags', funnel:'Funnel & Retargeting', meta:'Facebook Pixel', website:'เว็บไซต์', line:'LINE OA', seo:'SEO',
+  overview:'ภาพรวมการตลาด', realtime:'ผู้เข้าชมเรียลไทม์', audience:'Audience & Tags', funnel:'Funnel & Retargeting', meta:'Facebook Pixel', google:'Google Analytics & Ads', website:'เว็บไซต์', line:'LINE OA', seo:'SEO',
 };
 
 export function GrowthWorkspace({ currentUser, packages, trackings, quotations, onBack, onLogout }:{ currentUser:User; packages:TourPackage[]; trackings:CustomerTracking[]; quotations:QuotationRecord[]; onBack:()=>void; onLogout:()=>void; }){
@@ -183,7 +194,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
         {notice && <div className="growth-notice">{notice}</div>}
 
         {tab==='overview' && <>
-          <section className="growth-title"><span>MARKETING OVERVIEW</span><h1>เห็นตั้งแต่คนเข้าเว็บ<br/>จนถึงการปิดการขาย</h1><p>Website, LINE, Customer Tracking และเอกสารขายอยู่ใน Funnel เดียวกัน โดย Meta/Facebook เตรียมจุดเชื่อมไว้แล้วและยังไม่ส่งข้อมูลออกจนกว่าจะใส่ค่าเชื่อมต่อ</p></section>
+          <section className="growth-title"><span>MARKETING OVERVIEW</span><h1>เห็นตั้งแต่คนเข้าเว็บ<br/>จนถึงการปิดการขาย</h1><p>Website, LINE, Customer Tracking และเอกสารขายอยู่ใน Funnel เดียวกัน โดยทั้ง Meta/Facebook และ Google Analytics/Ads เตรียมจุดเชื่อมไว้แล้วและยังไม่ส่งข้อมูลออกจนกว่าจะใส่ค่าเชื่อมต่อ</p></section>
           <div className="growth-kpi-grid">
             <article><small>ONLINE NOW</small><strong>{summary?.liveSessions ?? 0}</strong><span>คนบนเว็บ 5 นาทีล่าสุด</span></article>
             <article><small>VISITORS · {periodDays}D</small><strong>{summary?.uniqueVisitors ?? 0}</strong><span>ผู้เข้าชมไม่ซ้ำ</span></article>
@@ -202,6 +213,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
           <div className="marketing-shortcuts">
             <article><Target/><div><small>NEXT STEP</small><strong>Funnel & Retargeting</strong><span>ดูจุดตกหล่นและกลุ่มเป้าหมายที่ตามต่อได้</span></div></article>
             <article><Target/><div><small>META READY</small><strong>Facebook Pixel</strong><span>{summary?.metaPixelConfigured?'เชื่อม Browser Pixel แล้ว':'เตรียมระบบไว้แล้ว · รอ Pixel ID'}</span></div></article>
+            <article><Activity/><div><small>GOOGLE READY</small><strong>Analytics & Ads</strong><span>{summary?.googleTagConfigured?'Google Tag พร้อมทำงาน':'เตรียมระบบไว้แล้ว · รอ Google Tag / GA4 / Ads ID'}</span></div></article>
             <article><UserCheck/><div><small>KNOWN CUSTOMER</small><strong>{summary?.lineFriends??0} LINE Friends</strong><span>พร้อมต่อยอด Tag / Broadcast / CRM</span></div></article>
           </div>
         </>}
@@ -228,12 +240,12 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
         </>}
 
         {tab==='audience' && <>
-          <section className="growth-title"><span>AUDIENCE & TAGS</span><h1>แบ่งกลุ่มคนจาก Website + LINE<br/>ไว้เล่นการตลาดต่อภายหลัง</h1><p>Audience ในหน้านี้เป็น First-party Audience ของ Bhutan Center ก่อน ยังไม่ส่งข้อมูลไป Facebook จนกว่าจะเชื่อม Meta จริง คุณสามารถใช้ข้อมูลเว็บและ LINE มาช่วยบอกระดับความสนใจของลูกค้าได้</p></section>
+          <section className="growth-title"><span>AUDIENCE & TAGS</span><h1>แบ่งกลุ่มคนจาก Website + LINE<br/>ไว้เล่นการตลาดต่อภายหลัง</h1><p>Audience ในหน้านี้เป็น First-party Audience ของ Bhutan Center ก่อน ยังไม่ส่งข้อมูลออกไป Meta หรือ Google Ads จนกว่าจะเชื่อมจริง คุณสามารถใช้ข้อมูลเว็บและ LINE มาช่วยบอกระดับความสนใจของลูกค้าได้</p></section>
           <div className="audience-source-grid">
             <article className="ready"><Globe2/><div><small>DATA SOURCE</small><strong>Website</strong><span>PageView · Package · Returning · LINE Click</span></div><b>พร้อม</b></article>
             <article className={audience?.sources.line?'ready':''}><Megaphone/><div><small>DATA SOURCE</small><strong>LINE OA</strong><span>Friend · Message · Tags · Website Match</span></div><b>{audience?.sources.line?'พร้อม':'รอข้อมูล'}</b></article>
             <article className="ready"><UsersRound/><div><small>DATA SOURCE</small><strong>Customer Tracking</strong><span>Quotation · Confirmed · Paid · Exclusion</span></div><b>พร้อม</b></article>
-            <article><Target/><div><small>DESTINATION</small><strong>Meta / Facebook</strong><span>เตรียมไว้ · ยังไม่ Sync Audience ออก</span></div><b>รอเชื่อม</b></article>
+            <article><Target/><div><small>DESTINATION</small><strong>Meta / Google Ads</strong><span>เตรียมไว้ · ยังไม่ Sync Audience ออก</span></div><b>รอเชื่อม</b></article>
           </div>
           <section className="audience-library">
             <div className="retargeting-section-title"><div><span>AUDIENCE LIBRARY</span><h2>กลุ่มที่ระบบสร้างให้จากพฤติกรรม</h2></div><small>{periodDays} DAYS</small></div>
@@ -249,14 +261,14 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
             <div className="tag-cloud">{(audience?.tags||[]).length ? (audience?.tags||[]).map((item)=><span key={item.tag} className={`tag-chip tag-chip--${item.source}`}><Tags/><b>{item.tag}</b><em>{item.count}</em><small>{item.source}</small></span>) : <span className="tag-empty">Tag จะเริ่มเพิ่มเมื่อมีคนเข้าเว็บ ดูแพ็กเกจ กด LINE หรือมี LINE Interaction</span>}</div>
             <div className="tag-rule-grid"><article><strong>Website Visitor</strong><span>เข้าเว็บอย่างน้อย 1 ครั้ง</span></article><article><strong>Package Interest</strong><span>ดูหน้าแพ็กเกจ</span></article><article><strong>LINE Intent</strong><span>กด CTA ไป LINE</span></article><article><strong>LINE Friend</strong><span>เพิ่มเพื่อน OA</span></article><article><strong>LINE Engaged</strong><span>เคยส่งข้อความ</span></article><article><strong>Website ↔ LINE Matched</strong><span>จับคู่ Visitor กับ LINE ได้แล้ว</span></article></div>
           </section>
-          <section className="audience-note"><Target/><div><strong>เรื่องสำคัญตอนเชื่อม Facebook ภายหลัง</strong><span>{audience?.note||'LINE userId ใช้แบ่งกลุ่มใน CRM ของเราได้ ส่วน Meta Retargeting จะใช้ Pixel/CAPI และข้อมูลติดต่อที่ได้รับอนุญาตในการ Match Audience'}</span></div></section>
+          <section className="audience-note"><Target/><div><strong>เรื่องสำคัญตอนเชื่อม Ads ภายหลัง</strong><span>{audience?.note||'LINE userId ใช้แบ่งกลุ่มใน CRM ของเราได้ ส่วน Meta/Google Retargeting จะใช้ Website tag และข้อมูลติดต่อที่ได้รับอนุญาตในการ Match Audience ไม่ส่ง LINE userId ไปเป็น advertising identifier โดยตรง'}</span></div></section>
         </>}
 
         {tab==='funnel' && <>
           <section className="growth-title"><span>FUNNEL & RETARGETING</span><h1>รู้ว่าใครหลุดตรงไหน<br/>แล้วตามกลับมาได้</h1><p>โครงนี้ใช้แนวเดียวกับระบบไร่อมร แต่ปรับให้เข้ากับการขายทัวร์: ไม่บังคับซื้อบนเว็บ และใช้ LINE + Customer Tracking เป็นจุดเปลี่ยนจากผู้ชมเป็นลูกค้าที่รู้จักตัวตน</p></section>
 
           <section className="retargeting-funnel-panel">
-            <div className="retargeting-panel-head"><div><span>CONVERSION JOURNEY</span><h2>Bhutan Tour Funnel</h2></div><div className="retargeting-legend"><i className="ready"/>First-party พร้อมเก็บ <i/>Meta รอเชื่อม</div></div>
+            <div className="retargeting-panel-head"><div><span>CONVERSION JOURNEY</span><h2>Bhutan Tour Funnel</h2></div><div className="retargeting-legend"><i className="ready"/>First-party พร้อมเก็บ <i/>Meta / Google Ads รอเชื่อม</div></div>
             <div className="funnel-stage-grid">
               <FunnelDetail index="01" label="Visitors" value={summary?.uniqueVisitors??0} sub="เข้าเว็บไซต์" base={summary?.uniqueVisitors??0}/>
               <FunnelDetail index="02" label="Package View" value={summary?.packageViewVisitors??0} sub="เริ่มสนใจทริป" base={summary?.uniqueVisitors??0}/>
@@ -270,11 +282,11 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
           </section>
 
           <section className="retargeting-section">
-            <div className="retargeting-section-title"><div><span>RETARGETING CENTER</span><h2>กลุ่มที่ควรตามกลับมา</h2></div><small>เตรียม Audience Logic ไว้แล้ว · ยังไม่ Sync ไป Meta</small></div>
+            <div className="retargeting-section-title"><div><span>RETARGETING CENTER</span><h2>กลุ่มที่ควรตามกลับมา</h2></div><small>เตรียม Audience Logic ไว้แล้ว · ยังไม่ Sync ไป Meta / Google Ads</small></div>
             <div className="retargeting-audience-grid">
               <AudienceCard tone="cold" icon={Globe2} label="Website Visitors" value={summary?.visitorsNoLineClick??0} desc="เข้าเว็บแล้ว แต่ยังไม่กด LINE" action="ยิง Content / Package Reminder" />
               <AudienceCard tone="warm" icon={MousePointerClick} label="Package Interest" value={summary?.packageVisitorsNoLineClick??0} desc="เปิดดูแพ็กเกจ แต่ยังไม่เข้า LINE" action="ยิงแพ็กเกจ / High Season" />
-              <AudienceCard tone="hot" icon={Target} label="LINE Intent" value={summary?.lineClickVisitorsNoFriend??0} desc="กด LINE แล้ว แต่ยังจับคู่ Friend ไม่ได้" action="Retarget ด้วย Meta" />
+              <AudienceCard tone="hot" icon={Target} label="LINE Intent" value={summary?.lineClickVisitorsNoFriend??0} desc="กด LINE แล้ว แต่ยังจับคู่ Friend ไม่ได้" action="Retarget ด้วย Meta / Google Ads" />
               <AudienceCard tone="known" icon={UserCheck} label="LINE Friend · No CRM" value={summary?.lineFriendsWithoutTracking??0} desc="เป็นเพื่อนแล้ว แต่ยังไม่มี Customer Tracking" action="LINE Broadcast / Follow-up" />
               <AudienceCard tone="known" icon={UsersRound} label="Tracking · No Quote" value={sales.trackingNoQuote} desc="ทีมมีข้อมูลแล้ว แต่ยังไม่ส่งใบเสนอราคา" action="Sales Follow-up" />
               <AudienceCard tone="hot" icon={CircleDot} label="Quote · No Confirm" value={sales.quoteNoConfirm} desc="ส่งใบเสนอราคาแล้ว แต่ยังไม่ยืนยัน" action="Reminder / Offer / Deadline" />
@@ -283,7 +295,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
 
           <section className="retargeting-ready-card">
             <div className="retargeting-ready-icon"><Target/></div>
-            <div><span>FUTURE META SYNC</span><h2>Audience พร้อมสำหรับผูก Retargeting ภายหลัง</h2><p>เมื่อใส่ Facebook Pixel / CAPI ในอนาคต เราจะ map กลุ่ม First-party เหล่านี้ไปใช้สร้าง Custom Audience และ Exclusion เช่น ตัดลูกค้าที่ Confirmed/Paid ออกจากโฆษณาหาลูกค้าใหม่ได้</p></div>
+            <div><span>FUTURE AD SYNC</span><h2>Audience พร้อมสำหรับผูก Retargeting ภายหลัง</h2><p>เมื่อเชื่อม Meta Pixel/CAPI หรือ Google Ads ในอนาคต เราจะใช้กลุ่ม First-party เหล่านี้เป็นฐานสร้าง Audience, Remarketing และ Exclusion เช่น ตัดลูกค้าที่ Confirmed/Paid ออกจากโฆษณาหาลูกค้าใหม่ได้</p></div>
             <b>READY</b>
           </section>
         </>}
@@ -313,6 +325,43 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
           <section className="meta-connect-card">
             <div><span>CONNECT LATER</span><h2>ตอนนี้ยังไม่ต้องใส่ข้อมูล Facebook</h2><p>เมื่อพร้อม เพียงเพิ่ม Environment Variables ใน Vercel แล้ว Deploy ใหม่ Browser Pixel จะเริ่มทำงานทันที ส่วน CAPI สามารถเปิดต่อใน Phase เชื่อม Meta โดยไม่ต้องรื้อ Funnel หรือ Customer Tracking ใหม่</p></div>
             <div className="meta-env-list"><code>NEXT_PUBLIC_META_PIXEL_ID</code><code>META_CONVERSIONS_API_TOKEN</code><code>META_TEST_EVENT_CODE</code></div>
+          </section>
+        </>}
+
+        {tab==='google' && <>
+          <section className="growth-title"><span>GOOGLE MEASUREMENT</span><h1>Google Tag + GA4 + Google Ads<br/>พร้อมรอเชื่อมบัญชีเดิม</h1><p>รองรับการวัดพฤติกรรมเว็บไซต์, Conversion จาก LINE/แบบฟอร์ม และ Remarketing สำหรับ Google Ads โดยตอนนี้ยังไม่โหลด Google tag ถ้ายังไม่ได้ใส่ ID ใน Vercel</p></section>
+
+          <div className="meta-status-grid">
+            <MetaStatusCard icon={Activity} label="Google Tag" ready={Boolean(summary?.googleTagConfigured)} detail={summary?.googleTagConfigured?`พร้อมแล้ว · ${summary?.googleTagIdMasked||summary?.ga4IdMasked||summary?.googleAdsIdMasked||'Tag configured'}`:'รอ NEXT_PUBLIC_GOOGLE_TAG_ID หรือ Destination ID'} />
+            <MetaStatusCard icon={Globe2} label="Google Analytics 4" ready={Boolean(summary?.ga4Configured)} detail={summary?.ga4Configured?`GA4 พร้อม · ${summary?.ga4IdMasked||summary?.googleTagIdMasked||'G-...'}`:'Optional · รอ NEXT_PUBLIC_GA4_MEASUREMENT_ID'} />
+            <MetaStatusCard icon={Target} label="Google Ads" ready={Boolean(summary?.googleAdsConfigured)} detail={summary?.googleAdsConfigured?`Ads tag พร้อม · ${summary?.googleAdsIdMasked||summary?.googleTagIdMasked||'AW-...'}`:'รอ NEXT_PUBLIC_GOOGLE_ADS_ID'} />
+            <MetaStatusCard icon={MousePointerClick} label="Ads Traffic" ready detail={`${summary?.googleAdsVisitors??0} visitor(s) มี Google Ads click ID / paid Google attribution ในช่วงนี้`} />
+          </div>
+
+          <section className="meta-event-panel">
+            <div className="meta-event-head"><div><span>EVENT MAPPING</span><h2>Google Analytics + Ads Conversion</h2></div><small>Browser-ready · Remarketing-ready</small></div>
+            <div className="meta-event-table">
+              <MetaEvent source="page_view" meta="page_view" trigger="เปิดหน้าเว็บไซต์ · ใช้สร้าง Website Remarketing" state="ready" />
+              <MetaEvent source="package_view" meta="view_item" trigger="ดูแพ็กเกจ · เก็บความสนใจแพ็กเกจ" state="ready" />
+              <MetaEvent source="line_click" meta="line_click / Ads conversion" trigger="กด CTA ไป LINE OA" state={summary?.googleAdsLineConversionConfigured?'ready':'reserved'} />
+              <MetaEvent source="lead_submit" meta="generate_lead / Ads conversion" trigger="ส่งแบบฟอร์มให้ติดต่อกลับ" state={summary?.googleAdsLeadConversionConfigured?'ready':'reserved'} />
+              <MetaEvent source="quotation_sent" meta="Offline Conversion" trigger="Customer Tracking ส่ง Quotation · เตรียมไว้ Phase ต่อไป" state="reserved" />
+              <MetaEvent source="payment_received" meta="Purchase / Offline Conversion" trigger="รับชำระเงินจริง · เตรียมไว้ Phase ต่อไป" state="reserved" />
+            </div>
+          </section>
+
+          <section className="retargeting-section">
+            <div className="retargeting-section-title"><div><span>GOOGLE ADS REMARKETING</span><h2>รองรับคนเข้าเว็บแล้วกลับไปเจอโฆษณาเรา</h2></div><small>รอเชื่อม AW-... / Google tag</small></div>
+            <div className="retargeting-audience-grid">
+              <AudienceCard tone="cold" icon={Globe2} label="All Website Visitors" value={summary?.uniqueVisitors??0} desc="คนที่เคยเข้า Bhutan Center" action="Google Ads Website Audience" />
+              <AudienceCard tone="warm" icon={MousePointerClick} label="Package Viewers" value={summary?.packageViewVisitors??0} desc="คนที่เคยเปิดดูแพ็กเกจ" action="Remarketing Package / High Season" />
+              <AudienceCard tone="hot" icon={Target} label="LINE Intent" value={summary?.lineClickVisitors??0} desc="คนที่กด LINE จากเว็บไซต์" action="High-intent Remarketing" />
+            </div>
+          </section>
+
+          <section className="meta-connect-card">
+            <div><span>CONNECT LATER</span><h2>นำ Google Ads / Analytics เดิมมาเชื่อมภายหลังได้</h2><p>แนะนำให้ใช้ Google tag เป็นฐานเดียวแล้วเชื่อม GA4 และ Google Ads เป็น destinations เพื่อลด tag ซ้ำ ระบบรองรับ Google click IDs เช่น GCLID, GBRAID และ WBRAID ใน Website Events ไว้แล้ว เพื่อใช้ Attribution และต่อยอด Offline Conversion ในอนาคต</p></div>
+            <div className="meta-env-list"><code>NEXT_PUBLIC_GOOGLE_TAG_ID</code><code>NEXT_PUBLIC_GA4_MEASUREMENT_ID</code><code>NEXT_PUBLIC_GOOGLE_ADS_ID</code><code>NEXT_PUBLIC_GOOGLE_ADS_LINE_CONVERSION_LABEL</code><code>NEXT_PUBLIC_GOOGLE_ADS_LEAD_CONVERSION_LABEL</code></div>
           </section>
         </>}
 

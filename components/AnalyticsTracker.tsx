@@ -21,6 +21,18 @@ export function getVisitorIds(){
   };
 }
 
+function readCookie(name:string){
+  try{
+    const prefix=`${name}=`;
+    const item=document.cookie.split(';').map(x=>x.trim()).find(x=>x.startsWith(prefix));
+    return item ? decodeURIComponent(item.slice(prefix.length)) : '';
+  }catch{return '';}
+}
+
+function newMetaEventId(prefix:string){
+  try{return `bc_${prefix}_${crypto.randomUUID()}`;}catch{return `bc_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2,10)}`;}
+}
+
 export function getAttribution(){
   try {
     const params = new URLSearchParams(window.location.search);
@@ -34,6 +46,8 @@ export function getAttribution(){
       gbraid: params.get('gbraid') || '',
       wbraid: params.get('wbraid') || '',
       dclid: params.get('dclid') || '',
+      fbclid: params.get('fbclid') || '',
+      fbclid_ts: params.get('fbclid') ? Date.now() : 0,
       referrer: document.referrer || '',
     };
     const key='bc_attribution';
@@ -48,12 +62,14 @@ export function getAttribution(){
       gbraid: current.gbraid || previous.gbraid || '',
       wbraid: current.wbraid || previous.wbraid || '',
       dclid: current.dclid || previous.dclid || '',
+      fbclid: current.fbclid || previous.fbclid || '',
+      fbclid_ts: current.fbclid ? current.fbclid_ts : (Number(previous.fbclid_ts)||0),
       referrer: previous.referrer || current.referrer || '',
     };
     sessionStorage.setItem(key,JSON.stringify(merged));
     return merged;
   } catch {
-    return {source:'',campaign:'',medium:'',term:'',content:'',gclid:'',gbraid:'',wbraid:'',dclid:'',referrer:''};
+    return {source:'',campaign:'',medium:'',term:'',content:'',gclid:'',gbraid:'',wbraid:'',dclid:'',fbclid:'',fbclid_ts:0,referrer:''};
   }
 }
 
@@ -78,6 +94,9 @@ function buildPublicEventPayload(eventName:string, extra:Record<string,unknown>=
       gbraid: attr.gbraid || null,
       wbraid: attr.wbraid || null,
       dclid: attr.dclid || null,
+      fbclid: attr.fbclid || null,
+      fbp: readCookie('_fbp') || null,
+      fbc: readCookie('_fbc') || (attr.fbclid ? `fb.1.${attr.fbclid_ts || Date.now()}.${attr.fbclid}` : null),
       referrer: attr.referrer || null,
       viewport: `${window.innerWidth}x${window.innerHeight}`,
       visibility: document.visibilityState,
@@ -224,21 +243,40 @@ async function ensureMetaPixel(){
   return w.fbq as ((...args:any[])=>void);
 }
 
-async function trackMeta(pathname:string, slug:string){
+async function trackMeta(pathname:string, slug:string, pageEventId:string, viewEventId:string){
   const fbq=await ensureMetaPixel();
   if(!fbq) return;
-  fbq('track','PageView');
-  if(slug) fbq('track','ViewContent',{content_name:slug,content_category:'Bhutan Tour Package'});
+  fbq('track','PageView',{}, {eventID:pageEventId});
+  if(slug) fbq('track','ViewContent',{content_name:slug,content_category:'Bhutan Tour Package',content_ids:[slug],content_type:'product'}, {eventID:viewEventId});
 }
 
-export function trackMetaLineClick(packageSlug=''){
+export function trackMetaLineClick(packageSlug='', eventId=''){
+  const resolvedEventId=eventId || newMetaEventId('line');
   try{
     const w=window as any;
     if(w.fbq){
-      w.fbq('trackCustom','LineAddFriendClick',{package:packageSlug||undefined});
+      w.fbq('trackCustom','LineAddFriendClick',{package:packageSlug||undefined},{eventID:resolvedEventId});
       return true;
     }
-    void ensureMetaPixel().then((fbq)=>{ if(fbq) fbq('trackCustom','LineAddFriendClick',{package:packageSlug||undefined}); });
+    void ensureMetaPixel().then((fbq)=>{ if(fbq) fbq('trackCustom','LineAddFriendClick',{package:packageSlug||undefined},{eventID:resolvedEventId}); });
+  }catch{}
+  return false;
+}
+
+export function createMetaEventId(prefix='evt'){
+  return newMetaEventId(prefix);
+}
+
+export function trackMetaLead(packageSlug='', eventId=''){
+  const resolvedEventId=eventId || newMetaEventId('lead');
+  try{
+    const w=window as any;
+    const params=packageSlug ? {content_name:packageSlug,content_category:'Bhutan Tour Package'} : {};
+    if(w.fbq){
+      w.fbq('track','Lead',params,{eventID:resolvedEventId});
+      return true;
+    }
+    void ensureMetaPixel().then((fbq)=>{ if(fbq) fbq('track','Lead',params,{eventID:resolvedEventId}); });
   }catch{}
   return false;
 }
@@ -252,14 +290,16 @@ export default function AnalyticsTracker(){
       : '';
 
     const presenceExtra = slug ? {package_slug:slug} : {};
+    const pageMetaEventId=newMetaEventId('page');
+    const viewMetaEventId=slug ? newMetaEventId('view') : '';
 
     // Presence is intentionally separate from analytics. It is sent immediately
     // on entry and an explicit offline signal is sent when the page is closed.
     // This makes ONLINE NOW react in ~2 seconds instead of waiting for a long
     // heartbeat window.
     sendPublicEvent('heartbeat', {...presenceExtra,presence:'online'});
-    trackPublicEvent('page_view', presenceExtra);
-    if (slug) trackPublicEvent('package_view',{ package_slug:slug });
+    trackPublicEvent('page_view', {...presenceExtra,meta_event_id:pageMetaEventId});
+    if (slug) trackPublicEvent('package_view',{ package_slug:slug,meta_event_id:viewMetaEventId });
 
     const heartbeat=()=>{
       // Keep the session alive even when the user switches tabs. pagehide /
@@ -275,7 +315,7 @@ export default function AnalyticsTracker(){
     window.addEventListener('pagehide',goOffline);
     window.addEventListener('beforeunload',goOffline);
 
-    trackMeta(pathname,slug);
+    trackMeta(pathname,slug,pageMetaEventId,viewMetaEventId);
     trackGooglePage(pathname,slug);
 
     return()=>{

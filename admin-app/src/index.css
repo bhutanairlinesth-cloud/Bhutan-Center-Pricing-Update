@@ -3709,3 +3709,25 @@ input::placeholder,textarea::placeholder{color:#a89989}
 .marketing-config-actions button svg{width:15px;height:15px}.marketing-config-actions button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
 .marketing-config-note{margin-top:12px;padding:10px 12px;border-radius:12px;background:#fff4e6;color:#8c642e;font-size:9.5px}
 @media(max-width:760px){.marketing-config-card{padding:18px;border-radius:20px}.marketing-config-head,.marketing-config-actions{align-items:flex-start;flex-direction:column}.marketing-config-grid{grid-template-columns:1fr}.marketing-toggle-row{grid-column:auto!important}.marketing-config-actions button{width:100%}}
+
+/* =========================================================
+   V13.9 — Meta CAPI connection / Test Event controls
+   ========================================================= */
+.marketing-config-grid input[type=password]{height:44px;padding:0 13px;border:1px solid #dfd2c0;border-radius:12px;background:#fffdf9;color:#3a332b;font:inherit;font-size:12px;outline:none}
+.marketing-config-grid input[type=password]:focus{border-color:#c9a365;box-shadow:0 0 0 4px rgba(181,138,73,.11)}
+.marketing-config-actions--meta{align-items:flex-end}
+.marketing-config-buttons{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.marketing-config-actions .marketing-config-buttons button{margin:0}
+.marketing-config-actions .marketing-config-buttons button.secondary{background:#fffaf2;color:#8f6a36;border:1px solid #d9c39e;box-shadow:none}
+.marketing-config-actions .marketing-config-buttons button.secondary:hover{background:#f6eddd}
+.meta-test-result{margin-top:14px;padding:14px 16px;border-radius:15px;border:1px solid #eadfce;background:#fbf7f0;display:grid;gap:5px}
+.meta-test-result>div{display:flex;align-items:center;gap:8px}
+.meta-test-result svg{width:16px;height:16px}
+.meta-test-result strong{font-size:11px;color:#4d433a}
+.meta-test-result span{font-size:10px;line-height:1.5;color:#75695e}
+.meta-test-result small{font-size:8.5px;color:#9b8d7e;word-break:break-all}
+.meta-test-result.success{border-color:#cfe2d5;background:#f4fbf6}
+.meta-test-result.success svg,.meta-test-result.success strong{color:#347252}
+.meta-test-result.error{border-color:#ecd2c9;background:#fff7f4}
+.meta-test-result.error svg,.meta-test-result.error strong{color:#a4543e}
+@media(max-width:760px){.marketing-config-actions--meta{align-items:stretch}.marketing-config-buttons{width:100%;flex-direction:column}.marketing-config-buttons button{width:100%}}

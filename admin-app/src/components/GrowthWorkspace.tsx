@@ -68,7 +68,7 @@ interface Summary {
 interface PriceRow { id:string; name:string; nights:number; override:null|{visible:boolean;price_override_thb:number|null}; }
 interface AudiencePreset { id:string; name:string; count:number; source:string; intent:string; futureMeta:string; description:string; }
 interface AudienceData { days:number; tagStorageReady:boolean; sources:{website:boolean;line:boolean;crm:boolean;meta:boolean}; audiences:AudiencePreset[]; tags:{tag:string;count:number;source:'website'|'line'}[]; note:string; }
-interface IntegrationSettings { storageReady:boolean; storageError?:{code:string;message:string}|null; meta:{enabled:boolean;pixelId:string;pixelIdMasked:string|null;testEventCode:string;testEventConfigured:boolean;capiConfigured:boolean;source:string;updatedAt:string|null}; line:{enabled:boolean;url:string;source:string;updatedAt:string|null}; }
+interface IntegrationSettings { storageReady:boolean; storageError?:{code:string;message:string}|null; meta:{enabled:boolean;pixelId:string;pixelIdMasked:string|null;testEventCode:string;testEventConfigured:boolean;capiConfigured:boolean;accessTokenMasked:string|null;secretStorageReady:boolean;tokenSource:string;source:string;updatedAt:string|null;lastTestAt:string|null;lastTestOk:boolean|null;lastTestMessage:string|null;lastTestEventsReceived:number}; line:{enabled:boolean;url:string;source:string;updatedAt:string|null}; }
 
 type MarketingTab = 'overview' | 'realtime' | 'audience' | 'funnel' | 'meta' | 'google' | 'website' | 'line' | 'seo';
 const MARKETING_TAB_PATHS: Record<MarketingTab, string> = {
@@ -118,6 +118,9 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   const [metaPixelId,setMetaPixelId]=useState('');
   const [metaTestEventCode,setMetaTestEventCode]=useState('');
   const [metaEnabled,setMetaEnabled]=useState(false);
+  const [metaAccessToken,setMetaAccessToken]=useState('');
+  const [metaTesting,setMetaTesting]=useState(false);
+  const [metaTestResult,setMetaTestResult]=useState<{ok:boolean;message:string;eventsReceived?:number;fbtraceId?:string|null}|null>(null);
   const [lineOaUrl,setLineOaUrl]=useState('https://lin.ee/qQQMmYIt');
 
   useEffect(()=>{
@@ -212,11 +215,28 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
 
   async function saveMetaSettings(){
     const headers=await authHeaders();
-    const res=await fetch('/api/marketing/integrations',{method:'POST',headers,body:JSON.stringify({section:'meta',pixelId:metaPixelId,testEventCode:metaTestEventCode,enabled:metaEnabled})});
+    const res=await fetch('/api/marketing/integrations',{method:'POST',headers,body:JSON.stringify({section:'meta',pixelId:metaPixelId,testEventCode:metaTestEventCode,enabled:metaEnabled,accessToken:metaAccessToken})});
     const json=await res.json().catch(()=>({}));
-    if(!res.ok){setNotice(json.error||'บันทึก Meta Pixel ไม่สำเร็จ');return;}
+    if(!res.ok){setNotice(json.error||'บันทึก Meta Pixel ไม่สำเร็จ');return false;}
+    setMetaAccessToken('');
     setNotice(json.message||'บันทึก Meta Pixel แล้ว');
     await refresh();
+    return true;
+  }
+
+  async function sendMetaTestEvent(){
+    setMetaTesting(true); setMetaTestResult(null);
+    try{
+      const saved=await saveMetaSettings();
+      if(!saved) return;
+      const headers=await authHeaders();
+      const res=await fetch('/api/marketing/meta-test',{method:'POST',headers,body:JSON.stringify({})});
+      const json=await res.json().catch(()=>({}));
+      const result={ok:Boolean(res.ok&&json.ok),message:String(json.message||json.error||'Meta Test Event ไม่สำเร็จ'),eventsReceived:Number(json.eventsReceived||0),fbtraceId:json.fbtraceId||null};
+      setMetaTestResult(result);
+      setNotice(result.ok?result.message:`Test Event ไม่ผ่าน: ${result.message}`);
+      await refresh();
+    }finally{ setMetaTesting(false); }
   }
 
   async function saveLineSettings(){
@@ -365,8 +385,8 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
 
           <div className="meta-status-grid">
             <MetaStatusCard icon={MousePointerClick} label="Browser Pixel" ready={Boolean(summary?.metaPixelConfigured)} detail={summary?.metaPixelConfigured?`เชื่อมแล้ว · ${summary?.metaPixelIdMasked||'Pixel ID'}`:'กรอก Pixel ID ด้านล่างเพื่อเปิดใช้งาน'} />
-            <MetaStatusCard icon={Server} label="Conversions API" ready={Boolean(summary?.metaCapiConfigured)} detail={summary?.metaCapiConfigured?'พบ CAPI Access Token':'เตรียมจุดเชื่อม · รอ META_CONVERSIONS_API_TOKEN'} />
-            <MetaStatusCard icon={Activity} label="Test Events" ready={Boolean(summary?.metaTestEventConfigured)} detail={summary?.metaTestEventConfigured?'บันทึก Test Event Code แล้ว':'Optional · วาง Code จาก Meta Events Manager'} />
+            <MetaStatusCard icon={Server} label="Conversions API" ready={Boolean(integrations?.meta?.capiConfigured || summary?.metaCapiConfigured)} detail={(integrations?.meta?.capiConfigured || summary?.metaCapiConfigured)?`Token พร้อม · ${integrations?.meta?.accessTokenMasked||'Server secret'}`:'วาง CAPI Access Token ด้านล่างแล้วบันทึก'} />
+            <MetaStatusCard icon={Activity} label="Test Events" ready={Boolean(integrations?.meta?.lastTestOk)} detail={integrations?.meta?.lastTestOk?`ผ่านแล้ว · ${integrations?.meta?.lastTestEventsReceived||1} event`:(integrations?.meta?.testEventConfigured?'Code พร้อม · กดส่ง Test Event':'วาง Code จาก Meta Events Manager')} />
             <MetaStatusCard icon={Target} label="Retargeting Logic" ready detail="First-party Funnel พร้อมใช้งานในหลังบ้าน" />
           </div>
 
@@ -383,19 +403,21 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
           </section>
 
           <section className="marketing-config-card">
-            <div className="marketing-config-head"><div><span>META CONNECTION</span><h2>Facebook Pixel Settings</h2><p>บันทึกจากหลังบ้านได้ทันที ค่าในหน้านี้จะมีลำดับความสำคัญเหนือ Environment Variable เดิม</p></div><b className={integrations?.storageReady?'ready':'waiting'}>{integrations?.storageReady?'DATABASE READY':'RUN SQL V13.7'}</b></div>
+            <div className="marketing-config-head"><div><span>META CONNECTION</span><h2>Facebook Pixel Settings</h2><p>บันทึกจากหลังบ้านได้ทันที ค่าในหน้านี้จะมีลำดับความสำคัญเหนือ Environment Variable เดิม</p></div><b className={(integrations?.storageReady&&integrations?.meta?.secretStorageReady)?'ready':'waiting'}>{(integrations?.storageReady&&integrations?.meta?.secretStorageReady)?'DATABASE READY':'RUN SQL V13.9'}</b></div>
             <div className="marketing-config-grid">
-              <label><span>Facebook Pixel ID</span><input value={metaPixelId} onChange={e=>setMetaPixelId(e.target.value.replace(/\D/g,''))} inputMode="numeric" placeholder="เช่น 123456789012345"/><small>คัดลอกจาก Meta Events Manager → Data Source / Pixel</small></label>
-              <label><span>Test Event Code</span><input value={metaTestEventCode} onChange={e=>setMetaTestEventCode(e.target.value)} placeholder="เช่น TEST12345"/><small>ใช้สำหรับ Test Events / CAPI ในขั้นเชื่อม Server Event</small></label>
-              <label className="marketing-toggle-row"><input type="checkbox" checked={metaEnabled} onChange={e=>setMetaEnabled(e.target.checked)}/><span><strong>เปิดใช้งาน Meta Pixel บนเว็บไซต์</strong><small>ถ้าปิด ระบบจะไม่โหลด Facebook Pixel แม้มี Pixel ID</small></span></label>
+              <label><span>Facebook Pixel ID</span><input value={metaPixelId} onChange={e=>setMetaPixelId(e.target.value.replace(/\D/g,''))} inputMode="numeric" placeholder="เช่น 1574103264254056"/><small>Pixel / Dataset ID ที่ใช้กับเว็บไซต์ Bhutan Center</small></label>
+              <label><span>Conversions API Access Token</span><input type="password" value={metaAccessToken} onChange={e=>setMetaAccessToken(e.target.value)} autoComplete="new-password" placeholder={integrations?.meta?.capiConfigured?`บันทึกแล้ว ${integrations?.meta?.accessTokenMasked||''} · เว้นว่างเพื่อใช้ Token เดิม`:'วาง Token ที่ขึ้นต้นด้วย EAA…'}/><small>เก็บแบบเข้ารหัสฝั่ง Server เท่านั้น · หลัง Save จะไม่ส่ง Token กลับมาที่ Browser</small></label>
+              <label><span>Test Event Code</span><input value={metaTestEventCode} onChange={e=>setMetaTestEventCode(e.target.value)} placeholder="เช่น TEST12345"/><small>Meta Events Manager → Test Events → คัดลอก Test Event Code</small></label>
+              <label className="marketing-toggle-row"><input type="checkbox" checked={metaEnabled} onChange={e=>setMetaEnabled(e.target.checked)}/><span><strong>เปิดใช้งาน Browser Pixel + CAPI</strong><small>เมื่อเปิด ระบบจะยิง Browser Pixel และ Server Event คู่กัน พร้อม Event ID สำหรับ Deduplication</small></span></label>
             </div>
-            <div className="marketing-config-actions"><div><small>Source: {integrations?.meta?.source==='back_office'?'Back Office':integrations?.meta?.source==='environment'?'Vercel Environment':'ยังไม่ได้ตั้งค่า'}</small><span>CAPI Token ยังคงเก็บฝั่ง Server เท่านั้นเพื่อความปลอดภัย</span></div><button onClick={saveMetaSettings} disabled={currentUser.role!=='admin'}><Save/>บันทึก Meta Pixel</button></div>
+            <div className="marketing-config-actions marketing-config-actions--meta"><div><small>Pixel Source: {integrations?.meta?.source==='back_office'?'Back Office':integrations?.meta?.source==='environment'?'Vercel Environment':'ยังไม่ได้ตั้งค่า'} · Token: {integrations?.meta?.tokenSource==='back_office'?'Encrypted Back Office':integrations?.meta?.tokenSource==='environment'?'Vercel Environment':'ยังไม่มี'}</small><span>Pixel ID {metaPixelId||'—'} · CAPI {integrations?.meta?.capiConfigured?'พร้อม':'ยังไม่พร้อม'} · Test Code {metaTestEventCode?'พร้อม':'ยังไม่มี'}</span></div><div className="marketing-config-buttons"><button className="secondary" onClick={sendMetaTestEvent} disabled={currentUser.role!=='admin'||metaTesting||!metaPixelId||!metaTestEventCode}><Send/>{metaTesting?'กำลังส่ง…':'ส่ง Test Event'}</button><button onClick={()=>void saveMetaSettings()} disabled={currentUser.role!=='admin'}><Save/>บันทึก Meta / CAPI</button></div></div>
+            {(metaTestResult || integrations?.meta?.lastTestAt) && <div className={`meta-test-result ${(metaTestResult?.ok ?? integrations?.meta?.lastTestOk)?'success':'error'}`}><div><Activity/><strong>{(metaTestResult?.ok ?? integrations?.meta?.lastTestOk)?'Meta รับ Test Event แล้ว':'Test Event ล่าสุดยังไม่ผ่าน'}</strong></div><span>{metaTestResult?.message || integrations?.meta?.lastTestMessage || '—'}</span><small>{(metaTestResult?.fbtraceId)?`fbtrace_id: ${metaTestResult.fbtraceId}`:(integrations?.meta?.lastTestAt?`ล่าสุด ${new Date(integrations.meta.lastTestAt).toLocaleString('th-TH')}`:'')}</small></div>}
             {currentUser.role!=='admin' && <div className="marketing-config-note">เฉพาะ Administrator เท่านั้นที่เปลี่ยน Tracking Settings ได้</div>}
           </section>
 
           <section className="meta-connect-card">
-            <div><span>SERVER-SIDE NEXT</span><h2>Conversions API ยังเตรียมไว้ต่อได้</h2><p>Pixel ID และ Test Event Code จัดการจากหลังบ้านได้แล้ว ส่วน CAPI Access Token ยังไม่แสดงหรือเก็บใน Browser เพื่อความปลอดภัย หากต้องการเชื่อม CAPI เต็มรูปแบบ เราจะเก็บ Token ฝั่ง Server และใช้ Test Event Code ที่บันทึกไว้นี้ได้ทันที</p></div>
-            <div className="meta-env-list"><code>META_CONVERSIONS_API_TOKEN</code><code>Test Event Code: {metaTestEventCode||'—'}</code></div>
+            <div><span>LIVE SERVER EVENTS</span><h2>Browser Pixel + Conversions API ทำงานคู่กัน</h2><p>เมื่อ Pixel, Token และสวิตช์เปิดพร้อม ระบบจะส่ง PageView, ViewContent, LineAddFriendClick และ Lead จากฝั่ง Server ด้วย พร้อมใช้ Event ID เดียวกับ Browser Pixel เพื่อให้ Meta Deduplicate แทนการนับซ้ำ ส่วน Test Event Code ใช้เฉพาะปุ่มทดสอบและไม่ถูกส่งกับ Production Event</p></div>
+            <div className="meta-env-list"><code>Pixel: {integrations?.meta?.pixelIdMasked||metaPixelId||'—'}</code><code>CAPI: {integrations?.meta?.capiConfigured?'CONNECTED':'WAITING'}</code><code>Last Test: {integrations?.meta?.lastTestOk?'PASSED':integrations?.meta?.lastTestAt?'FAILED':'NOT TESTED'}</code></div>
           </section>
         </>}
 

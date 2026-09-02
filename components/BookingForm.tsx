@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import LineCta from "./LineCta";
-import { trackGoogleLead, trackPublicEvent } from "./AnalyticsTracker";
+import { createMetaEventId, trackGoogleLead, trackMetaLead, trackPublicEvent } from "./AnalyticsTracker";
 
 export default function BookingForm({ compact = false, defaultPackage = "" }: { compact?: boolean; defaultPackage?: string }) {
   const [status, setStatus] = useState<"idle"|"sending"|"sent"|"error">("idle");
@@ -16,9 +16,9 @@ export default function BookingForm({ compact = false, defaultPackage = "" }: { 
       const response = await fetch("/api/leads", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
       if (!response.ok) throw new Error("submit failed");
       const packageSlug = String(payload.package_slug || defaultPackage || "");
-      trackPublicEvent("lead_submit", { package_slug: packageSlug || undefined });
-      const w = window as any;
-      if (w.fbq) w.fbq("track", "Lead", packageSlug ? { content_name: packageSlug } : undefined);
+      const metaEventId=createMetaEventId("lead");
+      trackPublicEvent("lead_submit", { package_slug: packageSlug || undefined, meta_event_id:metaEventId });
+      trackMetaLead(packageSlug,metaEventId);
       trackGoogleLead(packageSlug);
       setStatus("sent");
       form.reset();

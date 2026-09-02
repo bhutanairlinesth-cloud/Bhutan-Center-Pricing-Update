@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase, serverSupabaseMode } from '@/lib/server-supabase';
+import { sendMetaCapiEvent } from '@/lib/meta-capi';
 
 const ALLOWED = new Set(['page_view','package_view','line_click','lead_submit','contact_click','heartbeat']);
+const META_EVENTS = new Set(['page_view','package_view','line_click','lead_submit','contact_click']);
 
 function tagsForEvent(eventName:string, packageSlug:string){
   const tags:string[]=[];
@@ -29,6 +31,7 @@ export async function POST(request: NextRequest) {
   const packageSlug=String(body.package_slug || '').slice(0,120);
   if(!visitorId) return NextResponse.json({ok:false, stored:false, reason:'missing_visitor_id'}, {status:400});
 
+  const metadata = typeof body.metadata === 'object' && body.metadata ? body.metadata as Record<string,unknown> : {};
   const row = {
     visitor_id: visitorId,
     session_id: String(body.session_id || '').slice(0, 120),
@@ -37,7 +40,7 @@ export async function POST(request: NextRequest) {
     package_slug: packageSlug || null,
     source: String(body.source || '').slice(0, 160) || null,
     campaign: String(body.campaign || '').slice(0, 160) || null,
-    metadata: typeof body.metadata === 'object' && body.metadata ? body.metadata : {},
+    metadata,
     user_agent: String(request.headers.get('user-agent') || '').slice(0, 500),
   };
 
@@ -62,5 +65,28 @@ export async function POST(request: NextRequest) {
       },{onConflict:'visitor_id,tag'});
     }
   }
-  return NextResponse.json({ ok: true, stored: true, mode });
+
+  let meta:any={skipped:true,reason:'not_a_meta_event'};
+  if(mode==='service_role' && META_EVENTS.has(eventName)){
+    const pagePath=String(row.page_path || '/');
+    const eventSourceUrl=new URL(pagePath.startsWith('/')?pagePath:`/${pagePath}`,request.url).toString();
+    meta=await sendMetaCapiEvent({
+      supabase,
+      request,
+      sourceEvent:eventName,
+      eventId:String(metadata.meta_event_id||'').slice(0,160),
+      eventSourceUrl,
+      packageSlug,
+      userData:{
+        fbp:String(metadata.fbp||''),
+        fbc:String(metadata.fbc||''),
+      },
+      customData:{
+        source:String(row.source||''),
+        campaign:String(row.campaign||''),
+      },
+    });
+  }
+
+  return NextResponse.json({ ok: true, stored: true, mode, meta:{ok:Boolean(meta?.ok),skipped:Boolean(meta?.skipped),reason:meta?.reason||null} });
 }

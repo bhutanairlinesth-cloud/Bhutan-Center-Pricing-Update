@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/admin-auth';
+import { deleteMarketingSecret, maskSecret, readMarketingSecret, writeMarketingSecret } from '@/lib/marketing-secrets';
 
 function cleanText(value:unknown, max=500){
   return String(value ?? '').trim().slice(0,max);
@@ -13,10 +14,13 @@ function maskId(value:string){
 export async function GET(request:NextRequest){
   try{
     const { supabase }=await requireStaff(request);
-    const { data, error }=await supabase
-      .from('marketing_runtime_settings')
-      .select('id,enabled,config,updated_at')
-      .in('id',['meta','line']);
+    const [{data,error},dbSecret]=await Promise.all([
+      supabase
+        .from('marketing_runtime_settings')
+        .select('id,enabled,config,updated_at')
+        .in('id',['meta','line']),
+      readMarketingSecret(supabase,'meta_capi_token').catch(()=>({value:'',updatedAt:null,storageReady:false})),
+    ]);
 
     const rows=error ? [] : (data||[]);
     const metaRow=rows.find((x:any)=>x.id==='meta') as any;
@@ -30,6 +34,8 @@ export async function GET(request:NextRequest){
     const dbTestCode=cleanText(metaConfig.test_event_code,120);
     const envTestCode=cleanText(process.env.META_TEST_EVENT_CODE,120);
     const testEventCode=dbTestCode || envTestCode;
+    const envToken=cleanText(process.env.META_CONVERSIONS_API_TOKEN,4096);
+    const accessToken=cleanText(dbSecret?.value,4096) || envToken;
     const lineUrl=cleanText(lineConfig.line_oa_url,500) || cleanText(process.env.LINE_OA_URL,500) || 'https://lin.ee/qQQMmYIt';
 
     return NextResponse.json({
@@ -41,9 +47,16 @@ export async function GET(request:NextRequest){
         pixelIdMasked:maskId(pixelId),
         testEventCode,
         testEventConfigured:Boolean(testEventCode),
-        capiConfigured:Boolean(process.env.META_CONVERSIONS_API_TOKEN),
+        capiConfigured:Boolean(accessToken),
+        accessTokenMasked:maskSecret(accessToken),
+        secretStorageReady:Boolean(dbSecret?.storageReady),
+        tokenSource:cleanText(dbSecret?.value,4096)?'back_office':envToken?'environment':'none',
         source:dbPixelId?'back_office':envPixelId?'environment':'none',
         updatedAt:metaRow?.updated_at || null,
+        lastTestAt:cleanText(metaConfig.last_test_at,80) || null,
+        lastTestOk:typeof metaConfig.last_test_ok==='boolean' ? Boolean(metaConfig.last_test_ok) : null,
+        lastTestMessage:cleanText(metaConfig.last_test_message,500) || null,
+        lastTestEventsReceived:Number(metaConfig.last_test_events_received||0),
       },
       line:{
         enabled:lineRow ? Boolean(lineRow.enabled) : true,
@@ -66,19 +79,38 @@ export async function POST(request:NextRequest){
     if(section==='meta'){
       const pixelId=cleanText(body.pixelId,80).replace(/\s+/g,'');
       const testEventCode=cleanText(body.testEventCode,120);
+      const accessToken=cleanText(body.accessToken,4096);
+      const clearAccessToken=Boolean(body.clearAccessToken);
       const enabled=Boolean(body.enabled && pixelId);
       if(pixelId && !/^\d{5,30}$/.test(pixelId)){
         return NextResponse.json({error:'Pixel ID ต้องเป็นตัวเลขเท่านั้น'},{status:400});
       }
+      if(accessToken && accessToken.length<20){
+        return NextResponse.json({error:'Conversions API Access Token ดูสั้นผิดปกติ กรุณาคัดลอก Token จาก Meta ใหม่'},{status:400});
+      }
+
+      const existing=await supabase.from('marketing_runtime_settings').select('config').eq('id','meta').maybeSingle();
+      const oldConfig=(existing.data?.config || {}) as Record<string,unknown>;
+      const config={
+        ...oldConfig,
+        pixel_id:pixelId,
+        test_event_code:testEventCode,
+      };
       const { error }=await supabase.from('marketing_runtime_settings').upsert({
         id:'meta',
         enabled,
-        config:{pixel_id:pixelId,test_event_code:testEventCode},
+        config,
         updated_by:String(profile?.id||profile?.email||''),
         updated_at:new Date().toISOString(),
       });
       if(error) throw error;
-      return NextResponse.json({ok:true,message:enabled?'เปิด Meta Pixel แล้ว':'บันทึก Meta settings แล้ว (Pixel ยังปิดอยู่)'});
+
+      if(clearAccessToken){
+        await deleteMarketingSecret(supabase,'meta_capi_token');
+      }else if(accessToken){
+        await writeMarketingSecret(supabase,'meta_capi_token',accessToken,String(profile?.id||profile?.email||''));
+      }
+      return NextResponse.json({ok:true,message:enabled?'บันทึก Meta Pixel / CAPI แล้ว':'บันทึก Meta settings แล้ว (Pixel ยังปิดอยู่)'});
     }
 
     if(section==='line'){

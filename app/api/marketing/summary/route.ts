@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/admin-auth';
 import { serverSupabaseMode } from '@/lib/server-supabase';
+import { getMetaServerConfig } from '@/lib/meta-capi';
 
 function maskId(value:string){
   const clean=String(value||'').trim();
@@ -113,6 +114,7 @@ export async function GET(request: NextRequest) {
         lineRuntimeUrl=String(lineRow?.config?.line_oa_url || '').trim();
       }
     }catch{}
+    const metaServer=await getMetaServerConfig(supabase);
     const googleTagId=String(process.env.NEXT_PUBLIC_GOOGLE_TAG_ID || '').trim();
     const ga4Id=String(process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID || '').trim();
     const googleAdsId=String(process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || '').trim();
@@ -152,7 +154,7 @@ export async function GET(request: NextRequest) {
       lineConfigured: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_CHANNEL_SECRET),
       lineBasicIdConfigured: Boolean(process.env.LINE_OA_BASIC_ID || process.env.LINE_OA_URL || lineRuntimeUrl || 'https://lin.ee/qQQMmYIt'),
       metaPixelConfigured: Boolean(metaEnabled && pixelId),
-      metaCapiConfigured: Boolean(process.env.META_CONVERSIONS_API_TOKEN),
+      metaCapiConfigured: Boolean(metaServer.capiConfigured),
       metaTestEventConfigured: Boolean(metaTestEventCode),
       metaPixelIdMasked: maskId(pixelId),
     });

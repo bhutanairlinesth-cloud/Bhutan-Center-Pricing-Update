@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSupabase } from '@/lib/server-supabase';
+import { getServerSupabase, serverSupabaseMode } from '@/lib/server-supabase';
+import { sendMetaCapiEvent } from '@/lib/meta-capi';
 
 const DEFAULT_LINE_OA_URL='https://lin.ee/qQQMmYIt';
 
@@ -9,9 +10,35 @@ export async function GET(request: NextRequest) {
   const session = String(url.searchParams.get('session') || '').slice(0,120);
   const packageSlug = String(url.searchParams.get('package') || '').slice(0,120);
   const pagePath = String(url.searchParams.get('page') || '/').slice(0,400);
+  const tracked=url.searchParams.get('tracked')==='1';
+  const metaEventId=String(url.searchParams.get('event_id')||'').slice(0,160) || `bc_line_${Date.now()}_${Math.random().toString(36).slice(2,10)}`;
   const supabase = getServerSupabase();
-  if (supabase) {
-    try { await supabase.from('website_events').insert({ visitor_id:visitor, session_id:session, event_name:'line_click', page_path:pagePath, package_slug:packageSlug || null, metadata:{} }); } catch {}
+
+  // Modern CTA sends line_click through /api/events first so Browser Pixel and
+  // CAPI share one event_id. This fallback remains for direct/no-JS visits to
+  // /go/line and deliberately skips duplicate storage when tracked=1.
+  if (supabase && !tracked) {
+    try {
+      await supabase.from('website_events').insert({
+        visitor_id:visitor,
+        session_id:session,
+        event_name:'line_click',
+        page_path:pagePath,
+        package_slug:packageSlug || null,
+        metadata:{meta_event_id:metaEventId,fallback:true},
+        user_agent:String(request.headers.get('user-agent')||'').slice(0,500),
+      });
+      if(serverSupabaseMode()==='service_role'){
+        await sendMetaCapiEvent({
+          supabase,
+          request,
+          sourceEvent:'line_click',
+          eventId:metaEventId,
+          eventSourceUrl:new URL(pagePath.startsWith('/')?pagePath:`/${pagePath}`,request.url).toString(),
+          packageSlug,
+        });
+      }
+    } catch {}
   }
 
   const basicId = String(process.env.LINE_OA_BASIC_ID || '').trim();

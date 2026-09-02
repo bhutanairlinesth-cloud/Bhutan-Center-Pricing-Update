@@ -4087,3 +4087,215 @@ textarea{min-height:74px}
   .line-broadcast-actions{flex-direction:column;align-items:stretch}
   .line-broadcast-actions button{width:100%}
 }
+
+/* ===== V13.12.1 · SIDEBAR MENU HOTFIX ===== */
+/* Override legacy .unified-sidebar-nav button selectors that broke accordion headers. */
+.unified-sidebar-nav.unified-sidebar-nav--accordion{
+  display:grid;
+  gap:8px;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:0 2px 12px;
+}
+
+.unified-sidebar-nav .unified-nav-accordion{
+  display:block;
+  width:100%;
+  min-width:0;
+  border:1px solid rgba(239,226,201,.11);
+  border-radius:15px;
+  background:rgba(255,253,249,.035);
+  overflow:hidden;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-head{
+  width:100%;
+  min-height:58px;
+  padding:9px 11px!important;
+  margin:0;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:#fffdf9!important;
+  display:flex!important;
+  grid-template-columns:none!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+  text-align:left!important;
+  overflow:visible!important;
+  box-shadow:none!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-head:hover{
+  background:rgba(255,253,249,.055)!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-head > .unified-nav-accordion-title{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  gap:11px!important;
+  min-width:0!important;
+  flex:1 1 auto!important;
+  overflow:visible!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-head > .unified-nav-accordion-title > i{
+  width:38px!important;
+  height:38px!important;
+  border-radius:11px!important;
+  display:grid!important;
+  place-items:center!important;
+  flex:0 0 38px!important;
+  background:rgba(239,226,201,.08)!important;
+  color:#d8bb86!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-head > .unified-nav-accordion-title > i svg{
+  width:18px!important;
+  height:18px!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-head > .unified-nav-accordion-title > span{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:flex-start!important;
+  justify-content:center!important;
+  min-width:0!important;
+  flex:1 1 auto!important;
+  overflow:visible!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-head > .unified-nav-accordion-title > span > strong{
+  display:block!important;
+  width:100%!important;
+  margin:0!important;
+  color:#fffdf9!important;
+  font-size:15px!important;
+  line-height:1.25!important;
+  font-weight:700!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-head > .unified-nav-accordion-title > span > small{
+  display:block!important;
+  width:100%!important;
+  margin-top:3px!important;
+  color:rgba(255,250,241,.52)!important;
+  font-size:11px!important;
+  line-height:1.3!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-head > .unified-nav-accordion-arrow{
+  width:16px!important;
+  height:16px!important;
+  flex:0 0 16px!important;
+  color:#d8bb86!important;
+  opacity:.9!important;
+  transform:rotate(0deg);
+  transition:transform .18s ease;
+}
+
+.unified-sidebar-nav .unified-nav-accordion.expanded > .unified-nav-accordion-head > .unified-nav-accordion-arrow{
+  transform:rotate(180deg)!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-body{
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:4px!important;
+  padding:2px 7px 9px!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-body > button{
+  width:100%!important;
+  min-height:50px!important;
+  padding:7px 9px!important;
+  display:grid!important;
+  grid-template-columns:34px minmax(0,1fr) 14px!important;
+  gap:9px!important;
+  align-items:center!important;
+  border-radius:11px!important;
+  text-align:left!important;
+  overflow:hidden!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-body > button > i{
+  width:34px!important;
+  height:34px!important;
+  border-radius:10px!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-body > button > span{
+  display:flex!important;
+  flex-direction:column!important;
+  min-width:0!important;
+  overflow:hidden!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-body > button > span > strong{
+  display:block!important;
+  width:100%!important;
+  color:inherit!important;
+  font-size:14px!important;
+  line-height:1.25!important;
+  font-weight:650!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-body > button > span > small{
+  display:block!important;
+  width:100%!important;
+  margin-top:3px!important;
+  color:rgba(255,250,241,.45)!important;
+  font-size:11px!important;
+  line-height:1.25!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+
+.unified-sidebar-nav .unified-nav-accordion-body > button.active > span > small{
+  color:#7b6853!important;
+}
+
+.unified-sidebar-nav .unified-sidebar-dashboard{
+  width:100%!important;
+  min-height:54px!important;
+  padding:7px 9px!important;
+  display:grid!important;
+  grid-template-columns:36px minmax(0,1fr) 14px!important;
+  gap:9px!important;
+  align-items:center!important;
+  border-radius:13px!important;
+}
+
+.unified-sidebar-nav .unified-sidebar-dashboard > span > strong{
+  font-size:14px!important;
+  line-height:1.25!important;
+}
+.unified-sidebar-nav .unified-sidebar-dashboard > span > small{
+  font-size:11px!important;
+  line-height:1.25!important;
+  white-space:normal!important;
+}
+
+@media(max-width:1200px){
+  .unified-backoffice-shell--single-nav .unified-sidebar{width:300px!important}
+  .unified-workspace{width:calc(100% - 300px)!important;margin-left:300px!important}
+}
+
+@media(max-width:760px){
+  .unified-backoffice-shell--single-nav .unified-sidebar{width:min(320px,90vw)!important}
+  .unified-workspace{width:100%!important;margin-left:0!important}
+}

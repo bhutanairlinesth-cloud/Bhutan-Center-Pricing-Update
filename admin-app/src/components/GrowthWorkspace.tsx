@@ -144,6 +144,17 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   const [metaTesting,setMetaTesting]=useState(false);
   const [metaTestResult,setMetaTestResult]=useState<{ok:boolean;message:string;eventsReceived?:number;fbtraceId?:string|null;diagnostics?:{graphVersion?:string;datasetId?:string;testEventCodeUsed?:string;clientIpDetected?:boolean;clientIpMasked?:string;userAgentDetected?:boolean;eventSourceUrl?:string;partnerAgent?:string}}|null>(null);
   const [lineOaUrl,setLineOaUrl]=useState('https://lin.ee/qQQMmYIt');
+  const [lineMode,setLineMode]=useState<'text'|'image'|'card'>('text');
+  const [broadcastName,setBroadcastName]=useState('LINE Broadcast');
+  const [imageUrl,setImageUrl]=useState('');
+  const [imagePreviewUrl,setImagePreviewUrl]=useState('');
+  const [imageCaption,setImageCaption]=useState('');
+  const [cardTitle,setCardTitle]=useState('เที่ยวภูฏานกับ Bhutan Center');
+  const [cardBody,setCardBody]=useState('วางแผนทริปส่วนตัวได้ ทั้งตั๋วบิน วีซ่า โรงแรม และโปรแกรมเดินทาง');
+  const [cardImageUrl,setCardImageUrl]=useState('');
+  const [cardButtonLabel,setCardButtonLabel]=useState('คุยใน LINE');
+  const [cardButtonUrl,setCardButtonUrl]=useState('https://lin.ee/qQQMmYIt');
+  const [cardAltText,setCardAltText]=useState('Bhutan Center LINE card');
 
   async function copyAudienceText(text:string,label='ข้อมูล'){
     try{
@@ -236,6 +247,16 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
     };
   },[trackings,quotations,periodDays]);
 
+  const broadcastReady = useMemo(() => {
+    if (lineMode === 'text') return Boolean(message.trim());
+    if (lineMode === 'image') return /^https?:\/\//i.test(imageUrl.trim());
+    return Boolean(cardTitle.trim() && cardBody.trim() && cardButtonLabel.trim() && /^https?:\/\//i.test(cardButtonUrl.trim()));
+  }, [lineMode, message, imageUrl, cardTitle, cardBody, cardButtonLabel, cardButtonUrl]);
+
+  useEffect(() => {
+    if (!cardButtonUrl.trim()) setCardButtonUrl(lineOaUrl || 'https://lin.ee/qQQMmYIt');
+  }, [lineOaUrl]);
+
   async function savePrice(row:PriceRow, price:string, visible:boolean){
     const headers=await authHeaders();
     const res=await fetch('/api/website/prices',{method:'POST',headers,body:JSON.stringify({package_id:row.id,price_override_thb:price===''?null:Number(price),visible})});
@@ -280,13 +301,35 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   }
 
   async function broadcast(){
-    if(!message.trim())return;
-    if(!window.confirm('ยืนยันส่งข้อความนี้ไปยัง LINE Contact ที่เป็นเพื่อนทั้งหมด?'))return;
+    const payload:Record<string, any> = { mode: lineMode, name: broadcastName.trim() || 'LINE Broadcast' };
+    if(lineMode==='text'){
+      if(!message.trim()) return;
+      payload.text = message.trim();
+    }
+    if(lineMode==='image'){
+      if(!/^https?:\/\//i.test(imageUrl.trim())){ setNotice('กรุณาใส่ลิงก์รูปภาพแบบ https://'); return; }
+      payload.imageUrl = imageUrl.trim();
+      payload.previewImageUrl = (imagePreviewUrl.trim() || imageUrl.trim());
+      payload.caption = imageCaption.trim();
+    }
+    if(lineMode==='card'){
+      if(!cardTitle.trim() || !cardBody.trim() || !cardButtonLabel.trim() || !/^https?:\/\//i.test(cardButtonUrl.trim())){
+        setNotice('กรุณากรอกข้อมูลการ์ดให้ครบ และ CTA URL ต้องเป็น https://');
+        return;
+      }
+      payload.title = cardTitle.trim();
+      payload.body = cardBody.trim();
+      payload.buttonLabel = cardButtonLabel.trim();
+      payload.buttonUrl = cardButtonUrl.trim();
+      payload.imageUrl = cardImageUrl.trim();
+      payload.altText = cardAltText.trim();
+    }
+    if(!window.confirm('ยืนยันส่ง Broadcast นี้ไปยัง LINE Contact ที่เป็นเพื่อนทั้งหมด?')) return;
     const headers=await authHeaders();
-    const res=await fetch('/api/line/broadcast',{method:'POST',headers,body:JSON.stringify({text:message,name:'Manual Broadcast'})});
+    const res=await fetch('/api/line/broadcast',{method:'POST',headers,body:JSON.stringify(payload)});
     const json=await res.json().catch(()=>({}));
     setNotice(res.ok?`ส่งสำเร็จ ${json.sent||0} คน`:(json.error||'ส่งไม่สำเร็จ'));
-    if(res.ok)setMessage('');
+    if(res.ok){ setMessage(''); setImageUrl(''); setImagePreviewUrl(''); setImageCaption(''); }
   }
 
   return <div className="growth-shell unified-module-view">
@@ -540,11 +583,47 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
           <section className="growth-title"><span>LINE OA</span><h1>ช่องทางหลัก<br/>สำหรับปิดการขาย</h1><p>Website จะพาลูกค้าเข้า LINE พร้อมเก็บ Line Click ใน Funnel และ Webhook จะเก็บ LINE userId เมื่อมี Follow / Message</p></section>
           <div className="line-status-grid"><article className={summary?.lineConfigured?'ready':''}><i>{summary?.lineConfigured?<CheckCircle2/>:<Settings2/>}</i><div><strong>Messaging API</strong><span>{summary?.lineConfigured?'พร้อมใช้งาน':'รอตั้งค่า Channel Token / Secret'}</span></div></article><article className={summary?.lineBasicIdConfigured?'ready':''}><i>{summary?.lineBasicIdConfigured?<CheckCircle2/>:<Globe2/>}</i><div><strong>LINE OA Link</strong><span>{summary?.lineBasicIdConfigured?'ปุ่มหน้าเว็บพร้อมส่งเข้า LINE':'รอตั้งค่า LINE OA URL'}</span></div></article></div>
           <section className="marketing-config-card marketing-config-card--compact">
-            <div className="marketing-config-head"><div><span>PUBLIC LINE CTA</span><h2>ลิงก์เพิ่มเพื่อน LINE OA</h2><p>ใช้เป็นปลายทางสำรองของปุ่ม LINE บนเว็บไซต์ และแก้ไขได้จากหลังบ้าน</p></div><b className="ready">BHUTAN CENTER</b></div>
+            <div className="marketing-config-head"><div><span>PUBLIC LINE CTA</span><h2>ลิงก์เพิ่มเพื่อน LINE OA</h2><p>ใช้เป็นปลายทางหลักของปุ่ม LINE บนเว็บไซต์ และแก้ไขได้จากหลังบ้าน</p></div><b className="ready">BHUTAN CENTER</b></div>
             <div className="marketing-config-grid marketing-config-grid--line"><label><span>LINE OA Add Friend URL</span><input value={lineOaUrl} onChange={e=>setLineOaUrl(e.target.value)} placeholder="https://lin.ee/qQQMmYIt"/><small>ค่าปัจจุบันที่ตั้งไว้: https://lin.ee/qQQMmYIt</small></label></div>
             <div className="marketing-config-actions"><div><small>{integrations?.line?.source==='back_office'?'บันทึกจาก Back Office':integrations?.line?.source==='environment'?'อ่านจาก Vercel':'ใช้ Default ของ Bhutan Center'}</small></div><button onClick={saveLineSettings} disabled={currentUser.role!=='admin'}><Save/>บันทึกลิงก์ LINE</button></div>
           </section>
-          <section className="broadcast-card"><div><span>BROADCAST</span><h2>ส่งข้อความจากหลังบ้าน</h2><p>เวอร์ชันนี้ส่งไปยัง LINE Contacts ที่ระบบรู้จักและยังเป็นเพื่อนอยู่ทั้งหมด การแบ่ง Tag จะเพิ่มต่อใน CRM Phase ถัดไป</p></div><textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="พิมพ์ข้อความ Broadcast..." rows={7}/><button onClick={broadcast} disabled={!summary?.lineConfigured || !message.trim()}><Send/>ส่ง Broadcast</button></section>
+
+          <section className="line-broadcast-studio">
+            <div className="line-broadcast-studio__head">
+              <div><span>BROADCAST STUDIO</span><h2>ส่งข้อความ · รูปภาพ · การ์ด Flex + CTA</h2><p>รองรับ 3 รูปแบบหลักสำหรับบรอดแคสต์จากหลังบ้าน โดยรูปภาพต้องเป็นลิงก์สาธารณะ (https://...) เพื่อให้ LINE ดึงไปแสดงได้</p></div>
+              <div className="line-broadcast-studio__meta"><strong>{summary?.lineFriends ?? 0}</strong><small>เพื่อน LINE ที่พร้อมรับข้อความ</small></div>
+            </div>
+            <div className="line-broadcast-mode">
+              {[{id:'text',label:'ข้อความ'},{id:'image',label:'รูปภาพ'},{id:'card',label:'การ์ด / Flex + CTA'}].map((option)=><button key={option.id} className={lineMode===option.id?'active':''} onClick={()=>setLineMode(option.id as 'text'|'image'|'card')}>{option.label}</button>)}
+            </div>
+            <div className="line-broadcast-body">
+              <div className="line-broadcast-form">
+                <label><span>ชื่อ Broadcast</span><input value={broadcastName} onChange={e=>setBroadcastName(e.target.value)} placeholder="เช่น โปรเที่ยวภูฏานเดือนนี้"/></label>
+                {lineMode==='text' && <label><span>ข้อความ</span><textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="พิมพ์ข้อความ Broadcast ที่ต้องการส่ง..." rows={8}/><small>เหมาะกับการประกาศข่าว, โปรโมชัน, หรือชวนคุยต่อใน LINE</small></label>}
+                {lineMode==='image' && <>
+                  <label><span>Image URL</span><input value={imageUrl} onChange={e=>setImageUrl(e.target.value)} placeholder="https://.../image.jpg"/><small>ใช้ลิงก์รูปแบบสาธารณะเท่านั้น</small></label>
+                  <label><span>Preview URL (ถ้ามี)</span><input value={imagePreviewUrl} onChange={e=>setImagePreviewUrl(e.target.value)} placeholder="https://.../preview.jpg"/><small>ถ้าเว้นว่าง ระบบจะใช้ URL เดียวกับรูปหลัก</small></label>
+                  <label><span>ข้อความแนบใต้รูป (ไม่บังคับ)</span><textarea value={imageCaption} onChange={e=>setImageCaption(e.target.value)} placeholder="เช่น เปิดรับจองทริปส่วนตัว ทักหาเราได้เลย" rows={5}/></label>
+                </>}
+                {lineMode==='card' && <>
+                  <label><span>หัวข้อการ์ด</span><input value={cardTitle} onChange={e=>setCardTitle(e.target.value)} placeholder="เช่น Private Journey to Bhutan"/></label>
+                  <label><span>รายละเอียด</span><textarea value={cardBody} onChange={e=>setCardBody(e.target.value)} placeholder="อธิบายจุดขายแบบสั้น กระชับ อ่านง่าย" rows={6}/></label>
+                  <label><span>Hero Image URL (ไม่บังคับ)</span><input value={cardImageUrl} onChange={e=>setCardImageUrl(e.target.value)} placeholder="https://.../cover.jpg"/></label>
+                  <div className="line-broadcast-form-grid2">
+                    <label><span>ปุ่ม CTA</span><input value={cardButtonLabel} onChange={e=>setCardButtonLabel(e.target.value)} placeholder="คุยใน LINE"/></label>
+                    <label><span>CTA URL</span><input value={cardButtonUrl} onChange={e=>setCardButtonUrl(e.target.value)} placeholder="https://lin.ee/qQQMmYIt"/></label>
+                  </div>
+                  <label><span>Alt Text</span><input value={cardAltText} onChange={e=>setCardAltText(e.target.value)} placeholder="ข้อความอธิบายเวลา LINE แสดงแบบข้อความแทนการ์ด"/></label>
+                </>}
+              </div>
+              <div className="line-broadcast-preview">
+                <div className="line-broadcast-preview__label">ตัวอย่างก่อนส่ง</div>
+                <LineBroadcastPreview mode={lineMode} text={message} imageUrl={imageUrl} imageCaption={imageCaption} cardTitle={cardTitle} cardBody={cardBody} cardImageUrl={cardImageUrl} cardButtonLabel={cardButtonLabel}/>
+                <ul className="line-broadcast-tips"><li>ข้อความยาวเกินไปควรแบ่งเป็นหลายส่วนเพื่อให้อ่านง่าย</li><li>การ์ด Flex เหมาะกับโปรโมชัน แพ็กเกจ และปุ่ม CTA ชัดเจน</li><li>ถ้าส่งรูปภาพ ต้องใช้ URL ที่เปิดสาธารณะได้จริง</li></ul>
+              </div>
+            </div>
+            <div className="line-broadcast-actions"><small>{summary?.lineConfigured ? 'พร้อมส่งผ่าน Messaging API' : 'ยังส่งไม่ได้จนกว่าจะตั้งค่า LINE Channel Access Token / Secret ให้ครบ'}</small><button onClick={broadcast} disabled={!summary?.lineConfigured || !broadcastReady}><Send/>ส่ง Broadcast</button></div>
+          </section>
         </>}
 
         {tab==='seo' && <>
@@ -586,6 +665,12 @@ function LiveVisitorRow({visitor}:{visitor:LiveVisitor}){
 function AudiencePresetCard({item}:{item:AudiencePreset}){
   const tone=item.intent.toLowerCase().replace(/\s+/g,'-');
   return <article className={`audience-preset audience-preset--${tone}`}><div className="audience-preset-top"><small>{item.source}</small><b>{item.intent}</b></div><strong>{item.count}</strong><h3>{item.name}</h3><p>{item.description}</p><span>อนาคต: {item.futureMeta}</span></article>;
+}
+
+function LineBroadcastPreview({ mode, text, imageUrl, imageCaption, cardTitle, cardBody, cardImageUrl, cardButtonLabel }:{ mode:'text'|'image'|'card'; text:string; imageUrl:string; imageCaption:string; cardTitle:string; cardBody:string; cardImageUrl:string; cardButtonLabel:string; }){
+  if(mode==='text') return <div className="line-preview-bubble"><p>{text.trim() || 'ข้อความ Broadcast จะขึ้นตรงนี้'}</p></div>;
+  if(mode==='image') return <div className="line-preview-card"><div className="line-preview-image">{imageUrl.trim()?<img src={imageUrl.trim()} alt="LINE preview"/>:<span>IMAGE PREVIEW</span>}</div><div className="line-preview-copy"><strong>รูปภาพ Broadcast</strong><p>{imageCaption.trim() || 'ข้อความแนบใต้รูปจะขึ้นตรงนี้'}</p></div></div>;
+  return <div className="line-preview-card"><div className="line-preview-image">{cardImageUrl.trim()?<img src={cardImageUrl.trim()} alt="Flex preview"/>:<span>FLEX HERO IMAGE</span>}</div><div className="line-preview-copy"><strong>{cardTitle.trim() || 'หัวข้อการ์ด'}</strong><p>{cardBody.trim() || 'รายละเอียดการ์ดจะขึ้นตรงนี้'}</p><button type="button">{cardButtonLabel.trim() || 'CTA Button'}</button></div></div>;
 }
 
 function WebsitePriceRow({row,onSave}:{row:PriceRow;onSave:(row:PriceRow,price:string,visible:boolean)=>void}){

@@ -57,37 +57,47 @@ export function getAttribution(){
   }
 }
 
-export async function trackPublicEvent(eventName:string, extra:Record<string,unknown>={}){
+function buildPublicEventPayload(eventName:string, extra:Record<string,unknown>={}){
+  const { visitorId, sessionId } = getVisitorIds();
+  const attr=getAttribution();
+  return {
+    visitor_id: visitorId,
+    session_id: sessionId,
+    event_name:eventName,
+    page_path: window.location.pathname,
+    package_slug: extra.package_slug || null,
+    source: attr.source || null,
+    campaign: attr.campaign || null,
+    metadata: {
+      ...extra,
+      title: document.title || '',
+      medium: attr.medium || null,
+      term: attr.term || null,
+      content: attr.content || null,
+      gclid: attr.gclid || null,
+      gbraid: attr.gbraid || null,
+      wbraid: attr.wbraid || null,
+      dclid: attr.dclid || null,
+      referrer: attr.referrer || null,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      visibility: document.visibilityState,
+    },
+  };
+}
+
+function sendPublicEvent(eventName:string, extra:Record<string,unknown>={}){
   try {
-    const { visitorId, sessionId } = getVisitorIds();
-    const attr=getAttribution();
-    const payload = {
-      visitor_id: visitorId,
-      session_id: sessionId,
-      event_name:eventName,
-      page_path: window.location.pathname,
-      package_slug: extra.package_slug || null,
-      source: attr.source || null,
-      campaign: attr.campaign || null,
-      metadata: {
-        ...extra,
-        title: document.title || '',
-        medium: attr.medium || null,
-        term: attr.term || null,
-        content: attr.content || null,
-        gclid: attr.gclid || null,
-        gbraid: attr.gbraid || null,
-        wbraid: attr.wbraid || null,
-        dclid: attr.dclid || null,
-        referrer: attr.referrer || null,
-        viewport: `${window.innerWidth}x${window.innerHeight}`,
-        visibility: document.visibilityState,
-      },
-    };
-    const body=JSON.stringify(payload);
-    navigator.sendBeacon?.('/api/events', new Blob([body], {type:'application/json'}))
-      || fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true}).catch(()=>null);
+    const body=JSON.stringify(buildPublicEventPayload(eventName,extra));
+    if(navigator.sendBeacon){
+      const accepted=navigator.sendBeacon('/api/events', new Blob([body], {type:'application/json'}));
+      if(accepted) return;
+    }
+    fetch('/api/events',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true}).catch(()=>null);
   } catch {}
+}
+
+export async function trackPublicEvent(eventName:string, extra:Record<string,unknown>={}){
+  sendPublicEvent(eventName,extra);
 }
 
 const GOOGLE_TAG_ID = process.env.NEXT_PUBLIC_GOOGLE_TAG_ID || '';
@@ -241,17 +251,29 @@ export default function AnalyticsTracker(){
       ? (new URLSearchParams(window.location.search).get('slug') || pathname.split('/').filter(Boolean).pop() || '')
       : '';
 
-    trackPublicEvent('page_view', slug ? {package_slug:slug} : {});
+    const presenceExtra = slug ? {package_slug:slug} : {};
+
+    // Presence is intentionally separate from analytics. It is sent immediately
+    // on entry and an explicit offline signal is sent when the page is closed.
+    // This makes ONLINE NOW react in ~2 seconds instead of waiting for a long
+    // heartbeat window.
+    sendPublicEvent('heartbeat', {...presenceExtra,presence:'online'});
+    trackPublicEvent('page_view', presenceExtra);
     if (slug) trackPublicEvent('package_view',{ package_slug:slug });
 
     const heartbeat=()=>{
-      if(document.visibilityState!=='visible') return;
-      trackPublicEvent('heartbeat', slug ? {package_slug:slug} : {});
+      // Keep the session alive even when the user switches tabs. pagehide /
+      // beforeunload are responsible for marking a closed page offline.
+      sendPublicEvent('heartbeat', {...presenceExtra,presence:'online'});
     };
-    heartbeat();
-    const timer=window.setInterval(heartbeat,30_000);
-    const onVisibility=()=>{ if(document.visibilityState==='visible') heartbeat(); };
+    const timer=window.setInterval(heartbeat,6_000);
+    const onVisibility=()=>{
+      if(document.visibilityState==='visible') sendPublicEvent('heartbeat',{...presenceExtra,presence:'online'});
+    };
+    const goOffline=()=>sendPublicEvent('heartbeat',{...presenceExtra,presence:'offline'});
     document.addEventListener('visibilitychange',onVisibility);
+    window.addEventListener('pagehide',goOffline);
+    window.addEventListener('beforeunload',goOffline);
 
     trackMeta(pathname,slug);
     trackGooglePage(pathname,slug);
@@ -259,6 +281,8 @@ export default function AnalyticsTracker(){
     return()=>{
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange',onVisibility);
+      window.removeEventListener('pagehide',goOffline);
+      window.removeEventListener('beforeunload',goOffline);
     };
   },[pathname]);
   return null;

@@ -18,6 +18,15 @@ interface LiveVisitor {
   lastSeenSeconds:number;
   eventName:string;
 }
+interface RealtimeSnapshot {
+  liveSessions:number;
+  liveVisitors:LiveVisitor[];
+  liveWindowSeconds:number;
+  heartbeatSeconds:number;
+  pollSeconds:number;
+  storageReady?:boolean;
+  error?:{code:string;message:string}|null;
+}
 interface Summary {
   periodDays:number;
   trackingConfigured:boolean;
@@ -98,6 +107,7 @@ const titleByTab:Record<MarketingTab,string> = {
 export function GrowthWorkspace({ currentUser, packages, trackings, quotations, onBack, onLogout }:{ currentUser:User; packages:TourPackage[]; trackings:CustomerTracking[]; quotations:QuotationRecord[]; onBack:()=>void; onLogout:()=>void; }){
   const [tab,setTab]=useState<MarketingTab>(()=>marketingTabFromPath(typeof window!=='undefined'?window.location.pathname:'/admin/marketing'));
   const [summary,setSummary]=useState<Summary|null>(null);
+  const [realtime,setRealtime]=useState<RealtimeSnapshot|null>(null);
   const [audience,setAudience]=useState<AudienceData|null>(null);
   const [prices,setPrices]=useState<PriceRow[]>([]);
   const [loading,setLoading]=useState(false);
@@ -118,6 +128,16 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
     window.addEventListener('popstate',handlePopState);
     return()=>window.removeEventListener('popstate',handlePopState);
   },[]);
+
+  async function refreshRealtime(){
+    try {
+      const headers=await authHeaders();
+      const res=await fetch('/api/marketing/realtime',{headers,cache:'no-store'});
+      if(!res.ok) return;
+      const data=await res.json() as RealtimeSnapshot;
+      setRealtime(data);
+    } catch {}
+  }
 
   async function refresh(){
     setLoading(true); setNotice('');
@@ -149,8 +169,15 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   }
   useEffect(()=>{ refresh(); },[periodDays]);
   useEffect(()=>{
+    if(tab!=='realtime' && tab!=='overview') return;
+    refreshRealtime();
+    const intervalMs=tab==='realtime'?2_000:5_000;
+    const timer=window.setInterval(()=>{ refreshRealtime(); },intervalMs);
+    return()=>window.clearInterval(timer);
+  },[tab]);
+  useEffect(()=>{
     if(tab!=='realtime') return;
-    const timer=window.setInterval(()=>{ refresh(); },15_000);
+    const timer=window.setInterval(()=>{ refresh(); },30_000);
     return()=>window.clearInterval(timer);
   },[tab,periodDays]);
 
@@ -229,7 +256,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
         {tab==='overview' && <>
           <section className="growth-title"><span>MARKETING OVERVIEW</span><h1>เห็นตั้งแต่คนเข้าเว็บ<br/>จนถึงการปิดการขาย</h1><p>Website, LINE, Customer Tracking และเอกสารขายอยู่ใน Funnel เดียวกัน โดยทั้ง Meta/Facebook และ Google Analytics/Ads เตรียมจุดเชื่อมไว้แล้วและยังไม่ส่งข้อมูลออกจนกว่าจะใส่ค่าเชื่อมต่อ</p></section>
           <div className="growth-kpi-grid">
-            <article><small>ONLINE NOW</small><strong>{summary?.liveSessions ?? 0}</strong><span>คนบนเว็บ 5 นาทีล่าสุด</span></article>
+            <article><small>ONLINE NOW</small><strong>{realtime?.liveSessions ?? summary?.liveSessions ?? 0}</strong><span>กำลังอยู่บนเว็บไซต์ตอนนี้</span></article>
             <article><small>VISITORS · {periodDays}D</small><strong>{summary?.uniqueVisitors ?? 0}</strong><span>ผู้เข้าชมไม่ซ้ำ</span></article>
             <article><small>PACKAGE INTEREST</small><strong>{summary?.packageViewVisitors ?? 0}</strong><span>คนที่เปิดดูแพ็กเกจ</span></article>
             <article><small>LINE INTENT</small><strong>{summary?.lineClickVisitors ?? 0}</strong><span>คนที่กดไป LINE OA</span></article>
@@ -252,22 +279,22 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
         </>}
 
         {tab==='realtime' && <>
-          <section className="growth-title realtime-title"><span>LIVE WEBSITE</span><h1>ตอนนี้มีคนอยู่บนเว็บ<br/>และกำลังดูอะไรอยู่</h1><p>ระบบส่ง heartbeat ทุก 30 วินาทีจากหน้า Public และหน้านี้รีเฟรชอัตโนมัติทุก 15 วินาที โดยนับเฉพาะ session ที่ยัง active ในช่วงประมาณ {summary?.liveWindowSeconds??90} วินาทีล่าสุด</p></section>
+          <section className="growth-title realtime-title"><span>LIVE WEBSITE</span><h1>ตอนนี้มีคนอยู่บนเว็บ<br/>และกำลังดูอะไรอยู่</h1><p>เข้าเว็บแล้วส่งสถานะทันที · ปิดหน้าเว็บแล้วส่ง Offline ทันที · heartbeat ทุก {realtime?.heartbeatSeconds??6} วินาที และหลังบ้านอัปเดตทุก {realtime?.pollSeconds??2} วินาที โดยมี fallback ตัด session ที่เงียบเกินประมาณ {realtime?.liveWindowSeconds??18} วินาที</p></section>
           {summary && (!summary.trackingConfigured || !summary.trackingStorageReady) && <div className="tracking-health tracking-health--error">
             <Wifi/><div><strong>Realtime Tracking ยังไม่พร้อม</strong><span>{!summary.trackingConfigured ? 'ยังไม่พบค่า Supabase สำหรับ Server API ใน Vercel' : summary.trackingError?.code==='42P01' ? 'ยังไม่มีตาราง website_events — ให้รัน SQL V13.5.1 Realtime Repair' : summary.trackingError?.code==='42501' ? 'RLS ยังไม่อนุญาตให้ระบบอ่าน Realtime — ให้รัน SQL V13.5.1 Realtime Repair' : `Database: ${summary.trackingError?.code||'not ready'} ${summary.trackingError?.message||''}`}</span></div>
           </div>}
           {summary?.trackingStorageReady && <div className="tracking-health tracking-health--ok"><CheckCircle2/><span>Tracking พร้อม · {summary.trackingMode==='service_role'?'Service Role':'RLS fallback'} · หน้า /admin ไม่นับเป็นผู้เข้าชมเว็บไซต์</span></div>}
           <div className="realtime-hero-grid">
-            <article className="realtime-online-card"><div className="live-pulse"><i/><Radio/></div><small>ONLINE NOW</small><strong>{summary?.liveSessions??0}</strong><span>คนกำลังอยู่บนเว็บไซต์</span><p>อัปเดตอัตโนมัติ · ไม่ต้องรู้ชื่อผู้เข้าชม</p></article>
-            <article><Wifi/><div><small>TRACKING</small><strong>Heartbeat 30s</strong><span>เห็นคนที่ยังเปิดเว็บอยู่จริง ไม่ใช่แค่ PageView ล่าสุด</span></div></article>
+            <article className="realtime-online-card"><div className="live-pulse"><i/><Radio/></div><small>ONLINE NOW</small><strong>{realtime?.liveSessions??summary?.liveSessions??0}</strong><span>คนกำลังอยู่บนเว็บไซต์</span><p>FAST LIVE · เข้า/ออกอัปเดตประมาณ 0–2 วินาที</p></article>
+            <article><Wifi/><div><small>TRACKING</small><strong>Heartbeat {realtime?.heartbeatSeconds??6}s</strong><span>มี Online / Offline signal แยกจาก Analytics โดยตรง</span></div></article>
             <article><MonitorSmartphone/><div><small>DEVICE</small><strong>Desktop / Mobile</strong><span>ดูได้ว่าผู้ชมกำลังเข้าจากอุปกรณ์แบบไหน</span></div></article>
             <article><Eye/><div><small>LIVE PAGE</small><strong>Page + Package</strong><span>เห็นหน้าที่กำลังดูและแพ็กเกจที่สนใจ</span></div></article>
           </div>
           <section className="realtime-table-card">
-            <div className="realtime-table-head"><div><span>ACTIVE SESSIONS</span><h2>ผู้เข้าชมที่กำลังอยู่บนเว็บ</h2></div><small><i/> LIVE · AUTO REFRESH 15s</small></div>
-            {(summary?.liveVisitors?.length??0)>0 ? <div className="realtime-table">
+            <div className="realtime-table-head"><div><span>ACTIVE SESSIONS</span><h2>ผู้เข้าชมที่กำลังอยู่บนเว็บ</h2></div><small><i/> LIVE · AUTO REFRESH {realtime?.pollSeconds??2}s</small></div>
+            {((realtime?.liveVisitors||summary?.liveVisitors||[]).length)>0 ? <div className="realtime-table">
               <div className="realtime-row realtime-row--head"><span>ผู้เข้าชม</span><span>หน้าที่กำลังดู</span><span>ที่มา</span><span>อุปกรณ์</span><span>ล่าสุด</span></div>
-              {(summary?.liveVisitors||[]).map((visitor,index)=><LiveVisitorRow key={`${visitor.sessionId}-${index}`} visitor={visitor}/>) }
+              {(realtime?.liveVisitors||summary?.liveVisitors||[]).map((visitor,index)=><LiveVisitorRow key={`${visitor.sessionId}-${index}`} visitor={visitor}/>) }
             </div> : <div className="realtime-empty"><Radio/><strong>ตอนนี้ยังไม่มี Active Session</strong><span>เมื่อมีคนเปิดหน้าเว็บไซต์ ระบบจะแสดงที่นี่ภายในไม่กี่วินาที</span></div>}
           </section>
         </>}

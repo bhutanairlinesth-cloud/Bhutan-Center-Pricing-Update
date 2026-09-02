@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, CheckCircle2, CircleDot, Eye, Globe2, MonitorSmartphone, MousePointerClick,
+  Activity, CheckCircle2, CircleDot, Copy, Eye, Globe2, MonitorSmartphone, MousePointerClick,
   Megaphone, Radio, RefreshCw, Save, Send, Server, Settings2, Tags, Target, UserCheck, UsersRound, Wifi,
 } from 'lucide-react';
 import { CustomerTracking, QuotationRecord, TourPackage, User } from '../types';
@@ -68,6 +68,28 @@ interface Summary {
 interface PriceRow { id:string; name:string; nights:number; override:null|{visible:boolean;price_override_thb:number|null}; }
 interface AudiencePreset { id:string; name:string; count:number; source:string; intent:string; futureMeta:string; description:string; }
 interface AudienceData { days:number; tagStorageReady:boolean; sources:{website:boolean;line:boolean;crm:boolean;meta:boolean}; audiences:AudiencePreset[]; tags:{tag:string;count:number;source:'website'|'line'}[]; note:string; }
+
+interface MetaAudienceRecipe {
+  id:string;
+  name:string;
+  priority:'เริ่มก่อน'|'แนะนำ'|'High Intent'|'Phase 2';
+  source:string;
+  retention:string;
+  rule:string;
+  use:string;
+  exclude?:string;
+  note?:string;
+}
+
+const META_AUDIENCE_RECIPES:MetaAudienceRecipe[]=[
+  {id:'all_visitors_30',name:'BC | Website Visitors | 30D',priority:'เริ่มก่อน',source:'Website',retention:'30 วัน',rule:'Include: All website visitors',use:'Retarget คนที่เคยเข้าเว็บด้วย Content, Package, High Season',exclude:'แยก High Intent ออกไปยิงชุดเฉพาะได้'},
+  {id:'package_viewers_30',name:'BC | Package Viewers | 30D',priority:'เริ่มก่อน',source:'Website Event',retention:'30 วัน',rule:'Include Event: ViewContent',use:'ยิงแพ็กเกจ, รีวิว, จุดเด่นทริป, ราคาเริ่มต้น',exclude:'แนะนำ Exclude: BC | LINE Intent | 14D'},
+  {id:'line_intent_14',name:'BC | LINE Intent | 14D',priority:'High Intent',source:'Website Event',retention:'14 วัน',rule:'Include Event: LineAddFriendClick',use:'กลุ่ม Intent สูง — CTA ให้ทัก LINE, ปรึกษาทริป, เช็กวันเดินทาง',note:'Event นี้มาจากการกดปุ่ม LINE บน BhutanCenter.org ไม่ใช่ LINE userId'},
+  {id:'lead_30',name:'BC | Website Leads | 30D',priority:'แนะนำ',source:'Website Event',retention:'30 วัน',rule:'Include Event: Lead',use:'Follow-up คนที่ส่งฟอร์มแล้ว แต่ยังไม่ปิดการขาย',exclude:'ตอนสร้าง Acquisition Campaign สามารถใช้กลุ่มนี้เป็น Exclusion'},
+  {id:'visa_interest_30',name:'BC | Visa Interest | 30D',priority:'แนะนำ',source:'Website URL',retention:'30 วัน',rule:'Include people who visited URL containing: /visa',use:'ยิง Content เรื่อง Visa, SDF, ขั้นตอนเดินทาง แล้วพากลับเข้า Package/LINE'},
+  {id:'customer_exclusion',name:'BC | Confirmed-Paid | Exclusion',priority:'Phase 2',source:'CRM / Customer List',retention:'ตามข้อมูลลูกค้า',rule:'Customer List จากข้อมูลติดต่อที่ได้รับอนุญาต หรือ Purchase event เมื่อเชื่อม Payment',use:'Exclude ลูกค้าที่ซื้อแล้วออกจากแคมเปญหาลูกค้าใหม่',note:'ไม่ใช้ LINE userId ส่งเข้า Meta โดยตรง — Phase ต่อไปค่อย Sync จาก CRM อย่างปลอดภัย'},
+];
+
 interface IntegrationSettings { storageReady:boolean; storageError?:{code:string;message:string}|null; meta:{enabled:boolean;pixelId:string;pixelIdMasked:string|null;testEventCode:string;testEventConfigured:boolean;capiConfigured:boolean;accessTokenMasked:string|null;secretStorageReady:boolean;tokenSource:string;source:string;updatedAt:string|null;lastTestAt:string|null;lastTestOk:boolean|null;lastTestMessage:string|null;lastTestEventsReceived:number}; line:{enabled:boolean;url:string;source:string;updatedAt:string|null}; }
 
 type MarketingTab = 'overview' | 'realtime' | 'audience' | 'funnel' | 'meta' | 'google' | 'website' | 'line' | 'seo';
@@ -120,8 +142,17 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   const [metaEnabled,setMetaEnabled]=useState(false);
   const [metaAccessToken,setMetaAccessToken]=useState('');
   const [metaTesting,setMetaTesting]=useState(false);
-  const [metaTestResult,setMetaTestResult]=useState<{ok:boolean;message:string;eventsReceived?:number;fbtraceId?:string|null}|null>(null);
+  const [metaTestResult,setMetaTestResult]=useState<{ok:boolean;message:string;eventsReceived?:number;fbtraceId?:string|null;diagnostics?:{graphVersion?:string;datasetId?:string;testEventCodeUsed?:string;clientIpDetected?:boolean;clientIpMasked?:string;userAgentDetected?:boolean;eventSourceUrl?:string;partnerAgent?:string}}|null>(null);
   const [lineOaUrl,setLineOaUrl]=useState('https://lin.ee/qQQMmYIt');
+
+  async function copyAudienceText(text:string,label='ข้อมูล'){
+    try{
+      await navigator.clipboard.writeText(text);
+      setNotice(`คัดลอก ${label} แล้ว`);
+    }catch{
+      setNotice(`คัดลอกไม่สำเร็จ · ${text}`);
+    }
+  }
 
   useEffect(()=>{
     function handlePopState(){
@@ -232,7 +263,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
       const headers=await authHeaders();
       const res=await fetch('/api/marketing/meta-test',{method:'POST',headers,body:JSON.stringify({})});
       const json=await res.json().catch(()=>({}));
-      const result={ok:Boolean(res.ok&&json.ok),message:String(json.message||json.error||'Meta Test Event ไม่สำเร็จ'),eventsReceived:Number(json.eventsReceived||0),fbtraceId:json.fbtraceId||null};
+      const result={ok:Boolean(res.ok&&json.ok),message:String(json.message||json.error||'Meta Test Event ไม่สำเร็จ'),eventsReceived:Number(json.eventsReceived||0),fbtraceId:json.fbtraceId||null,diagnostics:json.diagnostics||undefined};
       setMetaTestResult(result);
       setNotice(result.ok?result.message:`Test Event ไม่ผ่าน: ${result.message}`);
       await refresh();
@@ -325,8 +356,49 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
             <article className="ready"><Globe2/><div><small>DATA SOURCE</small><strong>Website</strong><span>PageView · Package · Returning · LINE Click</span></div><b>พร้อม</b></article>
             <article className={audience?.sources.line?'ready':''}><Megaphone/><div><small>DATA SOURCE</small><strong>LINE OA</strong><span>Friend · Message · Tags · Website Match</span></div><b>{audience?.sources.line?'พร้อม':'รอข้อมูล'}</b></article>
             <article className="ready"><UsersRound/><div><small>DATA SOURCE</small><strong>Customer Tracking</strong><span>Quotation · Confirmed · Paid · Exclusion</span></div><b>พร้อม</b></article>
-            <article><Target/><div><small>DESTINATION</small><strong>Meta / Google Ads</strong><span>เตรียมไว้ · ยังไม่ Sync Audience ออก</span></div><b>รอเชื่อม</b></article>
+            <article className={integrations?.meta?.enabled?'ready':''}><Target/><div><small>DESTINATION</small><strong>Meta / Facebook</strong><span>{integrations?.meta?.enabled?'Pixel/CAPI เชื่อมแล้ว · พร้อมสร้าง Custom Audience':'เตรียมไว้ · ยังไม่ Sync Audience ออก'}</span></div><b>{integrations?.meta?.enabled?'พร้อม':'รอเชื่อม'}</b></article>
           </div>
+
+          <section className="meta-audience-playbook">
+            <div className="meta-audience-playbook-head">
+              <div><span>META CUSTOM AUDIENCE PLAYBOOK</span><h2>Audience ที่แนะนำให้สร้างใน Meta</h2><p>ใช้ Event ที่ Bhutan Center ยิงอยู่แล้วจาก Pixel/CAPI แล้วสร้าง Audience ใน Meta Ads Manager เองตามสูตรด้านล่าง ช่วงวันเป็นค่าเริ่มต้นที่แนะนำและปรับได้ตามแคมเปญจริง</p></div>
+              <div className={`meta-audience-connection ${integrations?.meta?.enabled&&integrations?.meta?.capiConfigured?'ready':''}`}><i/><div><small>META STATUS</small><strong>{integrations?.meta?.enabled&&integrations?.meta?.capiConfigured?'Pixel + CAPI พร้อม':'ยังเชื่อมไม่ครบ'}</strong><span>{metaPixelId?`Dataset ${metaPixelId}`:'รอ Pixel / Dataset ID'}</span></div></div>
+            </div>
+
+            <div className="meta-audience-steps">
+              <div><b>1</b><span><strong>เปิด Meta Ads Manager</strong><small>ไปที่ All tools → Audiences</small></span></div>
+              <div><b>2</b><span><strong>Create Audience</strong><small>เลือก Custom Audience → Website</small></span></div>
+              <div><b>3</b><span><strong>เลือก Bhutan Center Dataset</strong><small>{metaPixelId||'1574103264254056'} แล้วเลือก Rule ตามสูตรด้านล่าง</small></span></div>
+              <div><b>4</b><span><strong>ตั้ง Retention + ชื่อ</strong><small>Copy ชื่อ Audience จากหลังบ้านได้เลย</small></span></div>
+              <div><b>5</b><span><strong>Create Audience</strong><small>รอ Meta Populate แล้วนำไป Include / Exclude ที่ Ad Set</small></span></div>
+            </div>
+
+            <div className="meta-audience-recipe-grid">
+              {META_AUDIENCE_RECIPES.map(recipe=><article key={recipe.id} className={`meta-audience-recipe ${recipe.priority==='High Intent'?'hot':''} ${recipe.priority==='Phase 2'?'phase2':''}`}>
+                <div className="meta-audience-recipe-top"><span>{recipe.priority}</span><b>{recipe.retention}</b></div>
+                <h3>{recipe.name}</h3>
+                <div className="meta-audience-recipe-source"><small>SOURCE</small><strong>{recipe.source}</strong></div>
+                <div className="meta-audience-rule"><small>RULE ใน META</small><code>{recipe.rule}</code></div>
+                <p><strong>ใช้สำหรับ:</strong> {recipe.use}</p>
+                {recipe.exclude&&<p className="meta-audience-exclude"><strong>Exclude:</strong> {recipe.exclude}</p>}
+                {recipe.note&&<p className="meta-audience-note-small">{recipe.note}</p>}
+                <div className="meta-audience-recipe-actions"><button onClick={()=>void copyAudienceText(recipe.name,'ชื่อ Audience')}><Copy/>คัดลอกชื่อ</button><button onClick={()=>void copyAudienceText(`${recipe.name}\nSource: ${recipe.source}\nRetention: ${recipe.retention}\nRule: ${recipe.rule}\nUse: ${recipe.use}${recipe.exclude?`\nExclude: ${recipe.exclude}`:''}`,'สูตร Audience')}><Copy/>คัดลอกสูตร</button></div>
+              </article>)}
+            </div>
+
+            <div className="meta-audience-campaign-recipes">
+              <div className="retargeting-section-title"><div><span>CAMPAIGN RECIPES</span><h2>เอา Audience ไปใช้ยังไง</h2></div><small>STARTER SET</small></div>
+              <div className="meta-audience-campaign-grid">
+                <article><b>01</b><div><strong>Warm Retarget</strong><span>Include: Website Visitors 30D</span><small>Exclude: LINE Intent 14D เพื่อแยกคน Intent สูงไปอีกชุด</small></div></article>
+                <article><b>02</b><div><strong>Package Retarget</strong><span>Include: Package Viewers 30D</span><small>ใช้ Creative แพ็กเกจ / รีวิว / High Season / ราคาเริ่มต้น</small></div></article>
+                <article className="hot"><b>03</b><div><strong>High Intent</strong><span>Include: LINE Intent 14D</span><small>CTA ตรงไป LINE OA · ปรึกษาทริป · เช็กวันเดินทาง</small></div></article>
+                <article><b>04</b><div><strong>Acquisition Exclusion</strong><span>Exclude: Leads / Confirmed-Paid</span><small>ลดการยิงโฆษณาหาลูกค้าใหม่ใส่คนที่เข้ากระบวนการแล้ว</small></div></article>
+              </div>
+            </div>
+
+            <div className="meta-audience-warning"><Target/><div><strong>LINE Audience ใช้ยังไงกับ Meta</strong><span>LINE Friend / LINE Engaged ใช้ทำ Segmentation และ Broadcast ภายใน CRM ของเราได้ แต่ไม่ส่ง LINE userId เข้า Meta โดยตรง สำหรับ Meta ให้ใช้ Website Event เช่น LineAddFriendClick หรือ Phase 2 ใช้ Customer List จาก email/phone ที่มีสิทธิ์ใช้งานอย่างเหมาะสม</span></div></div>
+          </section>
+
           <section className="audience-library">
             <div className="retargeting-section-title"><div><span>AUDIENCE LIBRARY</span><h2>กลุ่มที่ระบบสร้างให้จากพฤติกรรม</h2></div><small>{periodDays} DAYS</small></div>
             <div className="audience-preset-grid">
@@ -411,7 +483,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
               <label className="marketing-toggle-row"><input type="checkbox" checked={metaEnabled} onChange={e=>setMetaEnabled(e.target.checked)}/><span><strong>เปิดใช้งาน Browser Pixel + CAPI</strong><small>เมื่อเปิด ระบบจะยิง Browser Pixel และ Server Event คู่กัน พร้อม Event ID สำหรับ Deduplication</small></span></label>
             </div>
             <div className="marketing-config-actions marketing-config-actions--meta"><div><small>Pixel Source: {integrations?.meta?.source==='back_office'?'Back Office':integrations?.meta?.source==='environment'?'Vercel Environment':'ยังไม่ได้ตั้งค่า'} · Token: {integrations?.meta?.tokenSource==='back_office'?'Encrypted Back Office':integrations?.meta?.tokenSource==='environment'?'Vercel Environment':'ยังไม่มี'}</small><span>Pixel ID {metaPixelId||'—'} · CAPI {integrations?.meta?.capiConfigured?'พร้อม':'ยังไม่พร้อม'} · Test Code {metaTestEventCode?'พร้อม':'ยังไม่มี'}</span></div><div className="marketing-config-buttons"><button className="secondary" onClick={sendMetaTestEvent} disabled={currentUser.role!=='admin'||metaTesting||!metaPixelId||!metaTestEventCode}><Send/>{metaTesting?'กำลังส่ง…':'ส่ง Test Event'}</button><button onClick={()=>void saveMetaSettings()} disabled={currentUser.role!=='admin'}><Save/>บันทึก Meta / CAPI</button></div></div>
-            {(metaTestResult || integrations?.meta?.lastTestAt) && <div className={`meta-test-result ${(metaTestResult?.ok ?? integrations?.meta?.lastTestOk)?'success':'error'}`}><div><Activity/><strong>{(metaTestResult?.ok ?? integrations?.meta?.lastTestOk)?'Meta รับ Test Event แล้ว':'Test Event ล่าสุดยังไม่ผ่าน'}</strong></div><span>{metaTestResult?.message || integrations?.meta?.lastTestMessage || '—'}</span><small>{(metaTestResult?.fbtraceId)?`fbtrace_id: ${metaTestResult.fbtraceId}`:(integrations?.meta?.lastTestAt?`ล่าสุด ${new Date(integrations.meta.lastTestAt).toLocaleString('th-TH')}`:'')}</small></div>}
+            {(metaTestResult || integrations?.meta?.lastTestAt) && <div className={`meta-test-result ${(metaTestResult?.ok ?? integrations?.meta?.lastTestOk)?'success':'error'}`}><div><Activity/><strong>{(metaTestResult?.ok ?? integrations?.meta?.lastTestOk)?'Meta รับ Test Event แล้ว':'Test Event ล่าสุดยังไม่ผ่าน'}</strong></div><span>{metaTestResult?.message || integrations?.meta?.lastTestMessage || '—'}</span><small>{(metaTestResult?.fbtraceId)?`fbtrace_id: ${metaTestResult.fbtraceId}`:(integrations?.meta?.lastTestAt?`ล่าสุด ${new Date(integrations.meta.lastTestAt).toLocaleString('th-TH')}`:'')}</small>{metaTestResult?.diagnostics && <small>Graph {metaTestResult.diagnostics.graphVersion||'—'} · Dataset {metaTestResult.diagnostics.datasetId||'—'} · Test {metaTestResult.diagnostics.testEventCodeUsed||'—'} · IP {metaTestResult.diagnostics.clientIpDetected?`OK ${metaTestResult.diagnostics.clientIpMasked||''}`:'MISSING'} · UA {metaTestResult.diagnostics.userAgentDetected?'OK':'MISSING'}</small>}</div>}
             {currentUser.role!=='admin' && <div className="marketing-config-note">เฉพาะ Administrator เท่านั้นที่เปลี่ยน Tracking Settings ได้</div>}
           </section>
 

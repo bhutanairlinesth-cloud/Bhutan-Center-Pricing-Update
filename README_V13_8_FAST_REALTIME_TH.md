@@ -1,6 +1,6 @@
 # Bhutan Center Unified V13.8 — Fast Realtime Visitors
 
-ปรับ ONLINE NOW ให้ตอบสนองเร็วขึ้นแบบเดียวกับระบบไร่อมร
+ปรับ ONLINE NOW ให้ตอบสนองเร็วขึ้นสำหรับ Bhutan Center
 
 ## สิ่งที่เปลี่ยน
 - เปิดหน้า Public → ส่ง Online signal ทันที

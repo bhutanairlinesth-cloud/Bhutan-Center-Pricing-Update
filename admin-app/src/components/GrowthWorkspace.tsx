@@ -417,7 +417,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
         </>}
 
         {tab==='funnel' && <>
-          <section className="growth-title"><span>FUNNEL & RETARGETING</span><h1>รู้ว่าใครหลุดตรงไหน<br/>แล้วตามกลับมาได้</h1><p>โครงนี้ใช้แนวเดียวกับระบบไร่อมร แต่ปรับให้เข้ากับการขายทัวร์: ไม่บังคับซื้อบนเว็บ และใช้ LINE + Customer Tracking เป็นจุดเปลี่ยนจากผู้ชมเป็นลูกค้าที่รู้จักตัวตน</p></section>
+          <section className="growth-title"><span>FUNNEL & RETARGETING</span><h1>รู้ว่าใครหลุดตรงไหน<br/>แล้วตามกลับมาได้</h1><p>โครงนี้ออกแบบสำหรับการขายทัวร์ของ Bhutan Center โดยไม่บังคับซื้อบนเว็บ และใช้ LINE + Customer Tracking เป็นจุดเปลี่ยนจากผู้ชมเป็นลูกค้าที่รู้จักตัวตน</p></section>
 
           <section className="retargeting-funnel-panel">
             <div className="retargeting-panel-head"><div><span>CONVERSION JOURNEY</span><h2>Bhutan Tour Funnel</h2></div><div className="retargeting-legend"><i className="ready"/>First-party พร้อมเก็บ <i/>Meta / Google Ads รอเชื่อม</div></div>
@@ -453,7 +453,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
         </>}
 
         {tab==='meta' && <>
-          <section className="growth-title"><span>FACEBOOK / META</span><h1>ตั้งค่า Meta Pixel<br/>จากหลังบ้านได้เลย</h1><p>กรอก Pixel ID และ Test Event Code ได้จากหน้านี้เหมือนระบบไร่อมร ไม่ต้องกลับไปแก้ Vercel ทุกครั้ง ค่าใหม่จะถูกใช้กับหน้า Public โดยอัตโนมัติหลังบันทึก</p></section>
+          <section className="growth-title"><span>FACEBOOK / META</span><h1>ตั้งค่า Meta Pixel<br/>จากหลังบ้านได้เลย</h1><p>กรอก Pixel ID และ Test Event Code ได้จากหลังบ้านโดยตรง ไม่ต้องกลับไปแก้ Vercel ทุกครั้ง ค่าใหม่จะถูกใช้กับหน้า Public โดยอัตโนมัติหลังบันทึก</p></section>
 
           <div className="meta-status-grid">
             <MetaStatusCard icon={MousePointerClick} label="Browser Pixel" ready={Boolean(summary?.metaPixelConfigured)} detail={summary?.metaPixelConfigured?`เชื่อมแล้ว · ${summary?.metaPixelIdMasked||'Pixel ID'}`:'กรอก Pixel ID ด้านล่างเพื่อเปิดใช้งาน'} />

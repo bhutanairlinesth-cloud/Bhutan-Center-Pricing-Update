@@ -3681,3 +3681,31 @@ input::placeholder,textarea::placeholder{color:#a89989}
 
 /* ===== V13.6 · Google Analytics + Ads foundation ===== */
 @media (min-width:1181px){.marketing-shortcuts{grid-template-columns:repeat(4,1fr)}}
+
+/* ===== V13.7 · Back Office Marketing Integration Settings ===== */
+.marketing-config-card{margin-top:18px;padding:26px;border:1px solid #e4d7c6;border-radius:24px;background:#fffdf9;box-shadow:0 12px 34px rgba(70,53,33,.05)}
+.marketing-config-card--compact{margin-top:16px}
+.marketing-config-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:20px}
+.marketing-config-head>div>span{color:#8f6a36;font-size:8px;font-weight:800;letter-spacing:.14em}
+.marketing-config-head h2{margin:6px 0 5px;color:#3a332b;font-size:22px}
+.marketing-config-head p{max-width:720px;margin:0;color:#887a6d;font-size:10px;line-height:1.6}
+.marketing-config-head>b{padding:7px 10px;border-radius:999px;font-size:8px;letter-spacing:.06em;white-space:nowrap}
+.marketing-config-head>b.ready{background:#f2e8d6;color:#8f6a36}
+.marketing-config-head>b.waiting{background:#fff0df;color:#9a632d}
+.marketing-config-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.marketing-config-grid--line{grid-template-columns:1fr}
+.marketing-config-grid>label{display:flex;flex-direction:column;gap:7px;padding:16px;border:1px solid #eadfce;border-radius:17px;background:#fbf7f0}
+.marketing-config-grid>label>span{color:#5d5146;font-size:10px;font-weight:750}
+.marketing-config-grid input[type=text],.marketing-config-grid input:not([type]){height:44px;padding:0 13px;border:1px solid #dfd2c0;border-radius:12px;background:#fffdf9;color:#3a332b;font:inherit;font-size:12px;outline:none}
+.marketing-config-grid input:focus{border-color:#c9a365;box-shadow:0 0 0 4px rgba(181,138,73,.11)}
+.marketing-config-grid small{color:#9b8d7e;font-size:9px;line-height:1.45}
+.marketing-toggle-row{grid-column:1/-1!important;display:grid!important;grid-template-columns:auto 1fr!important;align-items:center!important;gap:12px!important}
+.marketing-toggle-row>input{width:18px;height:18px;accent-color:#a67b3d}
+.marketing-toggle-row>span{display:flex;flex-direction:column;gap:3px}
+.marketing-toggle-row strong{font-size:11px;color:#4c4137}.marketing-toggle-row small{font-weight:400}
+.marketing-config-actions{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:18px;padding-top:17px;border-top:1px solid #eee4d7}
+.marketing-config-actions>div{display:flex;flex-direction:column;gap:3px;color:#8c7e70}.marketing-config-actions small{font-size:9px;font-weight:750}.marketing-config-actions span{font-size:9px}
+.marketing-config-actions button{min-height:42px;padding:0 18px;border:0;border-radius:999px;background:linear-gradient(135deg,#c49a58,#a67b3d);color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:10px;font-weight:750;box-shadow:0 10px 24px rgba(181,138,73,.18)}
+.marketing-config-actions button svg{width:15px;height:15px}.marketing-config-actions button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.marketing-config-note{margin-top:12px;padding:10px 12px;border-radius:12px;background:#fff4e6;color:#8c642e;font-size:9.5px}
+@media(max-width:760px){.marketing-config-card{padding:18px;border-radius:20px}.marketing-config-head,.marketing-config-actions{align-items:flex-start;flex-direction:column}.marketing-config-grid{grid-template-columns:1fr}.marketing-toggle-row{grid-column:auto!important}.marketing-config-actions button{width:100%}}

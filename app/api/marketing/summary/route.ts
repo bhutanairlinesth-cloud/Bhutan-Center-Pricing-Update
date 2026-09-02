@@ -91,7 +91,28 @@ export async function GET(request: NextRequest) {
     }
     const liveVisitors=[...liveMap.values()].slice(0,40);
 
-    const pixelId=String(process.env.NEXT_PUBLIC_META_PIXEL_ID || process.env.META_PIXEL_ID || '').trim();
+    let pixelId=String(process.env.NEXT_PUBLIC_META_PIXEL_ID || process.env.META_PIXEL_ID || '').trim();
+    let metaEnabled=Boolean(pixelId);
+    let metaTestEventCode=String(process.env.META_TEST_EVENT_CODE || '').trim();
+    let lineRuntimeUrl='';
+    try{
+      const runtime=await supabase
+        .from('marketing_runtime_settings')
+        .select('id,enabled,config')
+        .in('id',['meta','line']);
+      if(!runtime.error){
+        const metaRow=(runtime.data||[]).find((x:any)=>x.id==='meta') as any;
+        const lineRow=(runtime.data||[]).find((x:any)=>x.id==='line') as any;
+        const dbPixel=String(metaRow?.config?.pixel_id || '').trim();
+        const dbTest=String(metaRow?.config?.test_event_code || '').trim();
+        if(metaRow){
+          metaEnabled=Boolean(metaRow.enabled && (dbPixel || pixelId));
+          if(dbPixel) pixelId=dbPixel;
+          if(dbTest) metaTestEventCode=dbTest;
+        }
+        lineRuntimeUrl=String(lineRow?.config?.line_oa_url || '').trim();
+      }
+    }catch{}
     const googleTagId=String(process.env.NEXT_PUBLIC_GOOGLE_TAG_ID || '').trim();
     const ga4Id=String(process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID || '').trim();
     const googleAdsId=String(process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || '').trim();
@@ -129,10 +150,10 @@ export async function GET(request: NextRequest) {
       ga4IdMasked: maskId(ga4Id),
       googleAdsIdMasked: maskId(googleAdsId),
       lineConfigured: Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_CHANNEL_SECRET),
-      lineBasicIdConfigured: Boolean(process.env.LINE_OA_BASIC_ID || process.env.LINE_OA_URL),
-      metaPixelConfigured: Boolean(pixelId),
+      lineBasicIdConfigured: Boolean(process.env.LINE_OA_BASIC_ID || process.env.LINE_OA_URL || lineRuntimeUrl || 'https://lin.ee/qQQMmYIt'),
+      metaPixelConfigured: Boolean(metaEnabled && pixelId),
       metaCapiConfigured: Boolean(process.env.META_CONVERSIONS_API_TOKEN),
-      metaTestEventConfigured: Boolean(process.env.META_TEST_EVENT_CODE),
+      metaTestEventConfigured: Boolean(metaTestEventCode),
       metaPixelIdMasked: maskId(pixelId),
     });
   } catch (error:any) {

@@ -59,6 +59,7 @@ interface Summary {
 interface PriceRow { id:string; name:string; nights:number; override:null|{visible:boolean;price_override_thb:number|null}; }
 interface AudiencePreset { id:string; name:string; count:number; source:string; intent:string; futureMeta:string; description:string; }
 interface AudienceData { days:number; tagStorageReady:boolean; sources:{website:boolean;line:boolean;crm:boolean;meta:boolean}; audiences:AudiencePreset[]; tags:{tag:string;count:number;source:'website'|'line'}[]; note:string; }
+interface IntegrationSettings { storageReady:boolean; storageError?:{code:string;message:string}|null; meta:{enabled:boolean;pixelId:string;pixelIdMasked:string|null;testEventCode:string;testEventConfigured:boolean;capiConfigured:boolean;source:string;updatedAt:string|null}; line:{enabled:boolean;url:string;source:string;updatedAt:string|null}; }
 
 type MarketingTab = 'overview' | 'realtime' | 'audience' | 'funnel' | 'meta' | 'google' | 'website' | 'line' | 'seo';
 const MARKETING_TAB_PATHS: Record<MarketingTab, string> = {
@@ -103,6 +104,11 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   const [message,setMessage]=useState('');
   const [notice,setNotice]=useState('');
   const [periodDays,setPeriodDays]=useState<7|30|90>(30);
+  const [integrations,setIntegrations]=useState<IntegrationSettings|null>(null);
+  const [metaPixelId,setMetaPixelId]=useState('');
+  const [metaTestEventCode,setMetaTestEventCode]=useState('');
+  const [metaEnabled,setMetaEnabled]=useState(false);
+  const [lineOaUrl,setLineOaUrl]=useState('https://lin.ee/qQQMmYIt');
 
   useEffect(()=>{
     function handlePopState(){
@@ -117,10 +123,11 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
     setLoading(true); setNotice('');
     try {
       const headers=await authHeaders();
-      const [a,b,c]=await Promise.all([
+      const [a,b,c,d]=await Promise.all([
         fetch(`/api/marketing/summary?days=${periodDays}`,{headers}),
         fetch('/api/website/prices',{headers}),
         fetch(`/api/marketing/audiences?days=${periodDays}`,{headers}),
+        fetch('/api/marketing/integrations',{headers}),
       ]);
       if(a.ok){
         setSummary(await a.json());
@@ -130,6 +137,14 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
       }
       if(b.ok){const j=await b.json();setPrices(j.packages||[]);}
       if(c.ok)setAudience(await c.json());
+      if(d.ok){
+        const j=await d.json() as IntegrationSettings;
+        setIntegrations(j);
+        setMetaPixelId(j.meta?.pixelId||'');
+        setMetaTestEventCode(j.meta?.testEventCode||'');
+        setMetaEnabled(Boolean(j.meta?.enabled));
+        setLineOaUrl(j.line?.url||'https://lin.ee/qQQMmYIt');
+      }
     } finally { setLoading(false); }
   }
   useEffect(()=>{ refresh(); },[periodDays]);
@@ -166,6 +181,24 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
     const json=await res.json().catch(()=>({}));
     if(!res.ok){setNotice(json.error||'บันทึกไม่สำเร็จ');return;}
     setNotice('บันทึกราคาเว็บไซต์แล้ว'); refresh();
+  }
+
+  async function saveMetaSettings(){
+    const headers=await authHeaders();
+    const res=await fetch('/api/marketing/integrations',{method:'POST',headers,body:JSON.stringify({section:'meta',pixelId:metaPixelId,testEventCode:metaTestEventCode,enabled:metaEnabled})});
+    const json=await res.json().catch(()=>({}));
+    if(!res.ok){setNotice(json.error||'บันทึก Meta Pixel ไม่สำเร็จ');return;}
+    setNotice(json.message||'บันทึก Meta Pixel แล้ว');
+    await refresh();
+  }
+
+  async function saveLineSettings(){
+    const headers=await authHeaders();
+    const res=await fetch('/api/marketing/integrations',{method:'POST',headers,body:JSON.stringify({section:'line',lineUrl:lineOaUrl})});
+    const json=await res.json().catch(()=>({}));
+    if(!res.ok){setNotice(json.error||'บันทึกลิงก์ LINE ไม่สำเร็จ');return;}
+    setNotice(json.message||'บันทึกลิงก์ LINE OA แล้ว');
+    await refresh();
   }
 
   async function broadcast(){
@@ -301,12 +334,12 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
         </>}
 
         {tab==='meta' && <>
-          <section className="growth-title"><span>FACEBOOK / META</span><h1>Pixel พร้อมรอเชื่อม<br/>โดยไม่กระทบเว็บตอนนี้</h1><p>ระบบเตรียม Browser Pixel, event mapping และจุดต่อ Conversions API ไว้ก่อน หากยังไม่ใส่ข้อมูล Meta ทุกอย่างจะอยู่ในสถานะ “รอเชื่อมต่อ” และเว็บไซต์ยังทำงานตามปกติ</p></section>
+          <section className="growth-title"><span>FACEBOOK / META</span><h1>ตั้งค่า Meta Pixel<br/>จากหลังบ้านได้เลย</h1><p>กรอก Pixel ID และ Test Event Code ได้จากหน้านี้เหมือนระบบไร่อมร ไม่ต้องกลับไปแก้ Vercel ทุกครั้ง ค่าใหม่จะถูกใช้กับหน้า Public โดยอัตโนมัติหลังบันทึก</p></section>
 
           <div className="meta-status-grid">
-            <MetaStatusCard icon={MousePointerClick} label="Browser Pixel" ready={Boolean(summary?.metaPixelConfigured)} detail={summary?.metaPixelConfigured?`เชื่อมแล้ว · ${summary?.metaPixelIdMasked||'Pixel ID'}`:'รอ NEXT_PUBLIC_META_PIXEL_ID'} />
+            <MetaStatusCard icon={MousePointerClick} label="Browser Pixel" ready={Boolean(summary?.metaPixelConfigured)} detail={summary?.metaPixelConfigured?`เชื่อมแล้ว · ${summary?.metaPixelIdMasked||'Pixel ID'}`:'กรอก Pixel ID ด้านล่างเพื่อเปิดใช้งาน'} />
             <MetaStatusCard icon={Server} label="Conversions API" ready={Boolean(summary?.metaCapiConfigured)} detail={summary?.metaCapiConfigured?'พบ CAPI Access Token':'เตรียมจุดเชื่อม · รอ META_CONVERSIONS_API_TOKEN'} />
-            <MetaStatusCard icon={Activity} label="Test Events" ready={Boolean(summary?.metaTestEventConfigured)} detail={summary?.metaTestEventConfigured?'มี Test Event Code':'Optional · ใช้ตอนทดสอบ CAPI'} />
+            <MetaStatusCard icon={Activity} label="Test Events" ready={Boolean(summary?.metaTestEventConfigured)} detail={summary?.metaTestEventConfigured?'บันทึก Test Event Code แล้ว':'Optional · วาง Code จาก Meta Events Manager'} />
             <MetaStatusCard icon={Target} label="Retargeting Logic" ready detail="First-party Funnel พร้อมใช้งานในหลังบ้าน" />
           </div>
 
@@ -322,9 +355,20 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
             </div>
           </section>
 
+          <section className="marketing-config-card">
+            <div className="marketing-config-head"><div><span>META CONNECTION</span><h2>Facebook Pixel Settings</h2><p>บันทึกจากหลังบ้านได้ทันที ค่าในหน้านี้จะมีลำดับความสำคัญเหนือ Environment Variable เดิม</p></div><b className={integrations?.storageReady?'ready':'waiting'}>{integrations?.storageReady?'DATABASE READY':'RUN SQL V13.7'}</b></div>
+            <div className="marketing-config-grid">
+              <label><span>Facebook Pixel ID</span><input value={metaPixelId} onChange={e=>setMetaPixelId(e.target.value.replace(/\D/g,''))} inputMode="numeric" placeholder="เช่น 123456789012345"/><small>คัดลอกจาก Meta Events Manager → Data Source / Pixel</small></label>
+              <label><span>Test Event Code</span><input value={metaTestEventCode} onChange={e=>setMetaTestEventCode(e.target.value)} placeholder="เช่น TEST12345"/><small>ใช้สำหรับ Test Events / CAPI ในขั้นเชื่อม Server Event</small></label>
+              <label className="marketing-toggle-row"><input type="checkbox" checked={metaEnabled} onChange={e=>setMetaEnabled(e.target.checked)}/><span><strong>เปิดใช้งาน Meta Pixel บนเว็บไซต์</strong><small>ถ้าปิด ระบบจะไม่โหลด Facebook Pixel แม้มี Pixel ID</small></span></label>
+            </div>
+            <div className="marketing-config-actions"><div><small>Source: {integrations?.meta?.source==='back_office'?'Back Office':integrations?.meta?.source==='environment'?'Vercel Environment':'ยังไม่ได้ตั้งค่า'}</small><span>CAPI Token ยังคงเก็บฝั่ง Server เท่านั้นเพื่อความปลอดภัย</span></div><button onClick={saveMetaSettings} disabled={currentUser.role!=='admin'}><Save/>บันทึก Meta Pixel</button></div>
+            {currentUser.role!=='admin' && <div className="marketing-config-note">เฉพาะ Administrator เท่านั้นที่เปลี่ยน Tracking Settings ได้</div>}
+          </section>
+
           <section className="meta-connect-card">
-            <div><span>CONNECT LATER</span><h2>ตอนนี้ยังไม่ต้องใส่ข้อมูล Facebook</h2><p>เมื่อพร้อม เพียงเพิ่ม Environment Variables ใน Vercel แล้ว Deploy ใหม่ Browser Pixel จะเริ่มทำงานทันที ส่วน CAPI สามารถเปิดต่อใน Phase เชื่อม Meta โดยไม่ต้องรื้อ Funnel หรือ Customer Tracking ใหม่</p></div>
-            <div className="meta-env-list"><code>NEXT_PUBLIC_META_PIXEL_ID</code><code>META_CONVERSIONS_API_TOKEN</code><code>META_TEST_EVENT_CODE</code></div>
+            <div><span>SERVER-SIDE NEXT</span><h2>Conversions API ยังเตรียมไว้ต่อได้</h2><p>Pixel ID และ Test Event Code จัดการจากหลังบ้านได้แล้ว ส่วน CAPI Access Token ยังไม่แสดงหรือเก็บใน Browser เพื่อความปลอดภัย หากต้องการเชื่อม CAPI เต็มรูปแบบ เราจะเก็บ Token ฝั่ง Server และใช้ Test Event Code ที่บันทึกไว้นี้ได้ทันที</p></div>
+            <div className="meta-env-list"><code>META_CONVERSIONS_API_TOKEN</code><code>Test Event Code: {metaTestEventCode||'—'}</code></div>
           </section>
         </>}
 
@@ -373,7 +417,12 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
 
         {tab==='line' && <>
           <section className="growth-title"><span>LINE OA</span><h1>ช่องทางหลัก<br/>สำหรับปิดการขาย</h1><p>Website จะพาลูกค้าเข้า LINE พร้อมเก็บ Line Click ใน Funnel และ Webhook จะเก็บ LINE userId เมื่อมี Follow / Message</p></section>
-          <div className="line-status-grid"><article className={summary?.lineConfigured?'ready':''}><i>{summary?.lineConfigured?<CheckCircle2/>:<Settings2/>}</i><div><strong>Messaging API</strong><span>{summary?.lineConfigured?'พร้อมใช้งาน':'รอตั้งค่า Channel Token / Secret'}</span></div></article><article className={summary?.lineBasicIdConfigured?'ready':''}><i>{summary?.lineBasicIdConfigured?<CheckCircle2/>:<Globe2/>}</i><div><strong>LINE OA Link</strong><span>{summary?.lineBasicIdConfigured?'ปุ่มหน้าเว็บพร้อมส่งเข้า LINE':'รอตั้งค่า LINE_OA_BASIC_ID หรือ LINE_OA_URL'}</span></div></article></div>
+          <div className="line-status-grid"><article className={summary?.lineConfigured?'ready':''}><i>{summary?.lineConfigured?<CheckCircle2/>:<Settings2/>}</i><div><strong>Messaging API</strong><span>{summary?.lineConfigured?'พร้อมใช้งาน':'รอตั้งค่า Channel Token / Secret'}</span></div></article><article className={summary?.lineBasicIdConfigured?'ready':''}><i>{summary?.lineBasicIdConfigured?<CheckCircle2/>:<Globe2/>}</i><div><strong>LINE OA Link</strong><span>{summary?.lineBasicIdConfigured?'ปุ่มหน้าเว็บพร้อมส่งเข้า LINE':'รอตั้งค่า LINE OA URL'}</span></div></article></div>
+          <section className="marketing-config-card marketing-config-card--compact">
+            <div className="marketing-config-head"><div><span>PUBLIC LINE CTA</span><h2>ลิงก์เพิ่มเพื่อน LINE OA</h2><p>ใช้เป็นปลายทางสำรองของปุ่ม LINE บนเว็บไซต์ และแก้ไขได้จากหลังบ้าน</p></div><b className="ready">BHUTAN CENTER</b></div>
+            <div className="marketing-config-grid marketing-config-grid--line"><label><span>LINE OA Add Friend URL</span><input value={lineOaUrl} onChange={e=>setLineOaUrl(e.target.value)} placeholder="https://lin.ee/qQQMmYIt"/><small>ค่าปัจจุบันที่ตั้งไว้: https://lin.ee/qQQMmYIt</small></label></div>
+            <div className="marketing-config-actions"><div><small>{integrations?.line?.source==='back_office'?'บันทึกจาก Back Office':integrations?.line?.source==='environment'?'อ่านจาก Vercel':'ใช้ Default ของ Bhutan Center'}</small></div><button onClick={saveLineSettings} disabled={currentUser.role!=='admin'}><Save/>บันทึกลิงก์ LINE</button></div>
+          </section>
           <section className="broadcast-card"><div><span>BROADCAST</span><h2>ส่งข้อความจากหลังบ้าน</h2><p>เวอร์ชันนี้ส่งไปยัง LINE Contacts ที่ระบบรู้จักและยังเป็นเพื่อนอยู่ทั้งหมด การแบ่ง Tag จะเพิ่มต่อใน CRM Phase ถัดไป</p></div><textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="พิมพ์ข้อความ Broadcast..." rows={7}/><button onClick={broadcast} disabled={!summary?.lineConfigured || !message.trim()}><Send/>ส่ง Broadcast</button></section>
         </>}
 

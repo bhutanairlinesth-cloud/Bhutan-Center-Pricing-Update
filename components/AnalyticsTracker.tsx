@@ -182,18 +182,55 @@ function trackGooglePage(pathname:string, slug:string){
   }
 }
 
-function trackMeta(pathname:string, slug:string){
-  const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
-  if (!pixelId || typeof window === 'undefined') return;
-  const w = window as any;
-  if (!w.fbq) {
-    const f:any = function(){ f.callMethod ? f.callMethod.apply(f,arguments) : f.queue.push(arguments); };
-    f.queue=[]; f.loaded=true; f.version='2.0'; w.fbq=f;
-    const s=document.createElement('script'); s.async=true; s.src='https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(s);
-    f('init',pixelId);
+let metaConfigPromise:Promise<{enabled:boolean;pixelId:string}>|null=null;
+
+async function getMetaConfig(){
+  if(!metaConfigPromise){
+    metaConfigPromise=fetch('/api/marketing/meta-public',{cache:'no-store'})
+      .then(async(r)=>r.ok?await r.json():({enabled:false,pixelId:''}))
+      .then((j)=>({enabled:Boolean(j?.enabled),pixelId:String(j?.pixelId||'').trim()}))
+      .catch(()=>({enabled:false,pixelId:''}));
   }
-  w.fbq('track','PageView');
-  if (slug) w.fbq('track','ViewContent',{content_name:slug,content_category:'Bhutan Tour Package'});
+  return metaConfigPromise;
+}
+
+async function ensureMetaPixel(){
+  if(typeof window==='undefined') return null;
+  const cfg=await getMetaConfig();
+  if(!cfg.enabled || !cfg.pixelId) return null;
+  const w=window as any;
+  if(!w.fbq){
+    const f:any=function(){ f.callMethod ? f.callMethod.apply(f,arguments) : f.queue.push(arguments); };
+    f.queue=[]; f.loaded=true; f.version='2.0'; w.fbq=f;
+    const script=document.createElement('script');
+    script.async=true; script.src='https://connect.facebook.net/en_US/fbevents.js';
+    document.head.appendChild(script);
+  }
+  w.__bcMetaPixels=w.__bcMetaPixels||{};
+  if(!w.__bcMetaPixels[cfg.pixelId]){
+    w.__bcMetaPixels[cfg.pixelId]=true;
+    w.fbq('init',cfg.pixelId);
+  }
+  return w.fbq as ((...args:any[])=>void);
+}
+
+async function trackMeta(pathname:string, slug:string){
+  const fbq=await ensureMetaPixel();
+  if(!fbq) return;
+  fbq('track','PageView');
+  if(slug) fbq('track','ViewContent',{content_name:slug,content_category:'Bhutan Tour Package'});
+}
+
+export function trackMetaLineClick(packageSlug=''){
+  try{
+    const w=window as any;
+    if(w.fbq){
+      w.fbq('trackCustom','LineAddFriendClick',{package:packageSlug||undefined});
+      return true;
+    }
+    void ensureMetaPixel().then((fbq)=>{ if(fbq) fbq('trackCustom','LineAddFriendClick',{package:packageSlug||undefined}); });
+  }catch{}
+  return false;
 }
 
 export default function AnalyticsTracker(){

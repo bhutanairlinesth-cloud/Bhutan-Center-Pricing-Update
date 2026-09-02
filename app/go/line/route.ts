@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/server-supabase';
 
+const DEFAULT_LINE_OA_URL='https://lin.ee/qQQMmYIt';
+
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const visitor = String(url.searchParams.get('visitor') || '').slice(0,120);
@@ -8,19 +10,24 @@ export async function GET(request: NextRequest) {
   const packageSlug = String(url.searchParams.get('package') || '').slice(0,120);
   const pagePath = String(url.searchParams.get('page') || '/').slice(0,400);
   const supabase = getServerSupabase();
-  if (supabase && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    try {
-      await supabase.from('website_events').insert({ visitor_id:visitor, session_id:session, event_name:'line_click', page_path:pagePath, package_slug:packageSlug || null, metadata:{} });
-      if(visitor){
-        const now=new Date().toISOString();
-        await supabase.from('website_visitor_tags').upsert({visitor_id:visitor,tag:'LINE Intent',source:'website',last_seen_at:now},{onConflict:'visitor_id,tag'});
-        if(packageSlug) await supabase.from('website_visitor_tags').upsert({visitor_id:visitor,tag:`Package:${packageSlug}`,source:'website',last_seen_at:now},{onConflict:'visitor_id,tag'});
-      }
-    } catch {}
+  if (supabase) {
+    try { await supabase.from('website_events').insert({ visitor_id:visitor, session_id:session, event_name:'line_click', page_path:pagePath, package_slug:packageSlug || null, metadata:{} }); } catch {}
   }
 
   const basicId = String(process.env.LINE_OA_BASIC_ID || '').trim();
-  const fallback = String(process.env.LINE_OA_URL || '').trim();
+  let fallback = String(process.env.LINE_OA_URL || '').trim() || DEFAULT_LINE_OA_URL;
+  if(supabase){
+    try{
+      const { data }=await supabase
+        .from('marketing_runtime_settings')
+        .select('enabled,config')
+        .eq('id','line')
+        .maybeSingle();
+      const dbUrl=String((data?.config as any)?.line_oa_url || '').trim();
+      if(data?.enabled !== false && dbUrl) fallback=dbUrl;
+    }catch{}
+  }
+
   const ref = visitor || `BC${Date.now().toString(36)}`;
   let target = fallback || new URL('/contact', request.url).toString();
   if (basicId) {

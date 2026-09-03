@@ -574,7 +574,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
         </>}
 
         {tab==='website' && <>
-          <section className="growth-title"><span>PUBLIC WEBSITE</span><h1>ราคาเว็บไซต์<br/>จาก Pricing เดียวกัน</h1><p>ถ้าไม่ใส่ Override ระบบจะคำนวณราคาเริ่มต้นจาก Retail Pricing ปัจจุบันสำหรับ 2 ท่าน / 3 ดาวอัตโนมัติ</p></section>
+          <section className="growth-title"><span>PUBLIC WEBSITE</span><h1>ราคาแสดงบนเว็บไซต์<br/>แยกจากสูตรขายอย่างชัดเจน</h1><p>ค่า Auto จะคำนวณจาก Pricing จริงสำหรับ Retail · 2 ท่าน · 3 ดาว ส่วน Override เป็นเพียง “ราคาแสดงเพื่อการตลาด” และจะไม่เปลี่ยนสูตรคำนวณ, Quotation หรือ Invoice</p></section>
           <div className="website-price-list">{prices.map((row)=><WebsitePriceRow key={row.id} row={row} onSave={savePrice}/>)}</div>
           <a className="growth-open-site" href="/" target="_blank" rel="noreferrer"><Globe2/>เปิดเว็บไซต์ Public <span>↗</span></a>
         </>}

@@ -93,7 +93,7 @@ export default function App() {
     if (showLoading) setLoading(true);
     try {
       const [nextSettings, nextHotels, nextPackages, nextUsers, nextTrackings, nextInvoices, nextPayments, nextQuotations] = await Promise.all([
-        database.getSettings(), database.getHotels(), database.getPackages(), database.getUsers(), database.getTrackings(), database.getInvoices(), database.getPaymentTransactions(), database.getQuotations(),
+        database.getSettings(), database.getHotels().catch(() => []), database.getPackages(), database.getUsers(), database.getTrackings(), database.getInvoices(), database.getPaymentTransactions(), database.getQuotations(),
       ]);
       setSettings(nextSettings);
       setHotels(nextHotels);

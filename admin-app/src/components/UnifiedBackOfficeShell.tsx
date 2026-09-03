@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  BarChart3, Calculator, ChevronRight, ClipboardList, Database, Globe2, Hotel,
+  BarChart3, Building2, Calculator, ChevronRight, ClipboardList, Globe2,
   LayoutDashboard, LineChart, LogOut, Megaphone, Menu, PackageOpen, Radio, Search,
   Settings2, Tags, Target, Users, X,
 } from 'lucide-react';
@@ -46,10 +46,13 @@ export function UnifiedBackOfficeShell({ currentUser, settings, workspace, curre
       ],
     },
     {
-      label: 'การขาย & ลูกค้า',
+      label: 'ราคา & การขาย',
       items: [
         { workspace: 'front', path: '/admin/pricing', label: 'คำนวณราคา', detail: 'Pricing Desk', icon: Calculator },
+        { workspace: 'admin', path: '/admin/settings/pricing', label: 'ศูนย์ตั้งราคา', detail: 'Flight · LAND · Visa · Margin', icon: Settings2, adminOnly: true },
+        { workspace: 'admin', path: '/admin/settings/packages', label: 'โปรแกรมทัวร์', detail: 'Package · LAND Rate', icon: PackageOpen, adminOnly: true },
         { workspace: 'tracking', path: '/admin/customers', label: 'ติดตามลูกค้า', detail: 'CRM · Invoice · Payment', icon: ClipboardList },
+        { workspace: 'admin', path: '/admin/settings', label: 'รายงานยอดขาย', detail: 'Sales · Cost · Profit', icon: BarChart3, adminOnly: true },
       ],
     },
     {
@@ -72,18 +75,9 @@ export function UnifiedBackOfficeShell({ currentUser, settings, workspace, curre
       ],
     },
     {
-      label: 'ข้อมูลทัวร์',
+      label: 'ระบบ',
       items: [
-        { workspace: 'admin', path: '/admin/settings/packages', label: 'โปรแกรมทัวร์', detail: 'Tour Programs', icon: PackageOpen, adminOnly: true },
-        { workspace: 'admin', path: '/admin/settings/hotels', label: 'โรงแรม', detail: 'Hotels', icon: Hotel, adminOnly: true },
-        { workspace: 'admin', path: '/admin/settings/pricing', label: 'ราคาและค่าบริการ', detail: 'Flight · Visa · Margin', icon: Settings2, adminOnly: true },
-      ],
-    },
-    {
-      label: 'รายงาน & ระบบ',
-      items: [
-        { workspace: 'admin', path: '/admin/settings', label: 'รายงานยอดขาย', detail: 'Sales · Cost · Profit', icon: BarChart3, adminOnly: true },
-        { workspace: 'admin', path: '/admin/settings/data', label: 'ข้อมูลระบบ', detail: 'Pricing Data Overview', icon: Database, adminOnly: true },
+        { workspace: 'admin', path: '/admin/settings/company', label: 'บริษัท & เอกสาร', detail: 'Logo · Bank · VAT', icon: Building2, adminOnly: true },
         { workspace: 'admin', path: '/admin/settings/users', label: 'ผู้ใช้งาน', detail: 'Team Access', icon: Users, adminOnly: true },
       ],
     },

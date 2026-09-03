@@ -11,7 +11,7 @@ import { Brand } from './Brand';
 import { EmptyState, Modal } from './Ui';
 import { SalesDashboard } from './SalesDashboard';
 
-type AdminPage = 'dashboard' | 'overview' | 'packages' | 'hotels' | 'settings' | 'users';
+type AdminPage = 'dashboard' | 'overview' | 'packages' | 'hotels' | 'settings' | 'company' | 'users';
 
 
 const ADMIN_PAGE_PATHS: Record<AdminPage, string> = {
@@ -20,6 +20,7 @@ const ADMIN_PAGE_PATHS: Record<AdminPage, string> = {
   packages: '/admin/settings/packages',
   hotels: '/admin/settings/hotels',
   settings: '/admin/settings/pricing',
+  company: '/admin/settings/company',
   users: '/admin/settings/users',
 };
 
@@ -28,8 +29,10 @@ function adminPageFromPath(pathname: string): AdminPage {
   if (path.startsWith('/admin/settings/packages')) return 'packages';
   if (path.startsWith('/admin/settings/hotels')) return 'hotels';
   if (path.startsWith('/admin/settings/pricing')) return 'settings';
+  if (path.startsWith('/admin/settings/company')) return 'company';
   if (path.startsWith('/admin/settings/users')) return 'users';
-  if (path.startsWith('/admin/settings/data')) return 'overview';
+  if (path.startsWith('/admin/settings/data')) return 'settings';
+  if (path.startsWith('/admin/settings/hotels')) return 'packages';
   return 'dashboard';
 }
 
@@ -65,10 +68,9 @@ export function Admin({ embedded = false, settings, hotels, packages, users, tra
   const [page, setPage] = useState<AdminPage>(() => adminPageFromPath(typeof window !== 'undefined' ? window.location.pathname : '/admin/settings'));
   const nav = [
     { id: 'dashboard' as const, label: language === 'th' ? 'รายงานยอดขาย' : 'Sales dashboard', icon: LayoutDashboard },
-    { id: 'overview' as const, label: language === 'th' ? 'ข้อมูลระบบ' : 'Pricing & system data', icon: Database },
+    { id: 'settings' as const, label: language === 'th' ? 'ศูนย์ตั้งราคา' : 'Pricing control center', icon: Settings2 },
     { id: 'packages' as const, label: language === 'th' ? 'โปรแกรมทัวร์' : t('packages'), icon: PackageOpen },
-    { id: 'hotels' as const, label: language === 'th' ? 'โรงแรม' : t('hotels'), icon: HotelIcon },
-    { id: 'settings' as const, label: language === 'th' ? 'ราคาและค่าบริการ' : t('pricingSettings'), icon: Settings2 },
+    { id: 'company' as const, label: language === 'th' ? 'บริษัท & เอกสาร' : 'Company & documents', icon: Building2 },
     { id: 'users' as const, label: language === 'th' ? 'ผู้ใช้งาน' : t('users'), icon: Users },
   ];
   const active = nav.find((item) => item.id === page) || nav[0];
@@ -100,10 +102,11 @@ export function Admin({ embedded = false, settings, hotels, packages, users, tra
       </header>
       <div className="admin-content admin-content--single-nav">
         {page === 'dashboard' && <SalesDashboard trackings={trackings} invoices={invoices} payments={payments} onOpenTracking={onOpenTracking}/>} 
-        {page === 'overview' && <AdminOverview settings={settings} hotels={hotels} packages={packages} users={users} language={language} onOpen={openPage}/>} 
+        {page === 'overview' && <PricingControlCenter initial={settings} packages={packages} onSave={onSaveSettings} onSavePackage={onSavePackage}/>} 
+        {page === 'hotels' && <PackagesManager items={packages} onSave={onSavePackage} onDelete={onDeletePackage}/>} 
         {page === 'packages' && <PackagesManager items={packages} onSave={onSavePackage} onDelete={onDeletePackage}/>} 
-        {page === 'hotels' && <HotelsManager items={hotels} onSave={onSaveHotel} onDelete={onDeleteHotel}/>} 
-        {page === 'settings' && <SettingsManager initial={settings} onSave={onSaveSettings} onUploadLogo={onUploadLogo} onResetLogo={onResetLogo}/>} 
+        {page === 'settings' && <PricingControlCenter initial={settings} packages={packages} onSave={onSaveSettings} onSavePackage={onSavePackage}/>} 
+        {page === 'company' && <CompanySettingsManager initial={settings} onSave={onSaveSettings} onUploadLogo={onUploadLogo} onResetLogo={onResetLogo}/>} 
         {page === 'users' && <UsersManager items={users} currentUser={currentUser} mode={mode} onCreate={onCreateUser} onSave={onSaveUser} onDelete={onDeleteUser}/>} 
       </div>
     </main>
@@ -162,20 +165,20 @@ function PackagesManager({ items, onSave, onDelete }: { items: TourPackage[]; on
   const [editing, setEditing] = useState<TourPackage | null>(null);
   async function remove(item: TourPackage) { if (window.confirm(t('confirmDelete'))) await onDelete(item.id); }
   const recordLabel = language === 'th' ? `${items.length} รายการ` : `${items.length} records`;
-  const sourceTitle = language === 'th' ? 'พักเดี่ยวเพิ่ม / ท่าน' : 'Single supplement / pax';
+  const sourceTitle = language === 'th' ? 'LAND Rate · 2 pax / คน / คืน' : 'LAND Rate · 2 pax / person / night';
   return <div className="admin-stack">
     <PageAction title={t('packages')} detail={recordLabel} action={t('addPackage')} onAction={() => setEditing(newPackage())}/>
     <section className="panel-card no-padding">{items.length ? <div className="data-table">
       <div className="data-table-head"><span>{t('packageName')}</span><span>{t('durationNights')}</span><span>{sourceTitle}</span><span/></div>
       {items.map((pkg) => {
-        const single = pkg.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 };
+        const rates = normalizePackageHotelRates(pkg);
         return <div className="data-table-row" key={pkg.id}>
           <span className="package-cell"><i><PackageOpen/></i><b>{pkg.name}</b></span>
           <span>{pkg.nights} {t('nights')}</span>
           <span className="rate-preview single-supplement-preview">
-            <b>3★ {formatTHB(single.star3, language)}</b>
-            <b>4★ {formatTHB(single.star4, language)}</b>
-            <b>5★ {formatTHB(single.star5, language)}</b>
+            <b>3★ ${formatNumber(rates.star3.pax2USD, 0)}</b>
+            <b>4★ ${formatNumber(rates.star4.pax2USD, 0)}</b>
+            <b>5★ ${formatNumber(rates.star5.pax2USD, 0)}</b>
           </span>
           <span className="row-actions"><button aria-label={t('edit')} onClick={() => setEditing(pkg)}><Pencil/></button><button aria-label={t('delete')} className="danger" onClick={() => remove(pkg)}><Trash2/></button></span>
         </div>;
@@ -201,11 +204,21 @@ function newPackage(): TourPackage {
   };
 }
 
+function normalizePackageHotelRates(pkg: TourPackage) {
+  const fallback = pkg.rates || { pax1USD: 0, pax2USD: 0, pax3PlusUSD: 0 };
+  return {
+    star3: { ...(pkg.hotelRates?.star3 || fallback) },
+    star4: { ...(pkg.hotelRates?.star4 || fallback) },
+    star5: { ...(pkg.hotelRates?.star5 || fallback) },
+  };
+}
+
 function PackageEditor({ pkg, onClose, onSave }: { pkg: TourPackage | null; onClose: () => void; onSave: (pkg: TourPackage) => Promise<void> }) {
   const { t, language } = useI18n();
   const [form, setForm] = useState<TourPackage | null>(pkg);
   React.useEffect(() => setForm(pkg ? {
     ...pkg,
+    hotelRates: normalizePackageHotelRates(pkg),
     singleSupplementsTHB: pkg.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 },
   } : null), [pkg]);
   if (!form) return null;
@@ -214,10 +227,22 @@ function PackageEditor({ pkg, onClose, onSave }: { pkg: TourPackage | null; onCl
     singleSupplementsTHB: { ...(form.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 }), [key]: Math.max(0, value) },
   });
   const single = form.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 };
+  const hotelRates = normalizePackageHotelRates(form);
+  const setLandRate = (star: 'star3' | 'star4' | 'star5', key: 'pax1USD' | 'pax2USD' | 'pax3PlusUSD', value: number) => {
+    const nextHotelRates = { ...hotelRates, [star]: { ...hotelRates[star], [key]: Math.max(0, value) } };
+    setForm({ ...form, hotelRates: nextHotelRates, rates: star === 'star3' ? nextHotelRates.star3 : form.rates });
+  };
   return <Modal open={Boolean(pkg)} title={t('packages')} onClose={onClose}>
     <div className="editor-form package-editor-form">
       <label className="field"><span>{t('packageName')}</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}/></label>
       <label className="field"><span>{t('durationNights')}</span><input type="number" min="1" value={form.nights} onChange={(e) => setForm({ ...form, nights: Number(e.target.value) })}/></label>
+      <section className="package-land-editor">
+        <div className="settings-card-title"><span><CircleDollarSign/></span><div><h3>{language === 'th' ? 'LAND Rate ที่ใช้ในเครื่องคำนวณ' : 'LAND rates used by calculator'}</h3><p>{language === 'th' ? 'USD / คน / คืน · ค่านี้คือ Source of Truth ของราคาภาคพื้นในหน้าคำนวณ' : 'USD / person / night · These values are the calculator source of truth.'}</p></div></div>
+        <div className="package-land-grid">
+          {(['star3','star4','star5'] as const).map((star, index)=><div className="package-land-tier" key={star}><strong>{index + 3} Stars</strong><RateFields rates={hotelRates[star]} setRate={(key,value)=>setLandRate(star,key,value)}/></div>)}
+        </div>
+        <div className="info-banner"><CheckCircle2/><span>{language === 'th' ? 'การแก้ราคาตรงนี้จะมีผลกับการคำนวณใหม่ทันที แต่ใบเสนอราคาเดิมจะคงราคา Snapshot เดิมไว้' : 'Changes apply to new calculations immediately; existing quotations keep their saved snapshot.'}</span></div>
+      </section>
       <section className="single-supplement-editor">
         <div className="settings-card-title"><span><HotelIcon/></span><div><h3>{language === 'th' ? 'ส่วนต่างพักเดี่ยว' : 'Single-room supplement'}</h3><p>{language === 'th' ? 'กำหนดราคาเพิ่มต่อผู้พักเดี่ยว 1 ท่าน สำหรับแพ็กเกจนี้ทั้งทริป' : 'Set the extra charge per single-room traveller for the entire package.'}</p></div></div>
         <div className="single-supplement-fields">
@@ -237,8 +262,64 @@ function RateFields({ rates, setRate }: { rates: { pax1USD: number; pax2USD: num
   return <div className="rate-fields"><label className="field"><span>{t('rate1')} · USD</span><input type="number" min="0" value={rates.pax1USD} onChange={(e) => setRate('pax1USD', Number(e.target.value))}/></label><label className="field"><span>{t('rate2')} · USD</span><input type="number" min="0" value={rates.pax2USD} onChange={(e) => setRate('pax2USD', Number(e.target.value))}/></label><label className="field"><span>{t('rate3')} · USD</span><input type="number" min="0" value={rates.pax3PlusUSD} onChange={(e) => setRate('pax3PlusUSD', Number(e.target.value))}/></label></div>;
 }
 
-function SettingsManager({ initial, onSave, onUploadLogo, onResetLogo }: { initial: GlobalSettings; onSave: (settings: GlobalSettings) => Promise<void>; onUploadLogo: (file: File) => Promise<string>; onResetLogo: () => Promise<void> }) {
+function PricingControlCenter({ initial, packages, onSave, onSavePackage }: { initial: GlobalSettings; packages: TourPackage[]; onSave: (settings: GlobalSettings) => Promise<void>; onSavePackage: (pkg: TourPackage) => Promise<void> }) {
   const { t, language } = useI18n();
+  const [form, setForm] = useState(initial);
+  React.useEffect(() => setForm(initial), [initial]);
+  const change = (key: keyof GlobalSettings, value: number) => setForm((current) => ({ ...current, [key]: value }));
+  const discount = form.ticketPriceTHB > 0 ? ((form.ticketPriceTHB - (form.agentTicketPriceTHB ?? 0)) / form.ticketPriceTHB) * 100 : 0;
+
+  return <div className="admin-stack pricing-control-center">
+    <PageAction title={language === 'th' ? 'ศูนย์ตั้งราคา' : 'Pricing control center'} detail={language === 'th' ? 'แก้ราคาที่เครื่องคำนวณใช้งานจริงจากจุดเดียว' : 'Edit the real calculator pricing sources in one place'}/>
+
+    <section className="pricing-source-banner">
+      <div><span><CheckCircle2/></span><div><small>SOURCE OF TRUTH</small><h3>{language === 'th' ? 'สูตรคำนวณใช้ข้อมูล 2 ชุดนี้เท่านั้น' : 'Calculator uses only these 2 pricing sources'}</h3><p>{language === 'th' ? '1) ราคากลางจาก app_settings เช่น ตั๋ว ภาษี วีซ่า เรท และ Margin · 2) LAND Rate จากแต่ละโปรแกรมทัวร์ใน tour_packages.hotel_rates' : '1) Global app_settings for flight, tax, visa, FX and margin · 2) package LAND rates in tour_packages.hotel_rates.'}</p></div></div>
+      <div className="pricing-source-warning"><b>{language === 'th' ? 'ไม่ใช้ในการคำนวณ' : 'Not used by calculator'}</b><span>{language === 'th' ? 'ตาราง hotels และค่า Legacy Hotel Defaults เดิมถูกเก็บไว้เพื่อความปลอดภัย แต่ไม่แสดงเป็นเมนูตั้งราคาแล้ว' : 'The hotels table and legacy hotel defaults remain untouched for safety but are no longer shown as calculator controls.'}</span></div>
+    </section>
+
+    <section className="pricing-global-section">
+      <div className="pricing-section-heading"><div><span>GLOBAL PRICING</span><h2>{language === 'th' ? 'ราคากลางที่ใช้ทุกโปรแกรม' : 'Global pricing used by every package'}</h2><p>{language === 'th' ? 'บันทึกหนึ่งครั้ง การคำนวณใหม่จะอ่านค่าชุดนี้ทันที' : 'Save once and all new calculations read these values.'}</p></div><button className="primary-button" onClick={() => onSave(form)}><Save/>{language === 'th' ? 'บันทึกราคากลาง' : 'Save global pricing'}</button></div>
+      <div className="settings-grid pricing-clean-grid">
+        <section className="settings-card"><div className="settings-card-title"><span><Plane/></span><div><h3>{t('flightPricing')}</h3><p>THB / person</p></div></div><NumberField label={t('retailFlight')} value={form.ticketPriceTHB} onChange={(v) => change('ticketPriceTHB', v)}/><NumberField label={t('agentFlight')} value={form.agentTicketPriceTHB ?? 25220} onChange={(v) => change('agentTicketPriceTHB', v)}/><div className="calculated-note"><BadgePercent/> {t('agentDiscount')}: <b>{formatNumber(discount, 2)}%</b></div><NumberField label={t('airportTaxLabel')} value={form.airportTaxTHB} onChange={(v) => change('airportTaxTHB', v)}/><NumberField label={language === 'th' ? 'ส่วนเพิ่ม Business Class / ท่าน' : 'Business Class surcharge / pax'} value={form.businessUpgradeTHB ?? 15000} onChange={(v) => change('businessUpgradeTHB', v)}/></section>
+        <section className="settings-card"><div className="settings-card-title"><span><CircleDollarSign/></span><div><h3>{language === 'th' ? 'อัตราแลกเปลี่ยน & Visa' : 'Exchange & Visa'}</h3><p>Global conversion</p></div></div><NumberField label={t('usdRate')} value={form.exchangeRateUSD} onChange={(v) => change('exchangeRateUSD', v)} step="0.01" suffix="THB / USD"/><NumberField label={t('visaFee')} value={form.visaFeeUSD} onChange={(v) => change('visaFeeUSD', v)} suffix="USD / pax"/></section>
+        <section className="settings-card"><div className="settings-card-title"><span><BadgePercent/></span><div><h3>{t('margins')}</h3><p>THB / person</p></div></div><NumberField label={t('retailMargin')} value={form.marginTHB} onChange={(v) => change('marginTHB', v)}/><NumberField label={t('agentMargin')} value={form.agentMarginTHB ?? 3000} onChange={(v) => change('agentMarginTHB', v)}/></section>
+        <section className="settings-card group-discount-settings"><div className="settings-card-title"><span><Users/></span><div><h3>{t('groupDiscountSettings')}</h3><p>{t('groupDiscountHint')}</p></div></div><div className="group-discount-fields"><NumberField label={t('groupDiscountMinPax')} value={form.groupDiscountMinPax ?? 10} onChange={(v) => change('groupDiscountMinPax', Math.max(1, Math.round(v)))} min={1} suffix={t('people')}/><NumberField label={t('groupDiscountPercent')} value={form.groupDiscountPercent ?? 10} onChange={(v) => change('groupDiscountPercent', Math.min(100, Math.max(0, v)))} step="0.01" min={0} max={100} suffix="%"/></div></section>
+      </div>
+    </section>
+
+    <section className="package-pricing-center">
+      <div className="pricing-section-heading"><div><span>PACKAGE LAND RATES</span><h2>{language === 'th' ? 'LAND Rate ของแต่ละโปรแกรม' : 'LAND rates by package'}</h2><p>{language === 'th' ? 'USD / คน / คืน · 3★, 4★, 5★ แยกตามจำนวนผู้เดินทาง นี่คือค่าที่หน้า “คำนวณราคา” ใช้จริง' : 'USD / person / night by hotel tier and party size. These are the values used by Pricing Desk.'}</p></div></div>
+      <div className="package-pricing-card-grid">{packages.map((pkg)=><PackagePricingEditorCard key={pkg.id} pkg={pkg} language={language} onSave={onSavePackage}/>)}</div>
+    </section>
+
+    <section className="pricing-snapshot-note"><ShieldCheck/><div><strong>{language === 'th' ? 'ใบเสนอราคาเดิมจะไม่เปลี่ยนย้อนหลัง' : 'Existing quotations stay unchanged'}</strong><span>{language === 'th' ? 'Quotation เก็บ Snapshot ตอนออกเอกสารไว้ การแก้ราคาที่นี่มีผลกับการคำนวณ/Quotation ใหม่เท่านั้น จึงไม่กระทบเอกสารที่ลูกค้าได้รับไปแล้ว' : 'Quotation records keep a saved pricing snapshot. Changes here affect new calculations and new quotations only.'}</span></div></section>
+  </div>;
+}
+
+function PackagePricingEditorCard({ pkg, language, onSave }: { pkg: TourPackage; language: 'th' | 'en'; onSave: (pkg: TourPackage) => Promise<void> }) {
+  const [form, setForm] = useState<TourPackage>(() => ({ ...pkg, hotelRates: normalizePackageHotelRates(pkg), singleSupplementsTHB: pkg.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 } }));
+  const [saving, setSaving] = useState(false);
+  React.useEffect(() => setForm({ ...pkg, hotelRates: normalizePackageHotelRates(pkg), singleSupplementsTHB: pkg.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 } }), [pkg]);
+  const hotelRates = normalizePackageHotelRates(form);
+  const singles = form.singleSupplementsTHB ?? { star3: 0, star4: 0, star5: 0 };
+  const updateRate = (star: 'star3' | 'star4' | 'star5', key: 'pax1USD' | 'pax2USD' | 'pax3PlusUSD', value: number) => {
+    const nextHotelRates = { ...hotelRates, [star]: { ...hotelRates[star], [key]: Math.max(0, value) } };
+    setForm({ ...form, hotelRates: nextHotelRates, rates: star === 'star3' ? nextHotelRates.star3 : form.rates });
+  };
+  const updateSingle = (star: 'star3' | 'star4' | 'star5', value: number) => setForm({ ...form, singleSupplementsTHB: { ...singles, [star]: Math.max(0, value) } });
+  async function save() {
+    setSaving(true);
+    try { await onSave({ ...form, rates: normalizePackageHotelRates(form).star3, hotelRates: normalizePackageHotelRates(form) }); }
+    finally { setSaving(false); }
+  }
+  return <article className="package-pricing-card">
+    <div className="package-pricing-card-head"><div><small>{pkg.nights + 1}D / {pkg.nights}N</small><h3>{pkg.name}</h3></div><button onClick={save} disabled={saving}><Save/>{saving ? (language === 'th' ? 'กำลังบันทึก' : 'Saving') : (language === 'th' ? 'บันทึกโปรแกรมนี้' : 'Save package')}</button></div>
+    <div className="package-pricing-tiers">{(['star3','star4','star5'] as const).map((star,index)=><section key={star}><strong>{index + 3} Stars</strong><div className="package-rate-compact-grid"><NumberField label="1 pax" value={hotelRates[star].pax1USD} onChange={(v)=>updateRate(star,'pax1USD',v)} suffix="USD/night"/><NumberField label="2 pax" value={hotelRates[star].pax2USD} onChange={(v)=>updateRate(star,'pax2USD',v)} suffix="USD/night"/><NumberField label="3+ pax" value={hotelRates[star].pax3PlusUSD} onChange={(v)=>updateRate(star,'pax3PlusUSD',v)} suffix="USD/night"/><NumberField label={language === 'th' ? 'พักเดี่ยวเพิ่ม' : 'Single add'} value={singles[star]} onChange={(v)=>updateSingle(star,v)} suffix="THB/trip"/></div></section>)}</div>
+  </article>;
+}
+
+function CompanySettingsManager({ initial, onSave, onUploadLogo, onResetLogo }: { initial: GlobalSettings; onSave: (settings: GlobalSettings) => Promise<void>; onUploadLogo: (file: File) => Promise<string>; onResetLogo: () => Promise<void> }) {
+  const { language } = useI18n();
   const [form, setForm] = useState(initial);
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoError, setLogoError] = useState('');
@@ -246,61 +327,24 @@ function SettingsManager({ initial, onSave, onUploadLogo, onResetLogo }: { initi
   React.useEffect(() => setForm(initial), [initial]);
   const change = (key: keyof GlobalSettings, value: number) => setForm((current) => ({ ...current, [key]: value }));
   const changeText = (key: keyof GlobalSettings, value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const discount = form.ticketPriceTHB > 0 ? ((form.ticketPriceTHB - (form.agentTicketPriceTHB ?? 0)) / form.ticketPriceTHB) * 100 : 0;
   async function chooseLogo(file?: File) {
     if (!file || logoBusy) return;
     setLogoError('');
-    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
-      setLogoError(language === 'th' ? 'รองรับเฉพาะ PNG, JPG หรือ WEBP' : 'Only PNG, JPG or WEBP files are supported.');
-      if (logoInputRef.current) logoInputRef.current.value = '';
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      setLogoError(language === 'th' ? 'ไฟล์โลโก้ต้องมีขนาดไม่เกิน 2 MB' : 'Logo file must be 2 MB or smaller.');
-      if (logoInputRef.current) logoInputRef.current.value = '';
-      return;
-    }
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) { setLogoError(language === 'th' ? 'รองรับเฉพาะ PNG, JPG หรือ WEBP' : 'Only PNG, JPG or WEBP files are supported.'); return; }
+    if (file.size > 2 * 1024 * 1024) { setLogoError(language === 'th' ? 'ไฟล์โลโก้ต้องมีขนาดไม่เกิน 2 MB' : 'Logo file must be 2 MB or smaller.'); return; }
     setLogoBusy(true);
-    try {
-      const url = await onUploadLogo(file);
-      setForm((current) => ({ ...current, logoUrl: url }));
-    } catch (error: any) {
-      console.error('Logo upload failed', error);
-      setLogoError(error?.message || (language === 'th' ? 'อัปโหลดโลโก้ไม่สำเร็จ' : 'Logo upload failed.'));
-    } finally {
-      setLogoBusy(false);
-      if (logoInputRef.current) logoInputRef.current.value = '';
-    }
+    try { const url = await onUploadLogo(file); setForm((current) => ({ ...current, logoUrl: url })); }
+    catch (error: any) { setLogoError(error?.message || (language === 'th' ? 'อัปโหลดโลโก้ไม่สำเร็จ' : 'Logo upload failed.')); }
+    finally { setLogoBusy(false); if (logoInputRef.current) logoInputRef.current.value = ''; }
   }
-  async function resetBrand() {
-    setLogoBusy(true);
-    try {
-      await onResetLogo();
-      setForm((current) => ({ ...current, logoUrl: '' }));
-    } finally { setLogoBusy(false); }
-  }
-  return <div className="admin-stack"><PageAction title={t('pricingSettings')} detail="Retail · Agent · USD · Visa · Branding"/>
-  <section className="branding-settings-card">
-    <div className="branding-preview"><span className="branding-preview-label">{language === 'th' ? 'ตัวอย่างโลโก้ในเว็บไซต์และเอกสาร' : 'Website and document logo preview'}</span><div className="branding-preview-canvas"><Brand logoUrl={form.logoUrl}/></div></div>
-    <div className="branding-actions"><div className="settings-card-title"><span><Settings2/></span><div><h3>{language === 'th' ? 'โลโก้บริษัท' : 'Company logo'}</h3><p>{language === 'th' ? 'อัปโหลดครั้งเดียว โลโก้จะเปลี่ยนบนเว็บไซต์ ใบเสนอราคา และ Invoice' : 'Upload once to update the website, quotations and invoices.'}</p></div></div><p className="branding-file-hint">PNG, JPG หรือ WEBP · ไม่เกิน 2 MB · แนะนำพื้นหลังโปร่งใส</p><input ref={logoInputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => chooseLogo(event.target.files?.[0])}/><div className="branding-button-row"><button type="button" className="primary-button" disabled={logoBusy} onClick={() => logoInputRef.current?.click()}><Plus/>{logoBusy ? (language === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...') : (language === 'th' ? 'อัปเดตโลโก้' : 'Update logo')}</button><button type="button" className="ghost-button" disabled={logoBusy || !form.logoUrl} onClick={resetBrand}><RefreshCw/>{language === 'th' ? 'ใช้โลโก้เริ่มต้น' : 'Use default logo'}</button></div>{logoError && <div className="upload-inline-error" role="alert">{logoError}</div>}</div>
-  </section>
-  <section className="payment-account-settings">
-    <div className="settings-card-title payment-account-title"><span><Building2/></span><div><h3>{language === 'th' ? 'บัญชีรับชำระใน Invoice' : 'Invoice payment accounts'}</h3><p>{language === 'th' ? 'กำหนดข้อมูลบัญชีธนาคารที่จะแสดงในเอกสารเรียกเก็บเงิน' : 'Configure the bank account details shown on invoices.'}</p></div></div>
-    <div className="payment-account-grid">
-      <PaymentAccountSettingsCard language={language} title={language === 'th' ? 'บัญชีบริษัท · ค่าเริ่มต้น Invoice 1' : 'Company account · default for Invoice 1'} bankName={form.companyBankName ?? 'ธนาคารกสิกรไทย'} accountName={form.companyAccountName ?? 'บริษัท OMG Experience Co., Ltd.'} accountNumber={form.companyAccountNumber ?? '051-2-51692-0'} onBankName={(v) => changeText('companyBankName', v)} onAccountName={(v) => changeText('companyAccountName', v)} onAccountNumber={(v) => changeText('companyAccountNumber', v)}/>
-      <PaymentAccountSettingsCard language={language} title={language === 'th' ? 'บัญชีเจ้านาย · ค่าเริ่มต้น Invoice 2' : 'Owner account · default for Invoice 2'} bankName={form.ownerBankName ?? 'ธนาคารไทยพาณิชย์'} accountName={form.ownerAccountName ?? 'นายศิเวก สัจเดว'} accountNumber={form.ownerAccountNumber ?? '203-215366-9'} onBankName={(v) => changeText('ownerBankName', v)} onAccountName={(v) => changeText('ownerAccountName', v)} onAccountNumber={(v) => changeText('ownerAccountNumber', v)}/>
-    </div>
-    <div className="vat-setting-row"><NumberField label={language === 'th' ? 'VAT สำหรับ Invoice 2 ที่ขอใบกำกับภาษี' : 'VAT rate for Invoice 2 tax invoice'} value={form.vatRatePercent ?? 7} onChange={(v) => change('vatRatePercent', Math.min(100, Math.max(0, v)))} step="0.01" suffix="%"/></div>
-  </section>
-  <div className="settings-grid">
-    <section className="settings-card"><div className="settings-card-title"><span><Plane/></span><div><h3>{t('flightPricing')}</h3><p>THB / person</p></div></div><NumberField label={t('retailFlight')} value={form.ticketPriceTHB} onChange={(v) => change('ticketPriceTHB', v)}/><NumberField label={t('agentFlight')} value={form.agentTicketPriceTHB ?? 25220} onChange={(v) => change('agentTicketPriceTHB', v)}/><div className="calculated-note"><BadgePercent/> {t('agentDiscount')}: <b>{formatNumber(discount, 2)}%</b></div><NumberField label={t('airportTaxLabel')} value={form.airportTaxTHB} onChange={(v) => change('airportTaxTHB', v)}/><NumberField label={language === 'th' ? 'ส่วนเพิ่มราคาขาย Business Class / ท่าน' : 'Business Class selling surcharge / pax'} value={form.businessUpgradeTHB ?? 15000} onChange={(v) => change('businessUpgradeTHB', v)}/></section>
-    <section className="settings-card"><div className="settings-card-title"><span><CircleDollarSign/></span><div><h3>{t('exchangeVisa')}</h3><p>Global conversion</p></div></div><NumberField label={t('usdRate')} value={form.exchangeRateUSD} onChange={(v) => change('exchangeRateUSD', v)} step="0.01" suffix="THB"/><NumberField label={t('visaFee')} value={form.visaFeeUSD} onChange={(v) => change('visaFeeUSD', v)} suffix="USD"/></section>
-    <section className="settings-card"><div className="settings-card-title"><span><BadgePercent/></span><div><h3>{t('margins')}</h3><p>THB / person</p></div></div><NumberField label={t('retailMargin')} value={form.marginTHB} onChange={(v) => change('marginTHB', v)}/><NumberField label={t('agentMargin')} value={form.agentMarginTHB ?? 3000} onChange={(v) => change('agentMarginTHB', v)}/></section>
-    <section className="settings-card group-discount-settings"><div className="settings-card-title"><span><Users/></span><div><h3>{t('groupDiscountSettings')}</h3><p>{t('groupDiscountHint')}</p></div></div><div className="group-discount-fields"><NumberField label={t('groupDiscountMinPax')} value={form.groupDiscountMinPax ?? 10} onChange={(v) => change('groupDiscountMinPax', Math.max(1, Math.round(v)))} min={1} suffix={t('people')}/><NumberField label={t('groupDiscountPercent')} value={form.groupDiscountPercent ?? 10} onChange={(v) => change('groupDiscountPercent', Math.min(100, Math.max(0, v)))} step="0.01" min={0} max={100} suffix="%"/></div><div className="group-discount-preview"><BadgePercent/><span>{(form.groupDiscountMinPax ?? 10)} {t('people')}+ · {formatNumber(form.groupDiscountPercent ?? 10, Number.isInteger(form.groupDiscountPercent ?? 10) ? 0 : 2)}%</span></div></section>
-    <section className="settings-card"><div className="settings-card-title"><span><HotelIcon/></span><div><h3>{t('legacyHotelDefaults')}</h3><p>Fallback only</p></div></div><div className="mini-rate-grid"><NumberField label="3★ · 1 pax" value={form.hotel3StarPax1USD} onChange={(v) => change('hotel3StarPax1USD', v)} suffix="USD"/><NumberField label="3★ · 2 pax" value={form.hotel3StarPax2USD} onChange={(v) => change('hotel3StarPax2USD', v)} suffix="USD"/><NumberField label="3★ · 3+ pax" value={form.hotel3StarPax3PlusUSD} onChange={(v) => change('hotel3StarPax3PlusUSD', v)} suffix="USD"/><NumberField label="4★ · 1 pax" value={form.hotel4StarPax1USD} onChange={(v) => change('hotel4StarPax1USD', v)} suffix="USD"/><NumberField label="4★ · 2 pax" value={form.hotel4StarPax2USD} onChange={(v) => change('hotel4StarPax2USD', v)} suffix="USD"/><NumberField label="4★ · 3+ pax" value={form.hotel4StarPax3PlusUSD} onChange={(v) => change('hotel4StarPax3PlusUSD', v)} suffix="USD"/></div></section>
-  </div><button className="primary-button save-settings-button" onClick={() => onSave(form)}><Save/>{t('saveSettings')}</button></div>;
+  async function resetBrand() { setLogoBusy(true); try { await onResetLogo(); setForm((current) => ({ ...current, logoUrl: '' })); } finally { setLogoBusy(false); } }
+  return <div className="admin-stack company-settings-page">
+    <PageAction title={language === 'th' ? 'บริษัท & เอกสาร' : 'Company & documents'} detail={language === 'th' ? 'โลโก้ · บัญชีรับชำระ · VAT' : 'Logo · payment accounts · VAT'}/>
+    <section className="branding-settings-card"><div className="branding-preview"><span className="branding-preview-label">{language === 'th' ? 'ตัวอย่างโลโก้ในเว็บไซต์และเอกสาร' : 'Website and document logo preview'}</span><div className="branding-preview-canvas"><Brand logoUrl={form.logoUrl}/></div></div><div className="branding-actions"><div className="settings-card-title"><span><Settings2/></span><div><h3>{language === 'th' ? 'โลโก้บริษัท' : 'Company logo'}</h3><p>{language === 'th' ? 'โลโก้นี้ใช้กับเว็บไซต์ ใบเสนอราคา และ Invoice' : 'Used on website, quotations and invoices.'}</p></div></div><input ref={logoInputRef} className="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => chooseLogo(event.target.files?.[0])}/><div className="branding-button-row"><button type="button" className="primary-button" disabled={logoBusy} onClick={() => logoInputRef.current?.click()}><Plus/>{language === 'th' ? 'อัปเดตโลโก้' : 'Update logo'}</button><button type="button" className="ghost-button" disabled={logoBusy || !form.logoUrl} onClick={resetBrand}><RefreshCw/>{language === 'th' ? 'ใช้โลโก้เริ่มต้น' : 'Use default logo'}</button></div>{logoError && <div className="upload-inline-error" role="alert">{logoError}</div>}</div></section>
+    <section className="payment-account-settings"><div className="settings-card-title payment-account-title"><span><Building2/></span><div><h3>{language === 'th' ? 'บัญชีรับชำระใน Invoice' : 'Invoice payment accounts'}</h3><p>{language === 'th' ? 'ข้อมูลส่วนนี้ไม่เกี่ยวกับสูตรราคา แยกมาไว้ในหมวดเอกสารเพื่อไม่ให้สับสน' : 'These settings do not affect the pricing formula and are separated here for clarity.'}</p></div></div><div className="payment-account-grid"><PaymentAccountSettingsCard language={language} title={language === 'th' ? 'บัญชีบริษัท · ค่าเริ่มต้น Invoice 1' : 'Company account · default for Invoice 1'} bankName={form.companyBankName ?? 'ธนาคารกสิกรไทย'} accountName={form.companyAccountName ?? 'บริษัท OMG Experience Co., Ltd.'} accountNumber={form.companyAccountNumber ?? '051-2-51692-0'} onBankName={(v) => changeText('companyBankName', v)} onAccountName={(v) => changeText('companyAccountName', v)} onAccountNumber={(v) => changeText('companyAccountNumber', v)}/><PaymentAccountSettingsCard language={language} title={language === 'th' ? 'บัญชีเจ้านาย · ค่าเริ่มต้น Invoice 2' : 'Owner account · default for Invoice 2'} bankName={form.ownerBankName ?? 'ธนาคารไทยพาณิชย์'} accountName={form.ownerAccountName ?? 'นายศิเวก สัจเดว'} accountNumber={form.ownerAccountNumber ?? '203-215366-9'} onBankName={(v) => changeText('ownerBankName', v)} onAccountName={(v) => changeText('ownerAccountName', v)} onAccountNumber={(v) => changeText('ownerAccountNumber', v)}/></div><div className="vat-setting-row"><NumberField label={language === 'th' ? 'VAT สำหรับ Invoice 2 ที่ขอใบกำกับภาษี' : 'VAT rate for Invoice 2 tax invoice'} value={form.vatRatePercent ?? 7} onChange={(v) => change('vatRatePercent', Math.min(100, Math.max(0, v)))} step="0.01" suffix="%"/></div></section>
+    <button className="primary-button save-settings-button" onClick={() => onSave(form)}><Save/>{language === 'th' ? 'บันทึกข้อมูลบริษัท & เอกสาร' : 'Save company & document settings'}</button>
+  </div>;
 }
-
 
 function PaymentAccountSettingsCard({ language, title, bankName, accountName, accountNumber, onBankName, onAccountName, onAccountNumber }: { language: 'th' | 'en'; title: string; bankName: string; accountName: string; accountNumber: string; onBankName: (value: string) => void; onAccountName: (value: string) => void; onAccountNumber: (value: string) => void }) {
   return <article className="payment-account-card"><div className="payment-account-card-head"><div><b>{title}</b><small>{language === 'th' ? 'ข้อมูลบัญชีนี้จะแสดงใน Invoice ที่เลือกบัญชีนี้' : 'These bank details appear on invoices using this account.'}</small></div></div><label className="field"><span>{language === 'th' ? 'ธนาคาร' : 'Bank'}</span><input value={bankName} onChange={(e) => onBankName(e.target.value)}/></label><label className="field"><span>{language === 'th' ? 'ชื่อบัญชี' : 'Account name'}</span><input value={accountName} onChange={(e) => onAccountName(e.target.value)}/></label><label className="field"><span>{language === 'th' ? 'เลขที่บัญชี' : 'Account number'}</span><input value={accountNumber} onChange={(e) => onAccountNumber(e.target.value)}/></label></article>;

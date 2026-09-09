@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft, ArrowRight, BadgePercent, BedDouble, BriefcaseBusiness, Building2, CalendarDays, Check, ClipboardList,
+  ArrowRight, BadgePercent, BedDouble, BriefcaseBusiness, Building2, CalendarDays, Check, ClipboardList,
   ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LayoutDashboard, LogOut, Plane, RotateCcw,
   Settings2, ShieldCheck, Sparkles, Users, WalletCards,
 } from 'lucide-react';
@@ -87,7 +87,11 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
   const defaultRegularLand = result?.regularLandCostPerPerson || 0;
   const effectiveRegularLand = input.regularLandCostPerPersonOverrideTHB ?? defaultRegularLand;
   const effectiveTlLand = input.tourLeaderLandCostPerPersonTHB ?? 0;
-  const effectiveGroupTicket = input.groupTicketPriceOverrideTHB ?? (input.channel === 'agent' ? (settings.agentTicketPriceTHB ?? 25220) : settings.ticketPriceTHB);
+  const baseChannelTicket = input.channel === 'agent' ? (settings.agentTicketPriceTHB ?? 25220) : settings.ticketPriceTHB;
+  const defaultGroupTicket = input.passengerCount >= groupDiscountMinPax && groupDiscountPercent > 0
+    ? Math.round(baseChannelTicket * (1 - groupDiscountPercent / 100))
+    : baseChannelTicket;
+  const effectiveGroupTicket = input.groupTicketPriceOverrideTHB ?? defaultGroupTicket;
   const effectiveGroupTax = input.groupAirportTaxOverrideTHB ?? settings.airportTaxTHB;
   const effectiveGroupMargin = input.groupMarginPerTravelerOverrideTHB ?? (input.channel === 'agent' ? (settings.agentMarginTHB ?? 3000) : settings.marginTHB);
 
@@ -139,15 +143,23 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     } finally { setSavingQuote(false); }
   }
 
-  return <div className="front-shell unified-module-view">
-    <main className="front-main">
-      <div className="workspace-pagebar">
-        <button className="workspace-back-button" onClick={onOpenDashboard}><ArrowLeft/>{language === 'th' ? 'กลับ Dashboard' : 'Back to dashboard'}</button>
-        <div className="workspace-pagebar-title"><span>PRICING DESK</span><strong>{language === 'th' ? 'คำนวณราคาและสร้างใบเสนอราคา' : 'Pricing & quotation'}</strong></div>
+  return <div className="front-shell">
+    <header className="front-header">
+      <Brand/>
+      <div className="front-header-actions">
+        <button className="ghost-button desktop-only" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button>
         <LanguageSwitch compact/>
+        <button className="ghost-button desktop-only" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>
+        <span className="user-chip"><i>{currentUser.name?.[0]?.toUpperCase() || 'U'}</i><span><b>{currentUser.name}</b><small>{currentUser.role}</small></span></span>
+        {currentUser.role === 'admin' && <button className="ghost-button desktop-only" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}
+        <button className="icon-button" onClick={onLogout} title={t('logout')}><LogOut/></button>
       </div>
+    </header>
+
+    <main className="front-main">
       <section className="page-intro">
         <div><span className="eyebrow"><Sparkles/> LIVE PRICING</span><h1>{t('calculatorTitle')}</h1><p>{t('calculatorSubtitle')}</p></div>
+        <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
       </section>
 
       <div className="calculator-layout">
@@ -175,7 +187,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
               <label className="field span-2"><span>{t('package')}</span><div className="select-wrap"><Plane/><select value={input.packageId} onChange={(event) => setInput((value) => ({ ...value, packageId: event.target.value, singleSupplementOverrideTHB: null }))}>{packages.map((pkg) => <option value={pkg.id} key={pkg.id}>{pkg.name}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{isGroupTL ? (language === 'th' ? 'ผู้เดินทางทั้งหมด (รวม TL)' : 'Total travellers (incl. TL)') : t('passengers')}</span><div className="select-wrap"><Users/><select value={input.passengerCount} onChange={(event) => {
                 const pax = Number(event.target.value); setInput((value) => ({ ...value, passengerCount: pax, chargeablePassengerCount: value.pricingMode === 'group_tl' ? Math.min(pax, Math.max(1, value.chargeablePassengerCount)) : pax, businessUpgradeCount: Math.min(value.businessUpgradeCount, Math.max(0, pax - Math.min(pax, value.childPassengerCount || 0))), singleRoomCount: Math.min(value.singleRoomCount, pax), childPassengerCount: Math.min(value.childPassengerCount || 0, pax) }));
-              }}>{Array.from({ length: 50 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{!isGroupTL && pax >= groupDiscountMinPax && groupDiscountPercent > 0 ? ` · ${groupDiscountLabel}` : ''}</option>)}</select><ChevronDown/></div></label>
+              }}>{Array.from({ length: 50 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{pax >= groupDiscountMinPax && groupDiscountPercent > 0 ? ` · ${groupDiscountLabel}` : ''}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{t('travelDate')}</span><div className="input-with-icon simple"><CalendarDays/><input type="date" value={input.travelDate} onChange={(event) => update('travelDate', event.target.value)}/></div></label>
               <label className="field span-2"><span>{t('hotelLevel')}</span><div className="select-wrap"><Building2/><select value={input.hotelCategory} onChange={(event) => setInput((value) => ({ ...value, hotelCategory: event.target.value as HotelCategory, singleSupplementOverrideTHB: null }))}><option value="3 Stars">3 Stars</option><option value="4 Stars">4 Stars</option><option value="5 Stars">5 Stars</option></select><ChevronDown/></div></label>
             </div>
@@ -201,7 +213,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
               <div className="group-tl-money-grid">
                 <label className="field money-input"><span>{language === 'th' ? 'LAND ผู้ชำระ / ท่าน' : 'Regular LAND / pax'}</span><div><input type="number" min="0" step="1" value={effectiveRegularLand} onChange={(event) => update('regularLandCostPerPersonOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{language === 'th' ? 'รวมที่พัก SDF วีซ่า และบริการภาคพื้น' : 'Hotel, SDF, visa and ground services'}</small></label>
                 <label className="field money-input"><span>{language === 'th' ? 'LAND ของ TL / ท่าน' : 'TL LAND / pax'}</span><div><input type="number" min="0" step="1" value={effectiveTlLand} onChange={(event) => update('tourLeaderLandCostPerPersonTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{language === 'th' ? 'กรอกหลังหักค่าที่พักฟรี แต่ยังรวม SDF/วีซ่า' : 'After free hotel; still includes SDF/visa'}</small></label>
-                <label className="field money-input"><span>{language === 'th' ? 'ค่าโดยสาร Economy (ไม่รวมภาษี) / ผู้เดินทางจริง' : 'Economy fare excl. tax / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTicket} onChange={(event) => update('groupTicketPriceOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
+                <label className="field money-input"><span>{language === 'th' ? 'ค่าโดยสาร Economy (ไม่รวมภาษี) / ผู้เดินทางจริง' : 'Economy fare excl. tax / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTicket} onChange={(event) => update('groupTicketPriceOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{input.passengerCount >= groupDiscountMinPax && groupDiscountPercent > 0 ? (language === 'th' ? `${input.channel === 'agent' ? 'Agent ' : ''}${formatTHB(baseChannelTicket, language)} → ลดกรุ๊ป ${groupDiscountDisplay}% = ${formatTHB(defaultGroupTicket, language)}` : `${input.channel === 'agent' ? 'Agent ' : ''}${formatTHB(baseChannelTicket, language)} → group ${groupDiscountDisplay}% off = ${formatTHB(defaultGroupTicket, language)}`) : (language === 'th' ? 'ยังไม่ถึงจำนวนขั้นต่ำสำหรับส่วนลดกรุ๊ป' : 'Group discount threshold not reached')}</small></label>
                 <label className="field money-input"><span>{language === 'th' ? 'ภาษีสนามบิน / ผู้เดินทางจริง' : 'Airport tax / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTax} onChange={(event) => update('groupAirportTaxOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
                 <label className="field money-input"><span>{language === 'th' ? 'Margin / ผู้เดินทางจริง' : 'Margin / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupMargin} onChange={(event) => update('groupMarginPerTravelerOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
                 <label className="field money-input"><span>{language === 'th' ? 'ราคาขายจริง / ผู้ชำระ (แก้ได้)' : 'Final selling / paying pax (editable)'}</span><div><input type="number" min="0" step="500" value={input.groupSellingPriceOverrideTHB ?? 0} onChange={(event) => update('groupSellingPriceOverrideTHB', Number(event.target.value) > 0 ? Number(event.target.value) : null)}/><em>THB</em></div><small>{language === 'th' ? 'ใส่ 0 เพื่อใช้ราคาแนะนำอัตโนมัติ' : 'Enter 0 to use the recommended price'}</small></label>

@@ -176,7 +176,10 @@ export function calculatePrice(
   const agentTicket = Number(settings.agentTicketPriceTHB ?? 25220);
   const groupDiscountMinPax = Math.max(1, Math.round(Number(settings.groupDiscountMinPax ?? 10)));
   const groupDiscountPercent = Math.min(100, Math.max(0, Number(settings.groupDiscountPercent ?? 10)));
-  const hasGroupFlightDiscount = pricingMode === 'standard' && groupDiscountPercent > 0 && pax >= groupDiscountMinPax;
+  // Group airfare discount applies to every pricing mode once the actual traveller
+  // count reaches the configured threshold. Agent/Partner keeps the Agent fare
+  // first, then receives the group discount on top of it (e.g. 25,220 × 90% = 22,698).
+  const hasGroupFlightDiscount = groupDiscountPercent > 0 && pax >= groupDiscountMinPax;
   const selectedTicket = input.channel === 'agent' ? agentTicket : retailTicket;
   const standardAirTicket = hasGroupFlightDiscount
     ? Math.round(selectedTicket * (1 - groupDiscountPercent / 100))
@@ -269,8 +272,8 @@ export function calculatePrice(
       airportTaxTotal: breakdown.airportTaxTotal,
       groupTotal: customerTotal,
       groupProfit,
-      hasGroupFlightDiscount: false,
-      groupDiscountPercentApplied: 0,
+      hasGroupFlightDiscount,
+      groupDiscountPercentApplied: hasGroupFlightDiscount ? groupDiscountPercent : 0,
       regularLandCostPerPerson,
       tourLeaderLandCostPerPerson,
       regularLandTotal: breakdown.regularLandTotal,

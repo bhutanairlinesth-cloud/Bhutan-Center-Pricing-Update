@@ -4462,3 +4462,122 @@ textarea{min-height:74px}
 .company-settings-page{gap:18px}
 @media(max-width:1200px){.pricing-source-banner{grid-template-columns:1fr}.package-pricing-tiers,.package-land-grid{grid-template-columns:1fr}.pricing-clean-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.pricing-global-section,.package-pricing-center{padding:18px}.pricing-section-heading,.package-pricing-card-head{flex-direction:column;align-items:stretch}.pricing-section-heading>.primary-button,.package-pricing-card-head button{width:100%;justify-content:center}.pricing-clean-grid,.package-rate-compact-grid{grid-template-columns:1fr}.pricing-source-banner{padding:18px}}
+
+/* ===== V13.14 · Agent Rate Sheet ===== */
+.page-intro--pricing{align-items:flex-start;gap:20px}
+.pricing-page-actions{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.agent-rate-sheet-trigger{min-width:245px;padding:12px 15px;border:1px solid #dcc7a6;border-radius:16px;background:linear-gradient(135deg,#fffaf1,#f5e9d5);color:#5d4934;display:flex;align-items:center;gap:11px;box-shadow:0 8px 22px rgba(92,67,38,.08);text-align:left;cursor:pointer}
+.agent-rate-sheet-trigger>svg{width:22px;height:22px;color:#a87932;flex:none}
+.agent-rate-sheet-trigger>span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.agent-rate-sheet-trigger strong{font-size:15px;color:#3f3327}
+.agent-rate-sheet-trigger small{font-size:11px;color:#837260;line-height:1.45}
+.agent-rate-sheet-trigger:hover{border-color:#c99f5c;transform:translateY(-1px)}
+
+.agent-rate-builder{display:grid;gap:18px;margin-bottom:18px}
+.agent-rate-builder__intro{padding:20px;border:1px solid #e7dac8;border-radius:20px;background:#fffaf3;display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
+.agent-rate-builder__intro>div{max-width:760px}
+.agent-rate-builder__intro span{font-size:11px;font-weight:800;letter-spacing:.14em;color:#9b7139}
+.agent-rate-builder__intro h2{margin:6px 0 5px;font-size:25px;line-height:1.25;color:#3d3229}
+.agent-rate-builder__intro p{margin:0;font-size:13px;line-height:1.7;color:#76695d}
+.agent-rate-builder__intro .primary-button{white-space:nowrap;min-height:44px}
+.agent-rate-builder__grid{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:14px}
+.agent-rate-builder__grid>section{padding:18px;border:1px solid #eadfce;border-radius:18px;background:#fff}
+.agent-rate-builder__grid h3{margin:0 0 12px;font-size:16px;color:#46382d}
+.agent-rate-choice-list{display:grid;gap:8px}
+.agent-rate-choice-list button,.agent-rate-hotel-options button{border:1px solid #dfd2bf;background:#fffdf9;border-radius:12px;color:#5e5044;cursor:pointer}
+.agent-rate-choice-list button{min-height:58px;padding:9px 11px;display:grid;grid-template-columns:26px minmax(0,1fr);gap:9px;text-align:left;align-items:center}
+.agent-rate-choice-list button>i,.agent-rate-hotel-options button>i{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;background:#f4ede2;color:#a67a39}
+.agent-rate-choice-list button>i svg,.agent-rate-hotel-options button>i svg{width:14px;height:14px}
+.agent-rate-choice-list button>span{display:flex;flex-direction:column;gap:2px}
+.agent-rate-choice-list strong{font-size:13px;color:#4a3c31}
+.agent-rate-choice-list small{font-size:11px;color:#87786a}
+.agent-rate-choice-list button.active,.agent-rate-hotel-options button.active{border-color:#cda45e;background:#fff8e9;box-shadow:inset 0 0 0 1px #e6c98f}
+.agent-rate-hotel-options{display:flex;flex-wrap:wrap;gap:8px}
+.agent-rate-hotel-options button{min-height:42px;padding:0 12px;display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700}
+.agent-rate-hotel-notes{display:grid;gap:9px;margin-top:12px}
+.agent-rate-builder__grid label{display:flex;flex-direction:column;gap:6px;margin-top:9px}
+.agent-rate-builder__grid label>span{font-size:12px;font-weight:700;color:#5c4c3e}
+.agent-rate-builder__grid input,.agent-rate-builder__grid textarea{width:100%;border:1px solid #ddcfbd;border-radius:11px;background:#fffdfa;padding:10px 11px;font:inherit;font-size:13px;color:#4f4338}
+.agent-rate-builder__summary{padding:13px 16px;border-radius:15px;background:#f4ecdf;border:1px solid #e3d3b8;display:flex;align-items:baseline;gap:8px;color:#6c5a45}
+.agent-rate-builder__summary strong{font-size:24px;color:#9a6c2e}
+.agent-rate-builder__summary span{font-size:13px;font-weight:700}
+.agent-rate-builder__summary small{margin-left:auto;font-size:11px;color:#887562}
+
+.agent-rate-print-stack{display:grid;gap:18px}
+.agent-rate-empty{padding:30px;border:1px dashed #d8c9b4;border-radius:18px;text-align:center;color:#8a7a68;background:#fffaf3}
+.agent-rate-page{width:210mm;max-width:100%;min-height:278mm;margin:0 auto;padding:12mm 13mm 10mm;background:#fff;color:#1f1a16;border:1px solid #e5dfd6;box-shadow:0 12px 34px rgba(71,53,35,.08);font-family:Prompt,Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column}
+.agent-rate-page__header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:10px;border-bottom:1px solid #d8d0c6}
+.agent-rate-page__header>div:first-child{display:flex;flex-direction:column;gap:5px}
+.agent-rate-page__header .brand img{max-height:42px!important;max-width:160px!important;object-fit:contain}
+.agent-rate-page__header small{font-size:9px;color:#776b60}
+.agent-rate-page__header>div:last-child{text-align:right;display:flex;flex-direction:column;gap:4px}
+.agent-rate-page__header>div:last-child span{font-size:9px;font-weight:800;letter-spacing:.14em;color:#9a6c2e}
+.agent-rate-page__header>div:last-child strong{font-size:10px;color:#6b6056}
+.agent-rate-page__title{text-align:center;padding:14px 0 12px}
+.agent-rate-page__title>span{font-size:9px;font-weight:700;color:#8b6b43;text-transform:uppercase;letter-spacing:.08em}
+.agent-rate-page__title h1{margin:5px 0 2px;font-size:20px;line-height:1.25;color:#171310}
+.agent-rate-page__title h2{margin:0;font-size:17px;line-height:1.3;color:#171310}
+.agent-rate-page__title p{margin:6px 0 0;font-size:10px;color:#776b61}
+.agent-rate-table{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed}
+.agent-rate-table th,.agent-rate-table td{border:1px solid #29231f;padding:5px 7px;vertical-align:top}
+.agent-rate-table th{background:#e6e2dd;font-weight:800;text-align:center}
+.agent-rate-table th:first-child{width:76%}
+.agent-rate-table td:last-child{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.agent-rate-table td b{font-weight:800}
+.agent-rate-table td small{display:block;margin-top:2px;color:#746b63;font-size:8px;line-height:1.35;font-weight:400}
+.agent-rate-table td.indent{padding-left:27px}
+.agent-rate-total-strip{display:grid;grid-template-columns:1.15fr 1fr 1fr;margin-top:9px;border:1px solid #e3d4ba;border-radius:10px;overflow:hidden;background:#fff8e9}
+.agent-rate-total-strip>div{padding:8px 10px;border-right:1px solid #e3d4ba;display:flex;flex-direction:column;gap:2px}
+.agent-rate-total-strip>div:last-child{border-right:0}
+.agent-rate-total-strip small{font-size:8px;color:#796a58}
+.agent-rate-total-strip strong{font-size:14px;color:#825b24}
+.agent-rate-hotels{margin-top:9px;padding:8px 10px;background:#fff8c7;border-radius:7px;border:1px solid #eee0a7}
+.agent-rate-hotels h3{margin:0 0 3px;font-size:10px}
+.agent-rate-hotels p{margin:0;font-size:9px;line-height:1.45;white-space:pre-wrap}
+.agent-rate-scope{display:grid;grid-template-columns:1.45fr .9fr;gap:13px;margin-top:10px}
+.agent-rate-scope>div{padding:8px 10px;border:1px solid #e6dfd6;border-radius:9px}
+.agent-rate-scope h3{margin:0 0 5px;font-size:10px}
+.agent-rate-scope ul{margin:0;padding-left:16px;columns:2;column-gap:18px}
+.agent-rate-scope>div:last-child ul{columns:1}
+.agent-rate-scope li{font-size:8px;line-height:1.45;margin-bottom:2px;break-inside:avoid}
+.agent-rate-notes{margin-top:9px;padding:8px 10px;border-radius:9px;background:#f8f4ee;border:1px solid #e8dfd4}
+.agent-rate-notes strong{font-size:9px}
+.agent-rate-notes p{margin:3px 0;font-size:8.5px;line-height:1.45}
+.agent-rate-notes small{display:block;margin-top:4px;font-size:7.5px;line-height:1.4;color:#74695f}
+.agent-rate-page footer{margin-top:auto;padding-top:8px;border-top:1px solid #ded6cc;display:flex;justify-content:space-between;gap:12px;font-size:8px;color:#776d64}
+.agent-rate-page footer strong{color:#433930}
+
+@media(max-width:1100px){.agent-rate-builder__grid{grid-template-columns:1fr 1fr}.agent-rate-builder__grid>section:last-child{grid-column:1/-1}}
+@media(max-width:760px){.page-intro--pricing{display:block}.pricing-page-actions{align-items:stretch;margin-top:12px}.agent-rate-sheet-trigger{width:100%;min-width:0}.agent-rate-builder__intro{flex-direction:column}.agent-rate-builder__intro .primary-button{width:100%}.agent-rate-builder__grid{grid-template-columns:1fr}.agent-rate-builder__grid>section:last-child{grid-column:auto}.agent-rate-builder__summary{align-items:flex-start;flex-wrap:wrap}.agent-rate-builder__summary small{width:100%;margin-left:0}.agent-rate-page{width:100%;min-height:auto;padding:18px}.agent-rate-scope{grid-template-columns:1fr}.agent-rate-total-strip{grid-template-columns:1fr}.agent-rate-total-strip>div{border-right:0;border-bottom:1px solid #e3d4ba}.agent-rate-total-strip>div:last-child{border-bottom:0}}
+
+@media print{
+  .a4-native-print-root #agent-rate-sheet-print-area{
+    width:210mm!important;
+    min-width:210mm!important;
+    margin:0!important;
+    padding:0!important;
+    display:block!important;
+    background:#fff!important;
+  }
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-page{
+    width:210mm!important;
+    min-width:210mm!important;
+    max-width:210mm!important;
+    min-height:297mm!important;
+    height:297mm!important;
+    margin:0!important;
+    padding:12mm 13mm 9mm!important;
+    border:0!important;
+    box-shadow:none!important;
+    border-radius:0!important;
+    break-after:page!important;
+    page-break-after:always!important;
+    overflow:hidden!important;
+  }
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-page:last-child{break-after:auto!important;page-break-after:auto!important}
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-table,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-total-strip,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-hotels,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-scope,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-notes{break-inside:avoid!important;page-break-inside:avoid!important}
+}

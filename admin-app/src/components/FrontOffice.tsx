@@ -59,6 +59,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [quotationNo, setQuotationNo] = useState(makeQuotationNo());
   const [savingQuote, setSavingQuote] = useState(false);
+  const [agentRateOpen, setAgentRateOpen] = useState(false);
 
   useEffect(() => {
     if (!input.packageId && packages[0]) setInput((value) => ({ ...value, packageId: packages[0].id }));
@@ -157,9 +158,12 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     </header>
 
     <main className="front-main">
-      <section className="page-intro">
+      <section className="page-intro page-intro--pricing">
         <div><span className="eyebrow"><Sparkles/> LIVE PRICING</span><h1>{t('calculatorTitle')}</h1><p>{t('calculatorSubtitle')}</p></div>
-        <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
+        <div className="pricing-page-actions">
+          <button className="agent-rate-sheet-trigger" onClick={() => setAgentRateOpen(true)}><FileText/><span><strong>{language === 'th' ? 'ใบราคา Agent' : 'Agent rate sheet'}</strong><small>{language === 'th' ? 'เลือกหลายโปรแกรม / หลายระดับโรงแรม แล้วออก PDF' : 'Multi-program / hotel PDF'}</small></span></button>
+          <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
+        </div>
       </section>
 
       <div className="calculator-layout">
@@ -334,6 +338,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
       </div>
     </Modal>
 
+    <AgentRateSheetModal open={agentRateOpen} onClose={() => setAgentRateOpen(false)} settings={settings} packages={packages} defaultPackageId={input.packageId} defaultHotelCategory={input.hotelCategory}/>
     {result && <QuotationPreview open={quoteOpen} onClose={() => setQuoteOpen(false)} result={result} customer={customer} currentUser={currentUser} quotationNo={quotationNo}/>}    
   </div>;
 }
@@ -346,6 +351,211 @@ function ChannelCard({ active, channel, title, detail, meta, onClick }: { active
 
 function PriceLine({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: string; note?: string }) {
   return <div className="price-line"><span className="price-icon">{icon}</span><span className="price-label"><b>{label}</b>{note && <small>{note}</small>}</span><strong>{value}</strong></div>;
+}
+
+
+type AgentRateSheetRow = {
+  packageId: string;
+  packageName: string;
+  nights: number;
+  hotelCategory: HotelCategory;
+  ticketAndTax: number;
+  businessUpgrade: number;
+  landPax1: number;
+  landPax2: number;
+  landPax3Plus: number;
+  singleSupplement: number;
+};
+
+const AGENT_RATE_HOTELS: HotelCategory[] = ['3 Stars', '4 Stars', '5 Stars'];
+
+function createAgentRatePricingInput(packageId: string, hotelCategory: HotelCategory, passengerCount: number): PricingInput {
+  return {
+    channel: 'agent',
+    pricingMode: 'standard',
+    packageId,
+    passengerCount,
+    chargeablePassengerCount: passengerCount,
+    hotelCategory,
+    travelDate: '',
+    businessUpgradeCount: 0,
+    businessUpgradePriceOverrideTHB: null,
+    singleRoomCount: 0,
+    singleSupplementOverrideTHB: null,
+    childPassengerCount: 0,
+    childSellingPricePerPersonTHB: null,
+    childTicketPricePerPersonTHB: null,
+    childAirportTaxPerPersonTHB: null,
+    additionalItems: [],
+    regularLandCostPerPersonOverrideTHB: null,
+    tourLeaderLandCostPerPersonTHB: null,
+    groupTicketPriceOverrideTHB: null,
+    groupAirportTaxOverrideTHB: null,
+    groupMarginPerTravelerOverrideTHB: null,
+    groupSellingPriceOverrideTHB: null,
+  };
+}
+
+function buildAgentRateRow(settings: GlobalSettings, packages: TourPackage[], packageId: string, hotelCategory: HotelCategory): AgentRateSheetRow | null {
+  const pkg = packages.find((item) => item.id === packageId);
+  if (!pkg) return null;
+  const result1 = calculatePrice(createAgentRatePricingInput(packageId, hotelCategory, 1), settings, packages);
+  const result2 = calculatePrice(createAgentRatePricingInput(packageId, hotelCategory, 2), settings, packages);
+  const result3 = calculatePrice(createAgentRatePricingInput(packageId, hotelCategory, 3), settings, packages);
+  if (!result1 || !result2 || !result3) return null;
+  const landNet = (result: NonNullable<ReturnType<typeof calculatePrice>>) => Math.max(0, result.sellingPricePerPerson - result.airTicketPerPerson - result.airportTaxPerPerson);
+  return {
+    packageId,
+    packageName: pkg.name,
+    nights: pkg.nights,
+    hotelCategory,
+    ticketAndTax: result3.airTicketPerPerson + result3.airportTaxPerPerson,
+    businessUpgrade: Number(settings.businessUpgradeTHB ?? 15000),
+    landPax1: landNet(result1),
+    landPax2: landNet(result2),
+    landPax3Plus: landNet(result3),
+    singleSupplement: getPackageSingleSupplement(pkg, hotelCategory),
+  };
+}
+
+function AgentRateSheetModal({ open, onClose, settings, packages, defaultPackageId, defaultHotelCategory }: {
+  open: boolean;
+  onClose: () => void;
+  settings: GlobalSettings;
+  packages: TourPackage[];
+  defaultPackageId: string;
+  defaultHotelCategory: HotelCategory;
+}) {
+  const [selectedPackageIds, setSelectedPackageIds] = useState<string[]>([]);
+  const [selectedHotels, setSelectedHotels] = useState<HotelCategory[]>([]);
+  const [agentName, setAgentName] = useState('');
+  const [validUntil, setValidUntil] = useState('');
+  const [note, setNote] = useState('ราคาสำหรับ Agent เท่านั้น กรุ๊ปตั้งแต่ 10 ท่านขึ้นไปกรุณาสอบถามราคาอีกครั้ง');
+  const [hotelExamples, setHotelExamples] = useState<Record<HotelCategory, string>>({ '3 Stars': '', '4 Stars': '', '5 Stars': '' });
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedPackageIds((current) => current.length ? current : [defaultPackageId || packages[0]?.id].filter(Boolean) as string[]);
+    setSelectedHotels((current) => current.length ? current : [defaultHotelCategory || '3 Stars']);
+  }, [open, defaultPackageId, defaultHotelCategory, packages]);
+
+  const rows = useMemo(() => selectedPackageIds.flatMap((packageId) => selectedHotels
+    .map((hotelCategory) => buildAgentRateRow(settings, packages, packageId, hotelCategory))
+    .filter((item): item is AgentRateSheetRow => Boolean(item))), [selectedPackageIds, selectedHotels, settings, packages]);
+
+  function togglePackage(packageId: string) {
+    setSelectedPackageIds((current) => current.includes(packageId) ? current.filter((id) => id !== packageId) : [...current, packageId]);
+  }
+  function toggleHotel(hotelCategory: HotelCategory) {
+    setSelectedHotels((current) => current.includes(hotelCategory) ? current.filter((item) => item !== hotelCategory) : [...current, hotelCategory]);
+  }
+
+  const fileTitle = `Agent Rate Sheet - ${selectedPackageIds.length} Program${selectedPackageIds.length === 1 ? '' : 's'}`;
+
+  return <Modal open={open} title="Agent Rate Sheet / ใบราคาเอเจนต์" onClose={onClose} wide>
+    <div className="agent-rate-builder no-print">
+      <div className="agent-rate-builder__intro">
+        <div><span>AGENT SALES TOOL</span><h2>สร้างใบราคา Agent จากข้อมูล Pricing ปัจจุบัน</h2><p>เลือกหลายโปรแกรมและหลายระดับโรงแรมได้ในครั้งเดียว ระบบจะคำนวณ Net Agent จากสูตรเดียวกับหน้าคำนวณราคา และแยกแต่ละโปรแกรม/โรงแรมเป็นคนละหน้าใน PDF</p></div>
+        <button className="primary-button" disabled={!rows.length} onClick={() => { void printElementAsA4('agent-rate-sheet-print-area', fileTitle); }}><FileText/>ดาวน์โหลด / Print PDF</button>
+      </div>
+      <div className="agent-rate-builder__grid">
+        <section>
+          <h3>1. เลือกโปรแกรม</h3>
+          <div className="agent-rate-choice-list">{packages.map((pkg) => <button key={pkg.id} className={selectedPackageIds.includes(pkg.id) ? 'active' : ''} onClick={() => togglePackage(pkg.id)}><i>{selectedPackageIds.includes(pkg.id) ? <Check/> : null}</i><span><strong>{pkg.nights + 1} วัน {pkg.nights} คืน</strong><small>{pkg.name}</small></span></button>)}</div>
+        </section>
+        <section>
+          <h3>2. เลือกระดับโรงแรม</h3>
+          <div className="agent-rate-hotel-options">{AGENT_RATE_HOTELS.map((hotel) => <button key={hotel} className={selectedHotels.includes(hotel) ? 'active' : ''} onClick={() => toggleHotel(hotel)}><i>{selectedHotels.includes(hotel) ? <Check/> : null}</i>{hotel.replace(' Stars',' ดาว')}</button>)}</div>
+          <div className="agent-rate-hotel-notes">
+            {selectedHotels.map((hotel) => <label key={hotel}><span>ตัวอย่างโรงแรม {hotel.replace(' Stars',' ดาว')} (ไม่บังคับ)</span><textarea rows={2} value={hotelExamples[hotel]} onChange={(e) => setHotelExamples((current) => ({ ...current, [hotel]: e.target.value }))} placeholder="เช่น Thimphu: ... / Paro: ..."/></label>)}
+          </div>
+        </section>
+        <section>
+          <h3>3. ข้อมูลเอกสาร</h3>
+          <label><span>ชื่อ Agent / บริษัท (ไม่บังคับ)</span><input value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="เช่น Jasmine Travel"/></label>
+          <label><span>ราคาใช้ได้ถึงวันที่ (ไม่บังคับ)</span><input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}/></label>
+          <label><span>หมายเหตุ</span><textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)}/></label>
+        </section>
+      </div>
+      <div className="agent-rate-builder__summary"><strong>{rows.length}</strong><span>หน้าที่จะออกใน PDF</span><small>{selectedPackageIds.length} โปรแกรม × {selectedHotels.length} ระดับโรงแรม</small></div>
+    </div>
+
+    <div className="agent-rate-print-stack" id="agent-rate-sheet-print-area">
+      {rows.length ? rows.map((row, index) => <AgentRateSheetPage key={`${row.packageId}-${row.hotelCategory}`} row={row} settings={settings} agentName={agentName} validUntil={validUntil} note={note} hotelExamples={hotelExamples[row.hotelCategory]} page={index + 1} totalPages={rows.length}/>) : <div className="agent-rate-empty">เลือกอย่างน้อย 1 โปรแกรม และ 1 ระดับโรงแรม</div>}
+    </div>
+  </Modal>;
+}
+
+function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelExamples, page, totalPages }: {
+  row: AgentRateSheetRow;
+  settings: GlobalSettings;
+  agentName: string;
+  validUntil: string;
+  note: string;
+  hotelExamples: string;
+  page: number;
+  totalPages: number;
+}) {
+  const hotelLabel = row.hotelCategory.replace(' Stars', ' ดาว');
+  const included = [
+    'ตั๋วเครื่องบินไป-กลับ ชั้นประหยัด Bhutan Airlines',
+    `ที่พักโรงแรมระดับ ${hotelLabel}`,
+    'อาหารทุกมื้อตามโปรแกรม',
+    'ไกด์ท้องถิ่นที่สื่อสารภาษาอังกฤษ',
+    'ค่าธรรมเนียมรายวันของรัฐบาล (SDF)',
+    'ค่าเข้าชมสถานที่ท่องเที่ยวตามโปรแกรม',
+    'ค่าธรรมเนียมวีซ่าประเทศภูฏาน',
+    'รถรับส่งและโปรแกรมท่องเที่ยวตามกำหนดการ',
+    'บริการรับ-ส่งสนามบินพาโร',
+    'ประกันการเดินทางแบบระบุวัน',
+  ];
+  const excluded = [
+    'ค่าเช่าม้าขึ้นวัดทักซัง',
+    'ค่าทิปไกด์และคนขับรถ',
+    'ค่าใช้จ่ายส่วนตัวและรายการอื่นนอกเหนือจากโปรแกรม',
+  ];
+  return <article className="agent-rate-page">
+    <header className="agent-rate-page__header">
+      <div><Brand/><small>OMG Experience Co., Ltd. · Bhutan Travel Specialist</small></div>
+      <div><span>NET AGENT RATE</span><strong>{page}/{totalPages}</strong></div>
+    </header>
+    <section className="agent-rate-page__title">
+      <span>{agentName.trim() ? `Prepared for: ${agentName.trim()}` : 'AGENT / PARTNER RATE'}</span>
+      <h1>ราคาโปรแกรมทัวร์ภูฏาน {row.nights + 1} วัน {row.nights} คืน</h1>
+      <h2>พักโรงแรม {hotelLabel} (Net Agent)</h2>
+      <p>{row.packageName}</p>
+    </section>
+    <table className="agent-rate-table">
+      <thead><tr><th>รายการ</th><th>ราคา (บาท)</th></tr></thead>
+      <tbody>
+        <tr><td><b>1. Economy Ticket + Taxes (Bhutan Airlines)</b><small>Agent airfare + airport taxes สำหรับ 1-9 ท่าน</small></td><td>{formatNumber(row.ticketAndTax, 0)}</td></tr>
+        <tr><td className="indent">Upgrade Business Class (Optional)</td><td>{formatNumber(row.businessUpgrade, 0)}</td></tr>
+        <tr><td><b>2. Land + SDF + Visa (บาท/ท่าน)</b><small>คำนวณจาก Pricing ปัจจุบัน รวม Agent margin และการปัดราคาตามสูตรระบบแล้ว</small></td><td></td></tr>
+        <tr><td className="indent">เดินทาง 1 ท่าน</td><td>{formatNumber(row.landPax1, 0)}</td></tr>
+        <tr><td className="indent">เดินทาง 2 ท่าน</td><td>{formatNumber(row.landPax2, 0)}</td></tr>
+        <tr><td className="indent">เดินทาง 3 - 9 ท่าน</td><td>{formatNumber(row.landPax3Plus, 0)}</td></tr>
+        <tr><td className="indent">GIT 10 PAX+</td><td>On Request</td></tr>
+        <tr><td><b>Single Supplement (นอนเดี่ยว)</b></td><td>{row.singleSupplement > 0 ? formatNumber(row.singleSupplement, 0) : 'On Request'}</td></tr>
+      </tbody>
+    </table>
+    <div className="agent-rate-total-strip">
+      <div><small>ราคาสุทธิ 3-9 ท่าน / ท่าน</small><strong>฿{formatNumber(row.ticketAndTax + row.landPax3Plus, 0)}</strong></div>
+      <div><small>ราคา Agent ตั๋วปัจจุบัน</small><strong>฿{formatNumber(Number(settings.agentTicketPriceTHB ?? 25220), 0)}</strong></div>
+      <div><small>Business Upgrade</small><strong>฿{formatNumber(row.businessUpgrade, 0)}</strong></div>
+    </div>
+    {hotelExamples.trim() && <section className="agent-rate-hotels"><h3>ตัวอย่างโรงแรม {hotelLabel}</h3><p>{hotelExamples}</p></section>}
+    <section className="agent-rate-scope">
+      <div><h3>ราคารวม</h3><ul>{included.map((item) => <li key={item}>{item}</li>)}</ul></div>
+      <div><h3>ราคาไม่รวม</h3><ul>{excluded.map((item) => <li key={item}>{item}</li>)}</ul></div>
+    </section>
+    <section className="agent-rate-notes">
+      <strong>หมายเหตุ</strong>
+      <p>{note || 'ราคาสำหรับ Agent เท่านั้น'}</p>
+      {validUntil && <p>ราคานี้ใช้ได้ถึงวันที่ {formatDate(validUntil, 'th')}</p>}
+      <small>ราคานี้ดึงจากข้อมูล Pricing ของ Bhutan Center ณ วันที่ออกเอกสาร ราคาตั๋ว อัตราแลกเปลี่ยน ภาษี วีซ่า LAND และ Margin อาจเปลี่ยนแปลงได้ตามวันที่ยืนยันการจอง</small>
+    </section>
+    <footer><strong>Bhutan Center · OMG Experience Co., Ltd.</strong><span>Agent Rate Sheet · {new Date().toLocaleDateString('th-TH')}</span></footer>
+  </article>;
 }
 
 function formatTravelPeriod(value: string, nights: number, language: 'th' | 'en'): string {

@@ -540,7 +540,7 @@ function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelE
     </table>
     <div className="agent-rate-total-strip">
       <div><small>ราคาสุทธิ 3-9 ท่าน / ท่าน</small><strong>฿{formatNumber(row.ticketAndTax + row.landPax3Plus, 0)}</strong></div>
-      <div><small>ราคา Agent ตั๋วปัจจุบัน</small><strong>฿{formatNumber(Number(settings.agentTicketPriceTHB ?? 25220), 0)}</strong></div>
+      <div><small>ราคา Agent ตั๋ว (ยังไม่รวม Airport Tax)</small><strong>฿{formatNumber(Number(settings.agentTicketPriceTHB ?? 25220), 0)}</strong><span>Airport Tax ฿{formatNumber(Number(settings.airportTaxTHB ?? 6500), 0)} / ท่าน</span></div>
       <div><small>Business Upgrade</small><strong>฿{formatNumber(row.businessUpgrade, 0)}</strong></div>
     </div>
     {hotelExamples.trim() && <section className="agent-rate-hotels"><h3>ตัวอย่างโรงแรม {hotelLabel}</h3><p>{hotelExamples}</p></section>}

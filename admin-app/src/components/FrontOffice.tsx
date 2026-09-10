@@ -26,6 +26,28 @@ interface FrontOfficeProps {
 
 const emptyCustomer: CustomerDetails = { name: '', phone: '', email: '', invoiceAddress: '', note: '' };
 
+const AGENT_RATE_HOTEL_DEFAULTS: Partial<Record<HotelCategory, { thimphu: string[]; punakha: string[]; paro: string[] }>> = {
+  '3 Stars': {
+    thimphu: ['Thimphu Central', 'Hotel Changangkha', 'Lhakyi Hotel', 'Phuntsho Pelri'],
+    punakha: ['River Valley', 'Hotel Lobesa', 'Meri Puensum Hotel'],
+    paro: ['Paro Metta Resort', 'Mandala Resort', 'Paro Grand', 'Olathang Cottage'],
+  },
+  '4 Stars': {
+    thimphu: ['Thimphu Capital Hotel', 'Ariya Hotel'],
+    punakha: ['RKPO Green Resort', 'Lobesa Boutique Hotel'],
+    paro: ['Kaachi Grand', 'Tashi Namgay Resort'],
+  },
+};
+
+function getDefaultAgentHotelExamples(hotelCategory: HotelCategory, nights: number): string {
+  const group = AGENT_RATE_HOTEL_DEFAULTS[hotelCategory];
+  if (!group) return '';
+  const lines = [`Thimphu : ${group.thimphu.join(' / ')}`];
+  if (nights >= 4) lines.push(`Punakha : ${group.punakha.join(' / ')}`);
+  lines.push(`Paro : ${group.paro.join(' / ')}`);
+  return lines.join('\n');
+}
+
 export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, onOpenDashboard, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
   const { t, language } = useI18n();
   const firstPackage = packages[0];
@@ -467,7 +489,11 @@ function AgentRateSheetModal({ open, onClose, settings, packages, defaultPackage
           <h3>2. เลือกระดับโรงแรม</h3>
           <div className="agent-rate-hotel-options">{AGENT_RATE_HOTELS.map((hotel) => <button key={hotel} className={selectedHotels.includes(hotel) ? 'active' : ''} onClick={() => toggleHotel(hotel)}><i>{selectedHotels.includes(hotel) ? <Check/> : null}</i>{hotel.replace(' Stars',' ดาว')}</button>)}</div>
           <div className="agent-rate-hotel-notes">
-            {selectedHotels.map((hotel) => <label key={hotel}><span>ตัวอย่างโรงแรม {hotel.replace(' Stars',' ดาว')} (ไม่บังคับ)</span><textarea rows={2} value={hotelExamples[hotel]} onChange={(e) => setHotelExamples((current) => ({ ...current, [hotel]: e.target.value }))} placeholder="เช่น Thimphu: ... / Paro: ..."/></label>)}
+            {selectedHotels.map((hotel) => <label key={hotel}>
+              <span>โรงแรม {hotel.replace(' Stars',' ดาว')} สำหรับเอกสาร (ไม่บังคับ)</span>
+              <textarea rows={3} value={hotelExamples[hotel]} onChange={(e) => setHotelExamples((current) => ({ ...current, [hotel]: e.target.value }))} placeholder="ปล่อยว่าง = ใช้รายชื่อโรงแรมมาตรฐานของ Bhutan Center อัตโนมัติ"/>
+              <small>{hotel === '3 Stars' || hotel === '4 Stars' ? 'ระบบมีรายชื่อโรงแรมมาตรฐานให้แล้ว และจะแสดงเมืองตามโปรแกรมอัตโนมัติ' : '5 ดาวยังไม่มีรายชื่อมาตรฐานในชุดนี้ สามารถกรอกเองได้'}</small>
+            </label>)}
           </div>
         </section>
         <section>
@@ -481,7 +507,11 @@ function AgentRateSheetModal({ open, onClose, settings, packages, defaultPackage
     </div>
 
     <div className="agent-rate-print-stack" id="agent-rate-sheet-print-area">
-      {rows.length ? rows.map((row, index) => <AgentRateSheetPage key={`${row.packageId}-${row.hotelCategory}`} row={row} settings={settings} agentName={agentName} validUntil={validUntil} note={note} hotelExamples={hotelExamples[row.hotelCategory]} page={index + 1} totalPages={rows.length}/>) : <div className="agent-rate-empty">เลือกอย่างน้อย 1 โปรแกรม และ 1 ระดับโรงแรม</div>}
+      {rows.length ? rows.map((row, index) => {
+        const customHotels = hotelExamples[row.hotelCategory]?.trim() || '';
+        const resolvedHotels = customHotels || getDefaultAgentHotelExamples(row.hotelCategory, row.nights);
+        return <AgentRateSheetPage key={`${row.packageId}-${row.hotelCategory}`} row={row} settings={settings} agentName={agentName} validUntil={validUntil} note={note} hotelExamples={resolvedHotels} page={index + 1} totalPages={rows.length}/>;
+      }) : <div className="agent-rate-empty">เลือกอย่างน้อย 1 โปรแกรม และ 1 ระดับโรงแรม</div>}
     </div>
   </Modal>;
 }
@@ -543,7 +573,7 @@ function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelE
       <div><small>ราคา Agent ตั๋ว (ยังไม่รวม Airport Tax)</small><strong>฿{formatNumber(Number(settings.agentTicketPriceTHB ?? 25220), 0)}</strong><span>Airport Tax ฿{formatNumber(Number(settings.airportTaxTHB ?? 6500), 0)} / ท่าน</span></div>
       <div><small>Business Upgrade</small><strong>฿{formatNumber(row.businessUpgrade, 0)}</strong></div>
     </div>
-    {hotelExamples.trim() && <section className="agent-rate-hotels"><h3>ตัวอย่างโรงแรม {hotelLabel}</h3><p>{hotelExamples}</p></section>}
+    {hotelExamples.trim() && <section className="agent-rate-hotels"><h3>โรงแรมมาตรฐาน {hotelLabel}</h3><p>{hotelExamples}</p></section>}
     <section className="agent-rate-scope">
       <div><h3>ราคารวม</h3><ul>{included.map((item) => <li key={item}>{item}</li>)}</ul></div>
       <div><h3>ราคาไม่รวม</h3><ul>{excluded.map((item) => <li key={item}>{item}</li>)}</ul></div>

@@ -4581,3 +4581,100 @@ textarea{min-height:74px}
   .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-scope,
   .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-notes{break-inside:avoid!important;page-break-inside:avoid!important}
 }
+
+/* ===== V13.14.5 · Agent Rate Sheet PDF parity fix ===== */
+@media print {
+  /* Chrome Save as PDF can evaluate the A4 viewport as a narrow screen.
+     Force the desktop document layout so the PDF matches the in-app preview. */
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-scope {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, .9fr) !important;
+    gap: 10px !important;
+    width: 100% !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-scope > div {
+    min-width: 0 !important;
+    width: auto !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-scope ul {
+    columns: 2 !important;
+    column-gap: 18px !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-scope > div:last-child ul {
+    columns: 1 !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-airfare-note,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-hotels,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-notes {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Keep one Agent Rate Sheet per A4 page without clipping the last section. */
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-page {
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    padding: 10mm 12mm 8mm !important;
+  }
+
+  /* Print remains readable, but is slightly more compact than the screen
+     preview so every rate sheet reliably fits one A4 page. */
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-page__title {
+    padding: 10px 0 9px !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-page__title h1 {
+    font-size: 22px !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-page__title h2 {
+    font-size: 18px !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-table {
+    font-size: 11px !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-table th,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-table td {
+    padding: 6px 8px !important;
+    line-height: 1.35 !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-hotels,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-airfare-note,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-scope,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-notes {
+    margin-top: 8px !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-scope li {
+    font-size: 10px !important;
+    line-height: 1.45 !important;
+    margin-bottom: 2px !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-hotels p,
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-airfare-note p {
+    font-size: 11px !important;
+    line-height: 1.45 !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-notes p {
+    font-size: 10.5px !important;
+    line-height: 1.45 !important;
+  }
+
+  .a4-native-print-root #agent-rate-sheet-print-area .agent-rate-notes small,
+  .a4-native-print-root #agent-rate-sheet-print-area footer {
+    font-size: 9px !important;
+  }
+}

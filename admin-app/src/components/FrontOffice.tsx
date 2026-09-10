@@ -560,7 +560,7 @@ function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelE
       <tbody>
         <tr><td><b>1. Economy Ticket + Taxes (Bhutan Airlines)</b><small>Agent airfare + airport taxes สำหรับ 1-9 ท่าน</small></td><td>{formatNumber(row.ticketAndTax, 0)}</td></tr>
         <tr><td className="indent">Upgrade Business Class (Optional)</td><td>{formatNumber(row.businessUpgrade, 0)}</td></tr>
-        <tr><td><b>2. Land + SDF + Visa (บาท/ท่าน)</b><small>คำนวณจาก Pricing ปัจจุบัน รวม Agent margin และการปัดราคาตามสูตรระบบแล้ว</small></td><td></td></tr>
+        <tr><td><b>2. Land + SDF + Visa (บาท/ท่าน)</b></td><td></td></tr>
         <tr><td className="indent">เดินทาง 1 ท่าน</td><td>{formatNumber(row.landPax1, 0)}</td></tr>
         <tr><td className="indent">เดินทาง 2 ท่าน</td><td>{formatNumber(row.landPax2, 0)}</td></tr>
         <tr><td className="indent">เดินทาง 3 - 9 ท่าน</td><td>{formatNumber(row.landPax3Plus, 0)}</td></tr>

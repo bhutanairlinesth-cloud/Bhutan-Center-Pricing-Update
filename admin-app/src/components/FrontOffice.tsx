@@ -568,11 +568,10 @@ function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelE
         <tr><td><b>Single Supplement (นอนเดี่ยว)</b></td><td>{row.singleSupplement > 0 ? formatNumber(row.singleSupplement, 0) : 'On Request'}</td></tr>
       </tbody>
     </table>
-    <div className="agent-rate-total-strip">
-      <div><small>ราคาสุทธิ 3-9 ท่าน / ท่าน</small><strong>฿{formatNumber(row.ticketAndTax + row.landPax3Plus, 0)}</strong></div>
-      <div><small>ราคา Agent ตั๋ว (ยังไม่รวม Airport Tax)</small><strong>฿{formatNumber(Number(settings.agentTicketPriceTHB ?? 25220), 0)}</strong><span>Airport Tax ฿{formatNumber(Number(settings.airportTaxTHB ?? 6500), 0)} / ท่าน</span></div>
-      <div><small>Business Upgrade</small><strong>฿{formatNumber(row.businessUpgrade, 0)}</strong></div>
-    </div>
+    <section className="agent-rate-airfare-note">
+      <strong>หมายเหตุเรื่องตั๋วเครื่องบิน</strong>
+      <p>ราคา Economy Ticket + Taxes ด้านบนเป็นราคารวมตั๋ว Agent + Airport Tax แล้ว โดยค่าโดยสาร Agent พื้นฐานอยู่ที่ ฿{formatNumber(Number(settings.agentTicketPriceTHB ?? 25220), 0)} และ Airport Tax ฿{formatNumber(Number(settings.airportTaxTHB ?? 6500), 0)} / ท่าน</p>
+    </section>
     {hotelExamples.trim() && <section className="agent-rate-hotels"><h3>โรงแรมมาตรฐาน {hotelLabel}</h3><p>{hotelExamples}</p></section>}
     <section className="agent-rate-scope">
       <div><h3>ราคารวม</h3><ul>{included.map((item) => <li key={item}>{item}</li>)}</ul></div>

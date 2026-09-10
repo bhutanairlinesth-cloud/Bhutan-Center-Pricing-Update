@@ -4505,50 +4505,50 @@ textarea{min-height:74px}
 
 .agent-rate-print-stack{display:grid;gap:18px}
 .agent-rate-empty{padding:30px;border:1px dashed #d8c9b4;border-radius:18px;text-align:center;color:#8a7a68;background:#fffaf3}
-.agent-rate-page{width:210mm;max-width:100%;min-height:278mm;margin:0 auto;padding:12mm 13mm 10mm;background:#fff;color:#1f1a16;border:1px solid #e5dfd6;box-shadow:0 12px 34px rgba(71,53,35,.08);font-family:Prompt,Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column}
+.agent-rate-page{width:210mm;max-width:100%;min-height:278mm;margin:0 auto;padding:12mm 13mm 10.5mm;background:#fff;color:#1f1a16;border:1px solid #e5dfd6;box-shadow:0 12px 34px rgba(71,53,35,.08);font-family:Prompt,Arial,sans-serif;box-sizing:border-box;display:flex;flex-direction:column}
 .agent-rate-page__header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding-bottom:10px;border-bottom:1px solid #d8d0c6}
 .agent-rate-page__header>div:first-child{display:flex;flex-direction:column;gap:5px}
 .agent-rate-page__header .brand img{max-height:42px!important;max-width:160px!important;object-fit:contain}
-.agent-rate-page__header small{font-size:9px;color:#776b60}
+.agent-rate-page__header small{font-size:10px;color:#776b60}
 .agent-rate-page__header>div:last-child{text-align:right;display:flex;flex-direction:column;gap:4px}
-.agent-rate-page__header>div:last-child span{font-size:9px;font-weight:800;letter-spacing:.14em;color:#9a6c2e}
-.agent-rate-page__header>div:last-child strong{font-size:10px;color:#6b6056}
+.agent-rate-page__header>div:last-child span{font-size:10px;font-weight:800;letter-spacing:.14em;color:#9a6c2e}
+.agent-rate-page__header>div:last-child strong{font-size:11px;color:#6b6056}
 .agent-rate-page__title{text-align:center;padding:14px 0 12px}
-.agent-rate-page__title>span{font-size:9px;font-weight:700;color:#8b6b43;text-transform:uppercase;letter-spacing:.08em}
-.agent-rate-page__title h1{margin:5px 0 2px;font-size:20px;line-height:1.25;color:#171310}
-.agent-rate-page__title h2{margin:0;font-size:17px;line-height:1.3;color:#171310}
-.agent-rate-page__title p{margin:6px 0 0;font-size:10px;color:#776b61}
-.agent-rate-table{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed}
-.agent-rate-table th,.agent-rate-table td{border:1px solid #29231f;padding:5px 7px;vertical-align:top}
+.agent-rate-page__title>span{font-size:10px;font-weight:700;color:#8b6b43;text-transform:uppercase;letter-spacing:.08em}
+.agent-rate-page__title h1{margin:5px 0 3px;font-size:26px;line-height:1.2;color:#171310}
+.agent-rate-page__title h2{margin:0;font-size:21px;line-height:1.28;color:#171310}
+.agent-rate-page__title p{margin:7px 0 0;font-size:12px;color:#776b61}
+.agent-rate-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.agent-rate-table th,.agent-rate-table td{border:1px solid #29231f;padding:8px 10px;vertical-align:top;line-height:1.45}
 .agent-rate-table th{background:#e6e2dd;font-weight:800;text-align:center}
 .agent-rate-table th:first-child{width:76%}
 .agent-rate-table td:last-child{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
 .agent-rate-table td b{font-weight:800}
-.agent-rate-table td small{display:block;margin-top:2px;color:#746b63;font-size:8px;line-height:1.35;font-weight:400}
-.agent-rate-table td.indent{padding-left:27px}
-.agent-rate-total-strip{display:grid;grid-template-columns:1.15fr 1fr 1fr;margin-top:9px;border:1px solid #e3d4ba;border-radius:10px;overflow:hidden;background:#fff8e9}
+.agent-rate-table td small{display:block;margin-top:3px;color:#746b63;font-size:10px;line-height:1.45;font-weight:400}
+.agent-rate-table td.indent{padding-left:34px}
+.agent-rate-total-strip{display:none}
 .agent-rate-total-strip>div{padding:8px 10px;border-right:1px solid #e3d4ba;display:flex;flex-direction:column;gap:2px}
 .agent-rate-total-strip>div:last-child{border-right:0}
 .agent-rate-total-strip small{font-size:8px;color:#796a58}
 .agent-rate-total-strip strong{font-size:14px;color:#825b24}
-.agent-rate-hotels{margin-top:9px;padding:8px 10px;background:#fff8c7;border-radius:7px;border:1px solid #eee0a7}
-.agent-rate-hotels h3{margin:0 0 3px;font-size:10px}
-.agent-rate-hotels p{margin:0;font-size:9px;line-height:1.45;white-space:pre-wrap}
+.agent-rate-hotels,.agent-rate-airfare-note{margin-top:10px;padding:10px 12px;background:#fff8c7;border-radius:8px;border:1px solid #eee0a7}
+.agent-rate-hotels h3,.agent-rate-airfare-note strong{margin:0 0 4px;font-size:16px;display:block;color:#2c241d}
+.agent-rate-hotels p,.agent-rate-airfare-note p{margin:0;font-size:12px;line-height:1.6;white-space:pre-wrap}
 .agent-rate-scope{display:grid;grid-template-columns:1.45fr .9fr;gap:13px;margin-top:10px}
-.agent-rate-scope>div{padding:8px 10px;border:1px solid #e6dfd6;border-radius:9px}
-.agent-rate-scope h3{margin:0 0 5px;font-size:10px}
-.agent-rate-scope ul{margin:0;padding-left:16px;columns:2;column-gap:18px}
+.agent-rate-scope>div{padding:10px 12px;border:1px solid #e6dfd6;border-radius:9px}
+.agent-rate-scope h3{margin:0 0 6px;font-size:15px}
+.agent-rate-scope ul{margin:0;padding-left:18px;columns:2;column-gap:22px}
 .agent-rate-scope>div:last-child ul{columns:1}
-.agent-rate-scope li{font-size:8px;line-height:1.45;margin-bottom:2px;break-inside:avoid}
-.agent-rate-notes{margin-top:9px;padding:8px 10px;border-radius:9px;background:#f8f4ee;border:1px solid #e8dfd4}
-.agent-rate-notes strong{font-size:9px}
-.agent-rate-notes p{margin:3px 0;font-size:8.5px;line-height:1.45}
-.agent-rate-notes small{display:block;margin-top:4px;font-size:7.5px;line-height:1.4;color:#74695f}
-.agent-rate-page footer{margin-top:auto;padding-top:8px;border-top:1px solid #ded6cc;display:flex;justify-content:space-between;gap:12px;font-size:8px;color:#776d64}
+.agent-rate-scope li{font-size:11px;line-height:1.55;margin-bottom:4px;break-inside:avoid}
+.agent-rate-notes{margin-top:10px;padding:10px 12px;border-radius:9px;background:#f8f4ee;border:1px solid #e8dfd4}
+.agent-rate-notes strong{font-size:15px}
+.agent-rate-notes p{margin:4px 0;font-size:11px;line-height:1.6}
+.agent-rate-notes small{display:block;margin-top:5px;font-size:10px;line-height:1.55;color:#74695f}
+.agent-rate-page footer{margin-top:auto;padding-top:8px;border-top:1px solid #ded6cc;display:flex;justify-content:space-between;gap:12px;font-size:10px;color:#776d64}
 .agent-rate-page footer strong{color:#433930}
 
 @media(max-width:1100px){.agent-rate-builder__grid{grid-template-columns:1fr 1fr}.agent-rate-builder__grid>section:last-child{grid-column:1/-1}}
-@media(max-width:760px){.page-intro--pricing{display:block}.pricing-page-actions{align-items:stretch;margin-top:12px}.agent-rate-sheet-trigger{width:100%;min-width:0}.agent-rate-builder__intro{flex-direction:column}.agent-rate-builder__intro .primary-button{width:100%}.agent-rate-builder__grid{grid-template-columns:1fr}.agent-rate-builder__grid>section:last-child{grid-column:auto}.agent-rate-builder__summary{align-items:flex-start;flex-wrap:wrap}.agent-rate-builder__summary small{width:100%;margin-left:0}.agent-rate-page{width:100%;min-height:auto;padding:18px}.agent-rate-scope{grid-template-columns:1fr}.agent-rate-total-strip{grid-template-columns:1fr}.agent-rate-total-strip>div{border-right:0;border-bottom:1px solid #e3d4ba}.agent-rate-total-strip>div:last-child{border-bottom:0}}
+@media(max-width:760px){.page-intro--pricing{display:block}.pricing-page-actions{align-items:stretch;margin-top:12px}.agent-rate-sheet-trigger{width:100%;min-width:0}.agent-rate-builder__intro{flex-direction:column}.agent-rate-builder__intro .primary-button{width:100%}.agent-rate-builder__grid{grid-template-columns:1fr}.agent-rate-builder__grid>section:last-child{grid-column:auto}.agent-rate-builder__summary{align-items:flex-start;flex-wrap:wrap}.agent-rate-builder__summary small{width:100%;margin-left:0}.agent-rate-page{width:100%;min-height:auto;padding:18px}.agent-rate-scope{grid-template-columns:1fr}.agent-rate-scope ul{columns:1}.agent-rate-total-strip{display:none}}
 
 @media print{
   .a4-native-print-root #agent-rate-sheet-print-area{

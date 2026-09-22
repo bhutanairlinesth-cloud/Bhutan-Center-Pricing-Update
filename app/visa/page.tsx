@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SectionIntro from "@/components/SectionIntro";
+import LineCta from "@/components/LineCta";
 import { metadataForPath } from "@/lib/seo-config";
 import { loadSeoState } from "@/lib/seo-store";
 
@@ -10,8 +11,8 @@ export async function generateMetadata() {
 
 export default function VisaPage() {
   return <>
-    <section className="page-hero"><div className="container"><span className="breadcrumbs">Travel service / Visa</span><h1>วีซ่าภูฏาน<br/>ให้เราดูแลขั้นตอนให้</h1><p>เตรียมเอกสารหลักให้ครบ จากนั้นทีม Bhutan Center จะช่วยประสานขั้นตอนยื่นวีซ่าและแจ้งความคืบหน้าให้คุณ</p></div></section>
-    <section className="section"><div className="container"><SectionIntro eyebrow="Visa process" title="ง่ายใน 3 ขั้นตอน" body="ข้อมูลด้านล่างย้ายมาจากเนื้อหาหลักของ Bhutan Center และสามารถปรับค่าธรรมเนียมหรือเงื่อนไขจากหลังบ้านได้ในอนาคต"/><div className="steps"><div className="step-row"><div><h3>เตรียมเอกสาร</h3><p>ไฟล์หน้าหนังสือเดินทางที่มีอายุใช้งานเหลืออย่างน้อย 6 เดือนนับจากวันเดินทาง และรูปถ่ายสีหน้าตรงตามข้อกำหนด</p></div></div><div className="step-row"><div><h3>ส่งเอกสารให้ Bhutan Center</h3><p>ทีมงานตรวจสอบความครบถ้วนและนำเข้าสู่กระบวนการยื่นวีซ่า ค่าธรรมเนียมวีซ่าที่เว็บไซต์เดิมระบุคือ USD 40 และรวมอยู่ในแพ็กเกจทัวร์</p></div></div><div className="step-row"><div><h3>รับ e‑Visa</h3><p>เมื่อได้รับการอนุมัติ ทีมงานจะส่งเอกสาร e‑Visa ให้ทางอีเมลเพื่อใช้ประกอบการเดินทาง</p></div></div></div></div></section>
-    <section className="section section--white"><div className="container callout"><div><h2>เดินทางกับแพ็กเกจ Bhutan Center?</h2><p>Visa และ SDF สามารถรวมอยู่ในแพ็กเกจเดียว ไม่ต้องแยกประสานหลายจุด</p></div><Link href="/packagetour-bhutan-new" className="button button--gold">ดูแพ็กเกจ <span>→</span></Link></div></section>
+    <section className="page-hero"><div className="container"><span className="breadcrumbs">Travel service / Visa</span><h1>วีซ่าภูฏาน<br/>ไม่ต้องจัดการคนเดียว</h1><p>เตรียมเอกสารหลักให้ครบ จากนั้นทีม Bhutan Center ช่วยตรวจ ประสาน และส่งเอกสาร e‑Visa ให้ก่อนเดินทาง</p></div></section>
+    <section className="section"><div className="container"><SectionIntro eyebrow="Visa process" title="3 ขั้นตอนที่ต้องรู้" body="สำหรับลูกค้าที่เดินทางกับแพ็กเกจ Bhutan Center ทีมงานจะสรุปเอกสารและค่าธรรมเนียมที่เกี่ยวข้องให้ตามวันเดินทางจริง"/><div className="steps"><div className="step-row"><div><h3>เตรียม Passport และรูปถ่าย</h3><p>ส่งไฟล์หน้าหนังสือเดินทางที่มีอายุใช้งานเพียงพอสำหรับการเดินทาง พร้อมรูปถ่ายสีหน้าตรงตามข้อกำหนดที่ทีมงานแจ้ง</p></div></div><div className="step-row"><div><h3>ส่งเอกสารให้ทีมตรวจ</h3><p>ทีม Bhutan Center ตรวจความครบถ้วนก่อนนำเข้าสู่ขั้นตอนยื่นวีซ่า และจะแจ้งค่าธรรมเนียม/เงื่อนไขที่เกี่ยวข้องในใบเสนอราคาหรือเอกสารการเดินทาง</p></div></div><div className="step-row"><div><h3>รับ e‑Visa ก่อนออกเดินทาง</h3><p>เมื่อได้รับการอนุมัติ ทีมงานจะส่งเอกสาร e‑Visa และแจ้งรายการเอกสารที่ควรพกติดตัวในวันเดินทาง</p></div></div></div></div></section>
+    <section className="section section--white"><div className="container callout"><div><h2>เดินทางกับแพ็กเกจ Bhutan Center?</h2><p>ให้ทีมดูแล Visa + SDF ไปพร้อมกับตั๋ว โรงแรม และโปรแกรม จะง่ายกว่าการแยกประสานทีละส่วน</p></div><div className="callout-actions"><Link href="/packages" className="button button--gold">ดูแพ็กเกจ <span>→</span></Link><LineCta className="button button--outline button--light">ถามเรื่องเอกสาร</LineCta></div></div></section>
   </>;
 }

@@ -1,3 +1,5 @@
+import { siteImages } from "./site-images";
+
 export type ItineraryDay = {
   day: number;
   title: string;
@@ -99,10 +101,8 @@ export const fallbackPackages: TourPackage[] = [
     priceNote: "ราคาเริ่มต้นต่อท่าน สำหรับการเดินทางตามเงื่อนไขที่กำหนด",
     airline: "Bhutan Airlines",
     hotel: "Tourist Class / 3-star equivalent",
-    image:
-      "https://upload.wikimedia.org/wikipedia/commons/0/0c/Paro_Taktsang%2C_Taktsang_Palphug_Monastery%2C_Tiger%27s_Nest_-views_from_the_trekking_path-_during_LGFC_-_Bhutan_2019_%28210%29.jpg",
-    accentImage:
-      "https://upload.wikimedia.org/wikipedia/commons/5/58/Punakha_dzong.jpg",
+    image: siteImages.tigerNest,
+    accentImage: siteImages.punakhaDzong,
     isActive: true,
   },
   {
@@ -162,9 +162,8 @@ export const fallbackPackages: TourPackage[] = [
     priceNote: "ราคาเริ่มต้นต่อท่าน ราคาอาจเปลี่ยนตามวันเดินทาง จำนวนผู้เดินทาง และราคาตั๋ว",
     airline: "Bhutan Airlines",
     hotel: "Tourist Class / 3-star equivalent",
-    image: "https://upload.wikimedia.org/wikipedia/commons/5/58/Punakha_dzong.jpg",
-    accentImage:
-      "https://upload.wikimedia.org/wikipedia/commons/7/76/Tashichho_Dzong%2C_Bhutan_19.jpg",
+    image: siteImages.punakhaDzong,
+    accentImage: siteImages.thimphuDzong,
     isActive: true,
   },
   {
@@ -200,10 +199,8 @@ export const fallbackPackages: TourPackage[] = [
     priceNote: "ราคาเริ่มต้นต่อท่าน ราคาอาจเปลี่ยนตามวันเดินทาง จำนวนผู้เดินทาง และราคาตั๋ว",
     airline: "Bhutan Airlines",
     hotel: "Tourist Class / 3-star equivalent",
-    image:
-      "https://upload.wikimedia.org/wikipedia/commons/7/76/Tashichho_Dzong%2C_Bhutan_19.jpg",
-    accentImage:
-      "https://upload.wikimedia.org/wikipedia/commons/0/0c/Paro_Taktsang%2C_Taktsang_Palphug_Monastery%2C_Tiger%27s_Nest_-views_from_the_trekking_path-_during_LGFC_-_Bhutan_2019_%28210%29.jpg",
+    image: siteImages.phobjikhaValley,
+    accentImage: siteImages.tigerNest,
     isActive: true,
   },
 ];

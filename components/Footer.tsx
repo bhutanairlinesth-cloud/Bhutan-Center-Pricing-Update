@@ -25,6 +25,12 @@ export default function Footer() {
         </div>
       </div>
       <div className="page-container footer-bottom"><BrandMark light/><span>© {new Date().getFullYear()} OMG Experience Co., Ltd.</span><span>ใบอนุญาตนำเที่ยว 11/07261</span></div>
+      <div className="page-container footer-photo-credits">
+        <details>
+          <summary>Photo credits</summary>
+          <p>สถานที่จริงในภูฏาน: <a href="https://commons.wikimedia.org/wiki/File:Paro_Taktsang,_Taktsang_Palphug_Monastery,_Tiger%27s_Nest_-views_from_the_trekking_path-_during_LGFC_-_Bhutan_2019_(210).jpg" target="_blank" rel="noreferrer">Vinayaraj / CC BY-SA 4.0</a> · <a href="https://commons.wikimedia.org/wiki/File:Punakha_Dzong_(15221769444).jpg" target="_blank" rel="noreferrer">Arian Zwegers / CC BY 2.0</a> · <a href="https://commons.wikimedia.org/wiki/File:Tashichho_Dzong_2012-11-19.jpg" target="_blank" rel="noreferrer">Christopher J. Fynn / CC BY-SA 3.0</a> · <a href="https://commons.wikimedia.org/wiki/File:Phobjikha_valley.jpg" target="_blank" rel="noreferrer">Kheng Singye Dorji / CC BY-SA 4.0</a> · <a href="https://commons.wikimedia.org/wiki/File:Bhutan_Airlines_Airbus_A319_(A5-BAC)_at_Paro_Airport.jpg" target="_blank" rel="noreferrer">Phil Pesch / CC BY-SA 2.0</a>. ภาพอาจถูกครอปเพื่อจัดวางบนหน้าเว็บ</p>
+        </details>
+      </div>
     </footer>
   );
 }

@@ -404,3 +404,71 @@
 .floating-line-button{position:fixed;right:24px;bottom:24px;z-index:90;display:flex;align-items:center;gap:10px;padding:10px 16px 10px 10px;border-radius:999px;background:#fff;color:#273228;box-shadow:0 14px 40px rgba(55,46,31,.18);border:1px solid rgba(111,95,70,.12);font-size:13px;font-weight:600;transition:transform .22s ease,box-shadow .22s ease}.floating-line-button:hover{transform:translateY(-3px);box-shadow:0 18px 46px rgba(55,46,31,.22)}.floating-line-dot{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:#06c755;color:#fff;font-size:10px;font-weight:800;letter-spacing:.04em}.floating-line-button strong{font-weight:600}
 .line-first-panel{margin-bottom:22px;padding:22px;border-radius:22px;background:linear-gradient(135deg,#f2fff6,#fff);border:1px solid rgba(6,199,85,.18);display:grid;grid-template-columns:1fr auto;gap:22px;align-items:center}.line-first-panel h3{margin:0 0 6px;font-size:22px;font-weight:500;color:#332d27}.line-first-panel p{margin:0;color:#73695f;font-size:14px;line-height:1.7}.line-first-panel .line-button{white-space:nowrap}
 @media(max-width:720px){.floating-line-button{right:14px;bottom:14px}.floating-line-button strong{display:none}.floating-line-button{padding:8px}.line-first-panel{grid-template-columns:1fr}.line-first-panel .line-button{width:100%}}
+
+/* ===== V13.15 PRESENTATION-READY PUBLIC WEBSITE ===== */
+/* Conversion / trust helpers */
+.hero-price-callout{
+  display:grid;grid-template-columns:auto auto auto;align-items:baseline;column-gap:9px;row-gap:2px;
+  width:max-content;max-width:100%;margin-top:30px;padding:16px 19px 14px;border:1px solid rgba(181,138,73,.26);
+  border-radius:20px;background:rgba(255,253,249,.76);box-shadow:0 14px 36px rgba(88,66,39,.07);backdrop-filter:blur(10px)
+}
+.hero-price-callout>span{grid-column:1/-1;color:#7a6d60;font-size:12px;letter-spacing:.04em}
+.hero-price-callout>strong{color:var(--gold-dark);font-size:36px;line-height:1.1;font-weight:600;letter-spacing:-.035em}
+.hero-price-callout>small{color:#85796d;font-size:13px}.hero-price-callout>em{grid-column:1/-1;margin-top:4px;color:#9a8c7d;font-size:10px;font-style:normal}
+.hero-photo-caption{position:absolute;z-index:3;left:26px;bottom:26px;color:#fff;text-shadow:0 2px 16px rgba(0,0,0,.28)}
+.hero-photo-caption small,.airline-photo-caption{letter-spacing:.12em}.hero-photo-caption small{display:block;color:#f2d7a7;font-size:10px}.hero-photo-caption strong{display:block;font-size:17px;font-weight:500}
+.hero-place-nav a{position:relative;z-index:5;padding:7px 11px;border-radius:999px;color:rgba(255,255,255,.78);font-size:11px;cursor:pointer;transition:background .2s ease,color .2s ease,transform .2s ease}
+.hero-place-nav a:hover,.hero-place-nav a:focus-visible,.hero-place-nav a.active{background:rgba(255,253,249,.96);color:var(--gold-dark);transform:translateY(-1px);outline:none}
+.package-section-cta,.compare-cta{margin-top:34px;padding:21px 23px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(135deg,#fffdf9,#f6eee2);display:flex;align-items:center;justify-content:space-between;gap:22px}
+.package-section-cta>div,.compare-cta>div{min-width:0}.package-section-cta strong,.compare-cta strong{display:block;color:var(--ink);font-size:17px;font-weight:500}.package-section-cta span,.compare-cta>div>span{display:block;margin-top:3px;color:var(--muted);font-size:13px}
+.airline-feature-media .airline-photo-caption{position:absolute;z-index:3;right:20px;bottom:20px;padding:9px 12px;border:1px solid rgba(255,255,255,.25);border-radius:999px;background:rgba(43,35,28,.52);backdrop-filter:blur(10px);color:#fff;font-size:10px}
+
+/* Destinations: real-place editorial experience */
+.destination-sales-hero .inner-hero__copy .gold-button{margin-top:24px}
+.destination-editorial{scroll-margin-top:118px}
+.destination-photo-label{position:absolute;z-index:3;left:22px;right:22px;bottom:20px;color:#fff;text-shadow:0 2px 18px rgba(0,0,0,.34)}
+.destination-photo-label small{display:block;color:#f2d7a7;font-size:10px;letter-spacing:.12em}.destination-photo-label strong{display:block;margin-top:2px;font-size:17px;font-weight:500}
+.destination-editorial-media::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(28,23,18,.02) 42%,rgba(28,23,18,.48) 100%);pointer-events:none}
+.destination-actions{display:flex;align-items:center;flex-wrap:wrap;gap:18px;margin-top:24px}.destination-line-link{display:inline-flex;align-items:center;min-height:42px;padding:0 14px;border:1px solid rgba(6,199,85,.30);border-radius:999px;color:#18894b;font-size:13px;font-weight:500;background:#f6fff9;transition:.2s}.destination-line-link:hover{background:#eafff1;transform:translateY(-1px)}
+.destination-final-cta{padding-top:28px}
+
+/* Bhutan Airlines: hero should feel like a product, not an information page */
+.airline-hero--photo{position:relative;overflow:hidden;padding:144px 0 70px;background:linear-gradient(145deg,#27231f,#4d4033)}
+.airline-hero--photo::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 15% 30%,rgba(197,154,88,.20),transparent 27%);pointer-events:none}
+.airline-hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:.82fr 1.18fr;gap:56px;align-items:center}
+.airline-hero--photo .airline-hero-copy{max-width:none}.airline-hero--photo .airline-hero-copy h1{font-size:clamp(52px,5vw,76px);letter-spacing:-.04em}.airline-hero--photo .airline-hero-copy p{max-width:650px;line-height:1.85}
+.airline-hero-photo{position:relative;min-height:590px;overflow:hidden;border-radius:34px;box-shadow:0 28px 65px rgba(0,0,0,.26);background:#5e554a}.airline-hero-photo::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 52%,rgba(24,20,17,.50));pointer-events:none}.airline-hero-photo img{width:100%;height:100%;object-fit:cover}.airline-hero-photo>div{position:absolute;z-index:2;left:24px;bottom:22px;color:#fff}.airline-hero-photo small{display:block;color:#efd3a3;font-size:10px;letter-spacing:.12em}.airline-hero-photo strong{display:block;margin-top:3px;font-size:20px;font-weight:500}
+.airline-hero-actions{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-top:28px}.airline-line-link{display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:0 20px;border:1px solid rgba(255,255,255,.25);border-radius:999px;color:#fff;font-size:13px;font-weight:500;transition:.2s}.airline-line-link:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.4)}
+.airline-hero-trust{display:flex;align-items:center;gap:12px;margin-top:30px;color:rgba(255,255,255,.76);font-size:12px;letter-spacing:.07em}.airline-hero-trust b{color:#dfbd83;font-weight:400}
+
+/* Public-page CTA polish */
+.callout-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.button--light{border-color:rgba(255,255,255,.28);color:#fff}.button--light:hover{background:rgba(255,255,255,.08)}
+.packages-hero-line{display:inline-flex;align-items:center;gap:10px;margin-top:23px;color:#178a4b;font-size:13px;font-weight:500;cursor:pointer}.packages-hero-line:hover span{transform:translateX(3px)}.packages-hero-line span{transition:.2s}
+.package-price-disclaimer{max-width:980px;margin:26px auto 0;text-align:center;color:#887b6e;font-size:11px;line-height:1.7}
+.package-hero-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px}.package-quote-button{min-height:52px}.package-price-note{margin:12px 0 0!important;color:#968879!important;font-size:11px!important;line-height:1.65!important}
+.final-cta-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:20px}.footer-secondary-button{min-height:52px;padding:0 20px;border:1px solid rgba(255,255,255,.22);border-radius:999px;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;transition:.2s}.footer-secondary-button:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.36)}
+
+/* Make every true interaction visibly interactive; decorative layers never eat clicks. */
+a.gold-button,a.button,a.text-link,a.line-button,a.package-card,a.city-row,a.footer-button,a.footer-secondary-button,.nav-main a,.nav-contact,.hero-place-nav a,.packages-hero-line,.destination-line-link,.airline-line-link{cursor:pointer;position:relative;z-index:2}
+.hero-main-photo::after,.package-card__media::after,.destination-card::after,.destination-editorial-media::after,.airline-hero-photo::after{pointer-events:none}
+a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid rgba(181,138,73,.28);outline-offset:3px}
+
+/* Header active state: makes navigation feel intentional during the demo. */
+.nav-main a.nav-active{color:var(--gold-dark);font-weight:500}.nav-main a.nav-active::after{content:"";display:block;height:2px;margin-top:5px;border-radius:3px;background:linear-gradient(90deg,var(--gold),var(--gold-soft))}
+
+@media(max-width:960px){
+  .airline-hero-grid{grid-template-columns:1fr;gap:34px}.airline-hero-photo{min-height:500px}
+  .package-section-cta,.compare-cta{align-items:flex-start}
+}
+@media(max-width:650px){
+  .hero-price-callout{width:100%;padding:14px 16px}.hero-price-callout>strong{font-size:31px}
+  .hero-place-nav a{padding:6px 7px;font-size:9px}
+  .hero-photo-caption{left:16px;bottom:58px}.hero-photo-caption strong{font-size:14px}
+  .package-section-cta,.compare-cta{flex-direction:column;align-items:stretch;padding:18px}.package-section-cta .line-button,.compare-cta .line-button{width:100%}
+  .airline-feature-media .airline-photo-caption{right:13px;bottom:13px}
+  .destination-actions{align-items:stretch;flex-direction:column}.destination-line-link{justify-content:center}.destination-photo-label{left:16px;bottom:15px}
+  .airline-hero--photo{padding:112px 0 58px}.airline-hero-photo{min-height:360px;border-radius:24px}.airline-hero-actions{align-items:stretch;flex-direction:column}.airline-hero-actions>*{width:100%}.airline-hero-trust{font-size:10px}
+  .package-hero-actions,.final-cta-actions{align-items:stretch;flex-direction:column}.package-hero-actions>*{width:100%}.final-cta-actions>*{width:100%}
+}
+.hotel-level-badge{display:inline-flex;align-items:center;justify-content:center;min-width:54px;height:34px;padding:0 12px;border-radius:999px;background:#f0e3cf;color:var(--gold-dark);font-size:13px;font-weight:600}.contact-hero-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:28px}.contact-card-label{display:block;color:var(--gold-dark);font-size:10px;font-weight:600;letter-spacing:.12em}.contact-direct-link{color:var(--gold-dark);font-weight:500}.contact-direct-link:hover{text-decoration:underline}@media(max-width:650px){.contact-hero-actions{align-items:stretch;flex-direction:column}.contact-hero-actions>*{width:100%}}
+.footer-photo-credits{padding:0 0 22px;color:rgba(255,255,255,.40);font-size:9px}.footer-photo-credits details{border-top:1px solid rgba(255,255,255,.08);padding-top:10px}.footer-photo-credits summary{width:max-content;cursor:pointer;color:rgba(255,255,255,.48);font-size:9px}.footer-photo-credits p{max-width:1080px;margin:8px 0 0;line-height:1.6}.footer-photo-credits a{text-decoration:underline;text-decoration-color:rgba(255,255,255,.18);text-underline-offset:2px}.footer-photo-credits a:hover{color:rgba(255,255,255,.72)}

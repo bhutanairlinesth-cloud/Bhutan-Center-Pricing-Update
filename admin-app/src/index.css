@@ -4715,3 +4715,24 @@ textarea{min-height:74px}
 .invoice-service-split-note strong { color: #163b30; }
 .invoice-service-split-note span { color: #5f6f67; line-height: 1.55; }
 .vat-service-invoice-card { border-color: #b7d8c9 !important; background: #f7fbf9 !important; }
+
+/* V13.14.8 — separate Agent service-VAT invoice file + company-only VAT account */
+.invoice-toolbar label > small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--muted, #6b7280);
+}
+.invoice-linked-file-button {
+  white-space: nowrap;
+}
+.invoice-company-only-note {
+  margin: 6px 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f5d4b;
+}
+@media print {
+  .invoice-company-only-note { color: #111 !important; }
+}

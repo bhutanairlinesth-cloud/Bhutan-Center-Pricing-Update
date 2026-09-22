@@ -1313,7 +1313,7 @@ export function CustomerTrackingWorkspace(props: Props) {
       onSavePayment={props.onSavePayment} onDeletePayment={props.onDeletePayment} onSaveInvoice={props.onSaveInvoice} onIssueInvoice={issueInvoice}
       onCreateSupplementalInvoice={createSupplementalInvoice} onCreateTravelerAddition={createTravelerAdditionInvoice} onOpenInvoice={openExistingInvoice} onDeleteSupplementalInvoice={deleteSupplementalInvoice}
       onUploadPaymentSlip={props.onUploadPaymentSlip} onGetPaymentSlipUrl={props.onGetPaymentSlipUrl} onDeletePaymentSlip={props.onDeletePaymentSlip}/>
-    <InvoicePreview value={invoicePreview} settings={props.settings} language={language} payments={invoicePreview ? paymentsFor(invoicePreview.tracking.id, props.payments) : []} invoices={invoicePreview ? props.invoices.filter((invoice) => invoice.trackingId === invoicePreview.tracking.id) : []} onClose={() => setInvoicePreview(null)} onSaveInvoice={props.onSaveInvoice} onSaveTracking={props.onSaveTracking}/>
+    <InvoicePreview value={invoicePreview} settings={props.settings} language={language} payments={invoicePreview ? paymentsFor(invoicePreview.tracking.id, props.payments) : []} invoices={invoicePreview ? props.invoices.filter((invoice) => invoice.trackingId === invoicePreview.tracking.id) : []} onClose={() => setInvoicePreview(null)} onOpenInvoice={(invoice) => setInvoicePreview((current) => current ? { tracking: current.tracking, invoice } : null)} onSaveInvoice={props.onSaveInvoice} onSaveTracking={props.onSaveTracking}/>
   </div>;
 }
 
@@ -2574,8 +2574,9 @@ function AutoTotal({ label, formula, value, language, featured = false }: { labe
   return <div className={`auto-total-card ${featured ? 'featured' : ''}`}><span>{label}</span><strong>{formatTHB(value, language)}</strong><small>{formula}</small></div>;
 }
 
-function InvoicePreview({ value, settings, language, payments, invoices, onClose, onSaveInvoice, onSaveTracking }: {
+function InvoicePreview({ value, settings, language, payments, invoices, onClose, onOpenInvoice, onSaveInvoice, onSaveTracking }: {
   value: { tracking: CustomerTracking; invoice: PaymentInvoice } | null; settings: GlobalSettings; language: 'th' | 'en'; payments: PaymentTransaction[]; invoices: PaymentInvoice[]; onClose: () => void;
+  onOpenInvoice: (invoice: PaymentInvoice) => void;
   onSaveInvoice: (item: PaymentInvoice) => Promise<void>; onSaveTracking: (item: CustomerTracking) => Promise<void>;
 }) {
   const th = language === 'th';
@@ -2628,6 +2629,9 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
     ? agentVatPackageBreakdown(settings, tracking, packagePortionForVat, snapshot)
     : null;
   const activeVatServiceInvoice = agentVatServiceInvoices(tracking, invoices).find((item) => item.status !== 'cancelled');
+  const linkedVatServiceInvoice = (isBalance || isFull) && agentVatMode === 'service_split'
+    ? activeVatServiceInvoice
+    : undefined;
   const splitMainSubtotal = agentVatMode === 'service_split' && currentAgentVatBreakdown
     ? Math.max(0, baseSubtotal - currentAgentVatBreakdown.serviceFeeTotal)
     : baseSubtotal;
@@ -2929,11 +2933,12 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
     <div className="invoice-toolbar invoice-toolbar-payment no-print">
       <button className="ghost-button" onClick={onClose}><ArrowLeft/>{th ? 'กลับ' : 'Back'}</button>
       <label><span>{th ? 'สถานะเอกสาร' : 'Status'}</span><select value={status} onChange={(e) => void updateStatus(e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label>
-      <label><span>{th ? 'บัญชีรับเงิน' : 'Payment account'}</span><select value={taxForcesCompany ? 'company' : paymentAccountType} disabled={taxForcesCompany} onChange={(e) => void updatePaymentAccount(e.target.value as PaymentAccountType)}><option value="company">{th ? 'บัญชีบริษัท · กสิกรไทย' : 'Company · Kasikornbank'}</option><option value="owner">{th ? 'บัญชีเจ้านาย · ไทยพาณิชย์' : 'Owner · SCB'}</option></select></label>
+      <label><span>{th ? 'บัญชีรับเงิน' : 'Payment account'}</span><select value={taxForcesCompany ? 'company' : paymentAccountType} disabled={taxForcesCompany} onChange={(e) => void updatePaymentAccount(e.target.value as PaymentAccountType)}><option value="company">{th ? 'บัญชีบริษัท · กสิกรไทย' : 'Company · Kasikornbank'}</option><option value="owner">{th ? 'บัญชีเจ้านาย · ไทยพาณิชย์' : 'Owner · SCB'}</option></select>{taxForcesCompany && <small>{th ? 'เอกสารที่มี VAT ใช้บัญชีบริษัทเท่านั้น' : 'VAT documents must use the company account only'}</small>}</label>
       {(isBalance || isFull) && tracking.channel === 'agent' && <label className="invoice-vat-toggle"><span>{th ? 'รูปแบบ VAT' : 'VAT mode'}</span><select value={agentVatMode} onChange={(e) => void updateAgentVatMode(e.target.value as AgentVatMode)}><option value="none">{th ? 'ไม่คิด VAT' : 'No VAT'}</option><option value="total_package">{th ? `VAT ${formatNumber(currentVatRate, 2)}% · ค่าแพ็กเกจทั้งหมด (Standard)` : `VAT ${formatNumber(currentVatRate, 2)}% · Total package (Standard)`}</option><option value="service_split">{th ? `VAT ${formatNumber(currentVatRate, 2)}% · ค่าบริการ (แยก Invoice 3)` : `VAT ${formatNumber(currentVatRate, 2)}% · Service fee (separate Invoice 3)`}</option></select></label>}
       {(isBalance || isFull) && tracking.channel !== 'agent' && <label className="invoice-vat-toggle"><span>{th ? 'ใบกำกับภาษี' : 'Tax invoice'}</span><button type="button" className={vatEnabled ? 'active' : ''} onClick={() => void updatePaymentOptions(vatEnabled ? paymentAccountType : 'company', !vatEnabled)}><BadgeCheck/>{vatEnabled ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% เปิดอยู่` : `VAT ${formatNumber(currentVatRate, 2)}% on`) : (th ? 'ไม่บวก VAT' : 'No VAT')}</button></label>}
       {isAgentVatServiceDocument && <label className="invoice-vat-toggle"><span>{th ? 'VAT ค่าบริการ' : 'Service VAT'}</span><button type="button" className="active" disabled><BadgeCheck/>{`VAT ${formatNumber(currentVatRate, 2)}%`}</button></label>}
-      <button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF'}</button>
+      {linkedVatServiceInvoice && <button className="ghost-button invoice-linked-file-button" type="button" onClick={() => onOpenInvoice(linkedVatServiceInvoice)}><ExternalLink/>{th ? `เปิด Invoice ${linkedVatServiceInvoice.sequenceNumber || 3} · ไฟล์ค่าบริการ + VAT` : `Open Invoice ${linkedVatServiceInvoice.sequenceNumber || 3} · Service fee + VAT file`}</button>}
+      <button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{isAgentVatServiceDocument ? (th ? `พิมพ์ Invoice ${displaySequence} / บันทึก PDF แยก` : `Print Invoice ${displaySequence} / Save separate PDF`) : (th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF')}</button>
     </div>
     <article className="invoice-sheet journey-invoice-sheet" id="invoice-print-area">
       <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{(isGeneralSupplemental || isAgentVatServiceDocument) ? (invoice.title || documentTitle) : (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
@@ -3013,7 +3018,7 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
       </>}
 
       <section className="invoice-total invoice-total-readable"><div><span>{isFull ? (th ? 'ยอดชำระทั้งหมด' : 'Full payment due') : isTravelerInvoice1 ? (th ? 'ยอดชำระ Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers amount due') : (isGeneralSupplemental || isAgentVatServiceDocument) ? (th ? `ยอดชำระ Invoice ${displaySequence}` : `Invoice ${displaySequence} amount due`) : (th ? `ยอดชำระงวดที่ ${displaySequence}` : `Payment ${displaySequence} due`)}</span><strong>THB {formatNumber(amountDue, 2)}</strong></div><aside><span>{th ? 'กำหนดชำระ' : 'PAYMENT DEADLINE'}</span><b>{invoice.dueDate ? formatDate(invoice.dueDate, language) : (th ? 'กรุณากำหนดวันชำระ' : 'Please set a due date')}</b></aside></section>
-      <section className="invoice-bank-payment"><div className="invoice-bank-copy"><span>{th ? 'บัญชีสำหรับชำระเงิน' : 'PAYMENT ACCOUNT'}</span><h3>{th ? `กรุณาโอนเงินเข้าบัญชี${paymentDetails.paymentBankName}` : `Please transfer to ${paymentDetails.paymentBankName}`}</h3><dl><div><dt>{th ? 'ชื่อบัญชี' : 'Account name'}</dt><dd>{paymentDetails.paymentAccountName}</dd></div><div><dt>{th ? 'เลขที่บัญชี' : 'Account number'}</dt><dd>{paymentDetails.paymentAccountNumber}</dd></div></dl></div></section>
+      <section className="invoice-bank-payment"><div className="invoice-bank-copy"><span>{th ? 'บัญชีสำหรับชำระเงิน' : 'PAYMENT ACCOUNT'}</span><h3>{th ? `กรุณาโอนเงินเข้าบัญชี${paymentDetails.paymentBankName}` : `Please transfer to ${paymentDetails.paymentBankName}`}</h3>{taxForcesCompany && <p className="invoice-company-only-note">{th ? 'รายการที่มี VAT รับชำระผ่านบัญชีบริษัทเท่านั้น' : 'VAT-bearing charges are payable to the company account only.'}</p>}<dl><div><dt>{th ? 'ชื่อบัญชี' : 'Account name'}</dt><dd>{paymentDetails.paymentAccountName}</dd></div><div><dt>{th ? 'เลขที่บัญชี' : 'Account number'}</dt><dd>{paymentDetails.paymentAccountNumber}</dd></div></dl></div></section>
       <footer className="invoice-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div><div><span>{th ? 'ผู้จัดทำ' : 'Prepared by'}</span><b>{tracking.salesOwnerName || '-'}</b></div></footer>
     </article>
   </Modal>;

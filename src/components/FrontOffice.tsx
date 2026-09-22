@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight, BadgePercent, BedDouble, BriefcaseBusiness, Building2, CalendarDays, Check, ClipboardList,
-  ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LayoutDashboard, LogOut, Plane, RotateCcw,
+  ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LogOut, Plane, RotateCcw,
   Settings2, ShieldCheck, Sparkles, Users, WalletCards,
 } from 'lucide-react';
 import { CustomerDetails, GlobalSettings, HotelCategory, PricingChannel, PricingInput, QuotationRecord, TourPackage, User } from '../types';
 import { useI18n, LanguageSwitch } from '../i18n';
-import { calculatePrice, getPackageSingleSupplement } from '../utils/pricing';
+import { calculatePrice, getConfiguredMargin, getPackageSingleSupplement } from '../utils/pricing';
 import { formatDate, formatNumber, formatTHB, formatUSD, makeId, makeQuotationNo } from '../utils/format';
 import { printElementAsA4 } from '../utils/printA4';
 import { Brand } from './Brand';
@@ -18,7 +18,6 @@ interface FrontOfficeProps {
   packages: TourPackage[];
   currentUser: User;
   onSaveQuotation: (item: QuotationRecord) => Promise<void>;
-  onOpenDashboard: () => void;
   onOpenTracking: () => void;
   onOpenAdmin: () => void;
   onLogout: () => void;
@@ -26,7 +25,7 @@ interface FrontOfficeProps {
 
 const emptyCustomer: CustomerDetails = { name: '', phone: '', email: '', invoiceAddress: '', note: '' };
 
-export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, onOpenDashboard, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
+export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
   const { t, language } = useI18n();
   const firstPackage = packages[0];
   const firstCategory: HotelCategory = '3 Stars';
@@ -89,7 +88,8 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
   const effectiveTlLand = input.tourLeaderLandCostPerPersonTHB ?? 0;
   const effectiveGroupTicket = input.groupTicketPriceOverrideTHB ?? (input.channel === 'agent' ? (settings.agentTicketPriceTHB ?? 25220) : settings.ticketPriceTHB);
   const effectiveGroupTax = input.groupAirportTaxOverrideTHB ?? settings.airportTaxTHB;
-  const effectiveGroupMargin = input.groupMarginPerTravelerOverrideTHB ?? (input.channel === 'agent' ? (settings.agentMarginTHB ?? 3000) : settings.marginTHB);
+  const configuredMargin = getConfiguredMargin(settings, input.channel, input.hotelCategory);
+  const effectiveGroupMargin = input.groupMarginPerTravelerOverrideTHB ?? configuredMargin;
 
   function update<K extends keyof PricingInput>(key: K, value: PricingInput[K]) {
     setInput((current) => ({ ...current, [key]: value }));
@@ -143,7 +143,6 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     <header className="front-header">
       <Brand/>
       <div className="front-header-actions">
-        <button className="ghost-button desktop-only" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button>
         <LanguageSwitch compact/>
         <button className="ghost-button desktop-only" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>
         <span className="user-chip"><i>{currentUser.name?.[0]?.toUpperCase() || 'U'}</i><span><b>{currentUser.name}</b><small>{currentUser.role}</small></span></span>
@@ -155,7 +154,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     <main className="front-main">
       <section className="page-intro">
         <div><span className="eyebrow"><Sparkles/> LIVE PRICING</span><h1>{t('calculatorTitle')}</h1><p>{t('calculatorSubtitle')}</p></div>
-        <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
+        <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
       </section>
 
       <div className="calculator-layout">
@@ -163,8 +162,8 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
           <div className="section-block">
             <div className="section-title"><span>01</span><div><h2>{t('channel')}</h2><p>Retail / Wholesale</p></div></div>
             <div className="channel-grid">
-              <ChannelCard active={input.channel === 'retail'} channel="retail" title={t('retail')} detail={t('retailHint')} meta={`${formatTHB(settings.ticketPriceTHB, language)} · ${t('margin')} ${formatTHB(settings.marginTHB, language)}`} onClick={() => update('channel', 'retail')}/>
-              <ChannelCard active={input.channel === 'agent'} channel="agent" title={t('agent')} detail={t('agentHint')} meta={`${formatTHB(settings.agentTicketPriceTHB ?? 25220, language)} · -${formatNumber(agentDiscount, 2)}%`} onClick={() => update('channel', 'agent')}/>
+              <ChannelCard active={input.channel === 'retail'} channel="retail" title={t('retail')} detail={t('retailHint')} meta={`${formatTHB(settings.ticketPriceTHB, language)} · ${t('margin')} ${formatTHB(input.hotelCategory === '5 Stars' ? (settings.hotel5StarMarginTHB ?? 10000) : settings.marginTHB, language)}`} onClick={() => update('channel', 'retail')}/>
+              <ChannelCard active={input.channel === 'agent'} channel="agent" title={t('agent')} detail={t('agentHint')} meta={`${formatTHB(settings.agentTicketPriceTHB ?? 25220, language)} · -${formatNumber(agentDiscount, 2)}% · ${t('margin')} ${formatTHB(input.hotelCategory === '5 Stars' ? (settings.hotel5StarMarginTHB ?? 10000) : (settings.agentMarginTHB ?? 3000), language)}`} onClick={() => update('channel', 'agent')}/>
             </div>
             <div className="pricing-mode-switch">
               <button type="button" className={!isGroupTL ? 'active' : ''} onClick={() => setPricingMode('standard')}>

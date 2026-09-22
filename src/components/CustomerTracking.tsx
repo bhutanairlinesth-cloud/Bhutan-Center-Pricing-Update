@@ -321,6 +321,36 @@ function originalChargeablePassengerCount(item: CustomerTracking) {
 function totalPackagePassengerCount(item: CustomerTracking) {
   return Math.max(0, item.passengerCount || 0) + addedPassengerCount(item);
 }
+
+function inferredPackageNights(item: CustomerTracking): number {
+  const name = String(item.packageName || '');
+  const match = name.match(/(\d+)\s*Days?\s*(\d+)\s*Nights?/i);
+  if (match) return Math.max(0, Number(match[2] || 0));
+  if (item.travelStartDate && item.travelEndDate) {
+    const start = new Date(`${item.travelStartDate}T00:00:00`).getTime();
+    const end = new Date(`${item.travelEndDate}T00:00:00`).getTime();
+    if (Number.isFinite(start) && Number.isFinite(end) && end >= start) return Math.max(0, Math.round((end - start) / 86400000));
+  }
+  return 0;
+}
+
+function agentServiceFeePerPerson(settings: GlobalSettings, item: CustomerTracking): number {
+  const nights = inferredPackageNights(item);
+  if (nights === 3) return Math.max(0, Number(settings.agentServiceFee4D3NTHB ?? 1500));
+  if (nights === 4) return Math.max(0, Number(settings.agentServiceFee5D4NTHB ?? 2000));
+  if (nights === 5) return Math.max(0, Number(settings.agentServiceFee6D5NTHB ?? 2500));
+  return 0;
+}
+
+function agentVatPackageBreakdown(settings: GlobalSettings, item: CustomerTracking, packagePortionTHB: number, snapshot?: InvoiceDocumentSnapshot | null) {
+  const packagePortion = Math.max(0, Number(packagePortionTHB || 0));
+  const passengerCount = Math.max(1, Math.round(Number(snapshot?.agentServiceFeePassengerCount ?? (totalPackagePassengerCount(item) || 1))));
+  const serviceFeePerPerson = Math.max(0, Number(snapshot?.agentServiceFeePerPersonTHB ?? agentServiceFeePerPerson(settings, item)));
+  const configuredServiceFeeTotal = Math.max(0, Number(snapshot?.agentServiceFeeTotalTHB ?? serviceFeePerPerson * passengerCount));
+  const serviceFeeTotal = Math.min(packagePortion, configuredServiceFeeTotal);
+  const packageAmountAfterServiceFee = Math.max(0, Number(snapshot?.agentPackageAmountAfterServiceFeeTHB ?? packagePortion - serviceFeeTotal));
+  return { passengerCount, serviceFeePerPerson, serviceFeeTotal, packageAmountAfterServiceFee, vatBaseTHB: serviceFeeTotal };
+}
 function addedTravelerAirfareTotal(item: CustomerTracking) {
   return activeTravelerAdditions(item).reduce((sum, entry) => sum + Math.max(0, entry.ticketPricePerPerson || 0) * Math.max(0, entry.passengerCount || 0), 0);
 }
@@ -849,7 +879,7 @@ export function CustomerTrackingWorkspace(props: Props) {
     const existing = props.invoices.find((x) => x.trackingId === tracking.id && x.installment === installment && x.status !== 'cancelled');
     const now = new Date().toISOString();
     const dueDate = installment === 'balance' ? tracking.balanceDueDate : tracking.depositDueDate;
-    const documentData = installment === 'deposit'
+    let documentData = installment === 'deposit'
       ? buildInvoiceSnapshot(tracking, 'ticket_original', { ticketBatch: buildOriginalTicketSnapshot(tracking) })
       : installment === 'full'
         ? buildInvoiceSnapshot(tracking, 'full_payment', { ticketBatch: buildOriginalTicketSnapshot(tracking), invoices: props.invoices, payments: props.payments })
@@ -865,9 +895,23 @@ export function CustomerTrackingWorkspace(props: Props) {
     const vatEnabled = installment === 'balance' || installment === 'full' ? Boolean(existing?.vatEnabled) : false;
     const vatRatePercent = Math.max(0, Number(existing?.vatRatePercent ?? props.settings.vatRatePercent ?? 7));
     const ticketComponent = installment === 'full'
-      ? Math.min(subtotalAmount, Math.max(0, tracking.depositAmount || 0))
+      ? Math.min(subtotalAmount, Math.max(0, documentData.ticketBatch?.totalDueTHB ?? tracking.depositAmount ?? 0))
       : 0;
-    const vatBaseAmount = installment === 'full' ? Math.max(0, subtotalAmount - ticketComponent) : subtotalAmount;
+    const packagePortionForVat = installment === 'full' ? Math.max(0, subtotalAmount - ticketComponent) : subtotalAmount;
+    const agentVatBreakdown = tracking.channel === 'agent' && (installment === 'balance' || installment === 'full')
+      ? agentVatPackageBreakdown(props.settings, tracking, packagePortionForVat, null)
+      : null;
+    const vatBaseAmount = agentVatBreakdown ? agentVatBreakdown.vatBaseTHB : packagePortionForVat;
+    if (agentVatBreakdown && vatEnabled) {
+      documentData = {
+        ...documentData,
+        agentServiceFeePerPersonTHB: agentVatBreakdown.serviceFeePerPerson,
+        agentServiceFeePassengerCount: agentVatBreakdown.passengerCount,
+        agentServiceFeeTotalTHB: agentVatBreakdown.serviceFeeTotal,
+        agentPackageAmountAfterServiceFeeTHB: agentVatBreakdown.packageAmountAfterServiceFee,
+        vatBaseTHB: agentVatBreakdown.vatBaseTHB,
+      };
+    }
     const vatAmount = vatEnabled ? roundMoney(vatBaseAmount * vatRatePercent / 100) : 0;
     const amount = roundMoney(subtotalAmount + vatAmount);
     const preferredAccountType: PaymentAccountType = vatEnabled
@@ -2493,11 +2537,14 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
         ? (invoice.subtotalAmount ?? customerGrandTotal(tracking, invoices))
         : (invoice.subtotalAmount ?? invoice.amount);
   const currentVatRate = Math.max(0, Number(invoice.vatRatePercent ?? settings.vatRatePercent ?? 7));
-  const fullPaymentVatBase = isFull
-    ? Math.max(0, packageTotal - Math.max(0, ticketBatch?.totalDueTHB ?? tracking.depositAmount ?? 0))
-    : 0;
+  const ticketComponentForFull = isFull ? Math.min(baseSubtotal, Math.max(0, ticketBatch?.totalDueTHB ?? tracking.depositAmount ?? 0)) : 0;
+  const packagePortionForVat = isFull ? Math.max(0, baseSubtotal - ticketComponentForFull) : baseSubtotal;
+  const currentAgentVatBreakdown = tracking.channel === 'agent' && (isBalance || isFull)
+    ? agentVatPackageBreakdown(settings, tracking, packagePortionForVat, snapshot)
+    : null;
+  const currentVatBase = currentAgentVatBreakdown ? currentAgentVatBreakdown.vatBaseTHB : packagePortionForVat;
   const currentVatAmount = (isBalance || isFull) && vatEnabled
-    ? roundMoney((isFull ? fullPaymentVatBase : baseSubtotal) * currentVatRate / 100)
+    ? roundMoney(currentVatBase * currentVatRate / 100)
     : 0;
   const amountDue = roundMoney(baseSubtotal + currentVatAmount);
   const selectedAccount = paymentAccountSnapshot(settings, (isBalance || isFull) && vatEnabled ? 'company' : paymentAccountType);
@@ -2557,8 +2604,27 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
     setVatEnabled(vatAllowed ? nextVatEnabled : false);
     const account = paymentAccountSnapshot(settings, forcedAccountType);
     const vatRatePercent = Math.max(0, Number(invoice.vatRatePercent ?? settings.vatRatePercent ?? 7));
-    const vatBase = isFull ? fullPaymentVatBase : baseSubtotal;
+    const agentBreakdown = tracking.channel === 'agent' && vatAllowed
+      ? agentVatPackageBreakdown(settings, tracking, packagePortionForVat, invoice.documentData || null)
+      : null;
+    if (nextVatEnabled && tracking.channel === 'agent' && agentBreakdown && agentBreakdown.serviceFeePerPerson <= 0) {
+      window.alert(th
+        ? 'ยังไม่ได้กำหนดค่าบริการสำหรับระยะเวลาของแพ็กเกจนี้ กรุณาตรวจสอบชื่อแพ็กเกจหรือกำหนดค่าบริการในหลังบ้านก่อนเปิด VAT'
+        : 'No service fee is configured for this package duration. Please check the package duration or configure the service fee in Back Office before enabling VAT.');
+      return;
+    }
+    const vatBase = agentBreakdown ? agentBreakdown.vatBaseTHB : packagePortionForVat;
     const vatAmount = vatAllowed && nextVatEnabled ? roundMoney(vatBase * vatRatePercent / 100) : 0;
+    const documentData = agentBreakdown && nextVatEnabled
+      ? {
+          ...(invoice.documentData || snapshot || buildInvoiceSnapshot(tracking, isFull ? 'full_payment' : 'package_balance', { invoices, payments, ticketBatch })),
+          agentServiceFeePerPersonTHB: agentBreakdown.serviceFeePerPerson,
+          agentServiceFeePassengerCount: agentBreakdown.passengerCount,
+          agentServiceFeeTotalTHB: agentBreakdown.serviceFeeTotal,
+          agentPackageAmountAfterServiceFeeTHB: agentBreakdown.packageAmountAfterServiceFee,
+          vatBaseTHB: agentBreakdown.vatBaseTHB,
+        }
+      : invoice.documentData;
     await onSaveInvoice({
       ...invoice,
       subtotalAmount: baseSubtotal,
@@ -2566,6 +2632,7 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
       vatRatePercent,
       vatAmount,
       amount: roundMoney(baseSubtotal + vatAmount),
+      documentData,
       ...account,
       updatedAt: new Date().toISOString(),
     });
@@ -2625,8 +2692,13 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
 
         {isFull && <section className="journey-payment-breakdown invoice-full-payment-reference">
           <h3>{th ? 'Full Payment — ชำระทั้งหมดครั้งเดียว' : 'Full Payment — one-time collection'}</h3>
-          <div><span>{th ? 'มูลค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(baseSubtotal, 2)}</b></div>
-          {vatEnabled && <div className="invoice-vat-row"><span>{`VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
+          <div><span>{th ? 'ยอดรวมก่อน VAT' : 'Total before VAT'}</span><b>{formatNumber(baseSubtotal, 2)}</b></div>
+          {vatEnabled && currentAgentVatBreakdown && <>
+            <div><span>{th ? 'ค่าตั๋วเครื่องบินและภาษีสนามบิน' : 'Airfare and airport tax'}</span><b>{formatNumber(ticketComponentForFull, 2)}</b></div>
+            <div><span>{th ? 'ค่าแพ็กเกจ' : 'Package amount'}</span><b>{formatNumber(currentAgentVatBreakdown.packageAmountAfterServiceFee, 2)}</b></div>
+            <div className="invoice-service-fee-row"><span>{th ? `ค่าบริการ ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} บาท × ${currentAgentVatBreakdown.passengerCount} ท่าน` : `Service fee ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} × ${currentAgentVatBreakdown.passengerCount} pax`}</span><b>{formatNumber(currentAgentVatBreakdown.serviceFeeTotal, 2)}</b></div>
+          </>}
+          {vatEnabled && <div className="invoice-vat-row"><span>{currentAgentVatBreakdown ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าบริการ` : `VAT ${formatNumber(currentVatRate, 2)}% — service fee`) : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
           <div className="journey-payment-due"><span>{th ? 'Total Due (THB)' : 'Total Due (THB)'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
         </section>}
 
@@ -2636,7 +2708,11 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
           {deductions.map((deduction) => <div key={deduction.id} className="deduction"><span>{th ? deduction.labelTh : deduction.labelEn}{deduction.reference ? ` (${deduction.reference})` : ''}</span><b>-{formatNumber(deduction.amountTHB, 2)}</b></div>)}
           {!deductions.length && <div className="deduction"><span>{th ? 'หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว' : 'Less paid airfare'}</span><b>-{formatNumber(0, 2)}</b></div>}
           <div className="invoice-balance-subtotal"><span>{th ? 'ยอดแพ็กเกจส่วนที่เหลือก่อน VAT' : 'Remaining package balance before VAT'}</span><b>{formatNumber(balanceDue, 2)}</b></div>
-          {vatEnabled && <div className="invoice-vat-row"><span>{`VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
+          {vatEnabled && currentAgentVatBreakdown && <>
+            <div><span>{th ? 'ค่าแพ็กเกจ' : 'Package amount'}</span><b>{formatNumber(currentAgentVatBreakdown.packageAmountAfterServiceFee, 2)}</b></div>
+            <div className="invoice-service-fee-row"><span>{th ? `ค่าบริการ ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} บาท × ${currentAgentVatBreakdown.passengerCount} ท่าน` : `Service fee ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} × ${currentAgentVatBreakdown.passengerCount} pax`}</span><b>{formatNumber(currentAgentVatBreakdown.serviceFeeTotal, 2)}</b></div>
+          </>}
+          {vatEnabled && <div className="invoice-vat-row"><span>{currentAgentVatBreakdown ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าบริการ` : `VAT ${formatNumber(currentVatRate, 2)}% — service fee`) : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
           <div className="journey-payment-due"><span>{th ? 'Total Package Due (THB)' : 'Total Package Due (THB)'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
         </section>}
 

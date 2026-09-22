@@ -78,6 +78,12 @@ export interface GlobalSettings {
   agentTicketPriceTHB?: number;
   agentTicketDiscountPercent?: number;
   agentMarginTHB?: number;
+  /** Standard margin override used whenever 5-star hotel pricing is selected. */
+  hotel5StarMarginTHB?: number;
+  /** Agent tax-invoice service-fee split by package duration. VAT applies to this service-fee portion only. */
+  agentServiceFee4D3NTHB?: number;
+  agentServiceFee5D4NTHB?: number;
+  agentServiceFee6D5NTHB?: number;
   groupDiscountMinPax?: number;
   groupDiscountPercent?: number;
   businessUpgradeTHB?: number;
@@ -467,6 +473,12 @@ export interface InvoiceDocumentSnapshot {
   ticketBatch?: InvoiceTicketBatchSnapshot;
   deductions?: InvoiceDeductionSnapshot[];
   balanceDueTHB?: number;
+  /** Agent-only VAT split snapshot for package invoices. */
+  agentServiceFeePerPersonTHB?: number;
+  agentServiceFeePassengerCount?: number;
+  agentServiceFeeTotalTHB?: number;
+  agentPackageAmountAfterServiceFeeTHB?: number;
+  vatBaseTHB?: number;
   capturedAt: string;
 }
 

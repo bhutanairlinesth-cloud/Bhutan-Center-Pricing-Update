@@ -473,11 +473,17 @@ export interface InvoiceDocumentSnapshot {
   ticketBatch?: InvoiceTicketBatchSnapshot;
   deductions?: InvoiceDeductionSnapshot[];
   balanceDueTHB?: number;
-  /** Agent-only VAT split snapshot for package invoices. */
+  /** Agent-only VAT snapshot for package invoices. */
   agentServiceFeePerPersonTHB?: number;
   agentServiceFeePassengerCount?: number;
   agentServiceFeeTotalTHB?: number;
   agentPackageAmountAfterServiceFeeTHB?: number;
+  /** Original amount of the package/full-payment invoice before a service-fee split. */
+  agentVatOriginalSubtotalTHB?: number;
+  /** VAT mode selected for Agent billing. service_split creates a separate Invoice 3. */
+  agentVatMode?: 'none' | 'total_package' | 'service_split' | 'service_split_invoice';
+  /** Links the package invoice and its VAT service Invoice 3 without adding DB columns. */
+  agentVatLinkedInvoiceId?: string;
   vatBaseTHB?: number;
   capturedAt: string;
 }

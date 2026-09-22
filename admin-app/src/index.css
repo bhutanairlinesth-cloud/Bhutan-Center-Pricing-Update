@@ -4679,7 +4679,7 @@ textarea{min-height:74px}
   }
 }
 
-/* v13.14.6 — 5-star margin + Agent VAT service-fee split */
+/* v13.14.7 — Agent VAT mode + separate service-fee Invoice 3 */
 .agent-vat-service-settings {
   margin-top: 18px;
   padding: 18px;
@@ -4701,3 +4701,17 @@ textarea{min-height:74px}
   }
 }
 
+
+/* V13.14.7 — Agent VAT modes + separate service VAT Invoice 3 */
+.invoice-service-split-note {
+  margin-top: 14px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid #d9e5df;
+  border-radius: 14px;
+  background: #f7fbf9;
+}
+.invoice-service-split-note strong { color: #163b30; }
+.invoice-service-split-note span { color: #5f6f67; line-height: 1.55; }
+.vat-service-invoice-card { border-color: #b7d8c9 !important; background: #f7fbf9 !important; }

@@ -66,6 +66,7 @@ function paymentAccountSnapshot(settings: GlobalSettings, type: PaymentAccountTy
 }
 function roundMoney(value: number) { return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100; }
 const paymentTypes: PaymentTransactionType[] = ['ticket_deposit', 'package_balance', 'full_payment', 'supplemental', 'refund', 'other'];
+type AgentVatMode = 'none' | 'total_package' | 'service_split';
 
 const TRACKING_DRAFT_PREFIX = 'bhutan_customer_tracking_draft_v1:';
 const NEW_TRACKING_DRAFT_KEY = `${TRACKING_DRAFT_PREFIX}new`;
@@ -300,11 +301,22 @@ function travelerAdditionInternalCostTotal(item: CustomerTracking) {
 function travelerAdditionTicketDepositTotal(entry: TravelerAddition) {
   return Math.max(0, entry.ticketDepositTotal ?? ((entry.ticketPricePerPerson + entry.airportTaxPerPerson) * entry.passengerCount));
 }
-function generalSupplementalInvoices(item: CustomerTracking, invoices: PaymentInvoice[]) {
+function isAgentVatServiceInvoice(invoice: PaymentInvoice) {
+  return invoice.documentData?.agentVatMode === 'service_split_invoice';
+}
+function agentVatServiceInvoices(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  return activeSupplementalInvoices(item.id, invoices).filter(isAgentVatServiceInvoice);
+}
+function payableSupplementalInvoices(item: CustomerTracking, invoices: PaymentInvoice[]) {
   const travelerInvoiceIds = travelerAdditionInvoiceIds(item);
   return activeSupplementalInvoices(item.id, invoices).filter((invoice) => !travelerInvoiceIds.has(invoice.id));
 }
+function generalSupplementalInvoices(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  return payableSupplementalInvoices(item, invoices).filter((invoice) => !isAgentVatServiceInvoice(invoice));
+}
 function customerSupplementalSalesTotal(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  // Agent VAT service Invoice 3 only reclassifies part of the package price and VAT;
+  // it must not be counted as new supplemental revenue.
   return travelerAdditionPackageTotal(item) + generalSupplementalInvoices(item, invoices).reduce((sum, invoice) => sum + Math.max(0, invoice.amount || 0), 0);
 }
 function customerSupplementalCostTotal(item: CustomerTracking, invoices: PaymentInvoice[]) {
@@ -350,6 +362,17 @@ function agentVatPackageBreakdown(settings: GlobalSettings, item: CustomerTracki
   const serviceFeeTotal = Math.min(packagePortion, configuredServiceFeeTotal);
   const packageAmountAfterServiceFee = Math.max(0, Number(snapshot?.agentPackageAmountAfterServiceFeeTHB ?? packagePortion - serviceFeeTotal));
   return { passengerCount, serviceFeePerPerson, serviceFeeTotal, packageAmountAfterServiceFee, vatBaseTHB: serviceFeeTotal };
+}
+function agentVatModeFromInvoice(invoice?: PaymentInvoice | null): AgentVatMode {
+  const mode = invoice?.documentData?.agentVatMode;
+  if (mode === 'service_split') return 'service_split';
+  if (mode === 'total_package') return 'total_package';
+  return invoice?.vatEnabled ? 'total_package' : 'none';
+}
+function nextSupplementalSequence(trackingId: string, invoices: PaymentInvoice[], preferred = 3) {
+  const all = supplementalInvoicesFor(trackingId, invoices);
+  if (!all.some((invoice) => invoice.sequenceNumber === preferred)) return preferred;
+  return Math.max(preferred, ...all.map((invoice) => invoice.sequenceNumber || preferred)) + 1;
 }
 function addedTravelerAirfareTotal(item: CustomerTracking) {
   return activeTravelerAdditions(item).reduce((sum, entry) => sum + Math.max(0, entry.ticketPricePerPerson || 0) * Math.max(0, entry.passengerCount || 0), 0);
@@ -585,11 +608,24 @@ function buildInvoiceSnapshot(item: CustomerTracking, kind: InvoiceDocumentSnaps
 function invoicePaidAmount(invoiceId: string, payments: PaymentTransaction[]) {
   return payments.filter((x) => x.invoiceId === invoiceId).reduce((sum, x) => sum + (x.type === 'refund' ? -Math.abs(x.amount) : x.amount), 0);
 }
-function paymentSummary(item: CustomerTracking, payments: PaymentTransaction[]) {
+function invoiceSettled(invoice: PaymentInvoice | undefined, payments: PaymentTransaction[]) {
+  if (!invoice || invoice.status === 'cancelled') return false;
+  return invoice.status === 'paid' || invoicePaidAmount(invoice.id, payments) >= Math.max(0, invoice.amount || 0) - 0.01;
+}
+function customerVatAddOnTotal(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  return invoices
+    .filter((invoice) => invoice.trackingId === item.id && invoice.status !== 'cancelled')
+    .filter((invoice) => invoice.installment === 'balance' || invoice.installment === 'full' || isAgentVatServiceInvoice(invoice))
+    .reduce((sum, invoice) => sum + Math.max(0, Number(invoice.vatAmount || 0)), 0);
+}
+function customerReceivableTotal(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  return customerGrandTotal(item, invoices) + customerVatAddOnTotal(item, invoices);
+}
+function paymentSummary(item: CustomerTracking, payments: PaymentTransaction[], invoices: PaymentInvoice[]) {
   const deposit = effectiveStageStatus(item.depositStatus, item.depositDueDate);
   const balance = effectiveStageStatus(item.balanceStatus, item.balanceDueDate);
   const received = sumPayments(paymentsFor(item.id, payments));
-  const grandTotal = Math.max(packageSalesTotal(item), item.grandTotalAmount || 0);
+  const grandTotal = Math.max(packageSalesTotal(item), customerReceivableTotal(item, invoices));
   if (balance === 'paid' && received >= grandTotal - 0.01 && grandTotal > 0) return 'paid';
   if (received >= grandTotal - 0.01 && grandTotal > 0) return 'paid';
   if (deposit === 'overdue' || balance === 'overdue') return 'overdue';
@@ -692,7 +728,7 @@ export function CustomerTrackingWorkspace(props: Props) {
       const matchSearch = !q || [item.opportunityName, item.customerName, item.phone, item.email, item.packageName, item.airline, item.flightPnr, item.landSupplier, item.landInvoiceNo, item.landTransferReference, ...(item.travelerAdditions || []).flatMap((entry) => [entry.pnr, entry.passengerNames, entry.airline])]
         .join(' ').toLowerCase().includes(q);
       const matchGroup = groupFilter === 'all' || stageGroup[stage] === groupFilter;
-      const matchPayment = paymentFilter === 'all' || paymentSummary(item, props.payments) === paymentFilter;
+      const matchPayment = paymentFilter === 'all' || paymentSummary(item, props.payments, props.invoices) === paymentFilter;
       return matchSearch && matchGroup && matchPayment;
     });
 
@@ -892,28 +928,36 @@ export function CustomerTrackingWorkspace(props: Props) {
         : documentData.balanceDueTHB ?? Math.max(0, packageSalesTotal(tracking) - totalTicketPaymentsReceived(tracking, props.invoices, props.payments));
 
     const sequenceNumber = installment === 'balance' ? 2 : 1;
-    const vatEnabled = installment === 'balance' || installment === 'full' ? Boolean(existing?.vatEnabled) : false;
+    const vatAllowed = installment === 'balance' || installment === 'full';
+    const existingAgentVatMode = tracking.channel === 'agent' && vatAllowed ? agentVatModeFromInvoice(existing) : 'none';
+    const vatEnabled = vatAllowed ? (tracking.channel === 'agent' ? existingAgentVatMode === 'total_package' : Boolean(existing?.vatEnabled)) : false;
     const vatRatePercent = Math.max(0, Number(existing?.vatRatePercent ?? props.settings.vatRatePercent ?? 7));
     const ticketComponent = installment === 'full'
       ? Math.min(subtotalAmount, Math.max(0, documentData.ticketBatch?.totalDueTHB ?? tracking.depositAmount ?? 0))
       : 0;
     const packagePortionForVat = installment === 'full' ? Math.max(0, subtotalAmount - ticketComponent) : subtotalAmount;
-    const agentVatBreakdown = tracking.channel === 'agent' && (installment === 'balance' || installment === 'full')
-      ? agentVatPackageBreakdown(props.settings, tracking, packagePortionForVat, null)
+    const agentVatBreakdown = tracking.channel === 'agent' && vatAllowed
+      ? agentVatPackageBreakdown(props.settings, tracking, packagePortionForVat, existing?.documentData || null)
       : null;
-    const vatBaseAmount = agentVatBreakdown ? agentVatBreakdown.vatBaseTHB : packagePortionForVat;
-    if (agentVatBreakdown && vatEnabled) {
+    if (agentVatBreakdown) {
       documentData = {
         ...documentData,
         agentServiceFeePerPersonTHB: agentVatBreakdown.serviceFeePerPerson,
         agentServiceFeePassengerCount: agentVatBreakdown.passengerCount,
         agentServiceFeeTotalTHB: agentVatBreakdown.serviceFeeTotal,
         agentPackageAmountAfterServiceFeeTHB: agentVatBreakdown.packageAmountAfterServiceFee,
-        vatBaseTHB: agentVatBreakdown.vatBaseTHB,
+        agentVatOriginalSubtotalTHB: subtotalAmount,
+        agentVatMode: existingAgentVatMode,
+        agentVatLinkedInvoiceId: existing?.documentData?.agentVatLinkedInvoiceId,
+        vatBaseTHB: existingAgentVatMode === 'total_package' ? packagePortionForVat : existingAgentVatMode === 'service_split' ? agentVatBreakdown.serviceFeeTotal : 0,
       };
     }
+    const invoiceSubtotalAmount = existingAgentVatMode === 'service_split' && agentVatBreakdown
+      ? Math.max(0, subtotalAmount - agentVatBreakdown.serviceFeeTotal)
+      : subtotalAmount;
+    const vatBaseAmount = tracking.channel === 'agent' && vatAllowed ? packagePortionForVat : packagePortionForVat;
     const vatAmount = vatEnabled ? roundMoney(vatBaseAmount * vatRatePercent / 100) : 0;
-    const amount = roundMoney(subtotalAmount + vatAmount);
+    const amount = roundMoney(invoiceSubtotalAmount + vatAmount);
     const preferredAccountType: PaymentAccountType = vatEnabled
       ? 'company'
       : (existing?.paymentAccountType || (installment === 'balance' ? 'owner' : 'company'));
@@ -936,7 +980,7 @@ export function CustomerTrackingWorkspace(props: Props) {
       documentData,
       issueDate: existing.issueDate || isoToday(),
       dueDate,
-      subtotalAmount,
+      subtotalAmount: invoiceSubtotalAmount,
       vatEnabled,
       vatRatePercent,
       vatAmount,
@@ -956,7 +1000,7 @@ export function CustomerTrackingWorkspace(props: Props) {
       documentData,
       issueDate: isoToday(),
       dueDate,
-      subtotalAmount,
+      subtotalAmount: invoiceSubtotalAmount,
       vatEnabled,
       vatRatePercent,
       vatAmount,
@@ -1219,7 +1263,7 @@ export function CustomerTrackingWorkspace(props: Props) {
           const stage = getJourneyStage(item);
           const itemPayments = paymentsFor(item.id, props.payments);
           const paid = sumPayments(itemPayments);
-          const remaining = Math.max(0, customerGrandTotal(item, props.invoices) - paid);
+          const remaining = Math.max(0, customerReceivableTotal(item, props.invoices) - paid);
           const recommended = item.nextAction || nextRecommendedAction(item, th);
           const localDraft = readTrackingDraft(trackingDraftKey(item.id, false));
           const hasNewerLocalDraft = Boolean(localDraft && new Date(localDraft.savedAt).getTime() > new Date(item.updatedAt || item.createdAt || 0).getTime());
@@ -1227,7 +1271,7 @@ export function CustomerTrackingWorkspace(props: Props) {
             <div className="journey-card-customer"><span>{item.customerName?.[0]?.toUpperCase() || '?'}</span><div><b>{item.opportunityName || item.customerName || '-'}</b><small>{item.customerName}{item.leadSource ? ` · ${item.leadSource}` : ''}</small><em>{item.phone || item.email || '-'}</em></div></div>
             <div className="journey-card-stage"><div className="journey-stage-line"><span className={`journey-stage stage-${stageGroup[stage]}`}>{stageLabel(stage, th)}</span>{hasNewerLocalDraft && <span className="local-draft-badge"><FileCheck2/>Draft</span>}</div><small>{item.packageName || '-'} · {item.passengerCount + addedPassengerCount(item)} {th ? 'ท่าน' : 'pax'}</small><em>{item.travelStartDate ? formatDate(item.travelStartDate, language) : th ? 'ยังไม่กำหนดวันเดินทาง' : 'Travel date not set'}</em></div>
             <div className="journey-card-action"><small>{th ? 'งานถัดไป' : 'Next action'}</small><b>{recommended}</b><em className={item.nextActionDueDate && item.nextActionDueDate <= isoToday() ? 'overdue' : ''}>{item.nextActionDueDate ? `${th ? 'ภายใน' : 'Due'} ${formatDate(item.nextActionDueDate, language)}` : th ? 'ยังไม่กำหนด Deadline' : 'No deadline'}</em></div>
-            <div className="journey-card-payment"><small>{th ? `แพ็กเกจรวม ${totalPackagePassengerCount(item)} ท่าน` : `Package total — ${totalPackagePassengerCount(item)} pax`}</small><b>{formatTHB(packageSalesTotal(item), language)}</b><em>{th ? `รับแล้ว ${formatTHB(paid, language)} · คงเหลือ ${formatTHB(remaining, language)}` : `Paid ${formatTHB(paid, language)} · Balance ${formatTHB(remaining, language)}`}</em><PaymentBadge status={paymentSummary(item, props.payments)} th={th}/></div>
+            <div className="journey-card-payment"><small>{th ? `แพ็กเกจรวม ${totalPackagePassengerCount(item)} ท่าน` : `Package total — ${totalPackagePassengerCount(item)} pax`}</small><b>{formatTHB(packageSalesTotal(item), language)}</b><em>{th ? `รับแล้ว ${formatTHB(paid, language)} · คงเหลือ ${formatTHB(remaining, language)}` : `Paid ${formatTHB(paid, language)} · Balance ${formatTHB(remaining, language)}`}</em><PaymentBadge status={paymentSummary(item, props.payments, props.invoices)} th={th}/></div>
             <div className="journey-card-actions"><button className="invoice-one" onClick={() => issueInvoice(item, 'deposit')}><ReceiptText/><span>{th ? 'Invoice 1' : 'Invoice 1'}</span></button><button className="invoice-two" onClick={() => issueInvoice(item, 'balance')}><FileText/><span>{th ? 'Invoice 2' : 'Invoice 2'}</span></button><button onClick={() => { setEditingIsNew(false); setEditing(item); }} title={th ? 'เปิดรายละเอียด' : 'Open details'}><Edit3/></button><button className="danger" onClick={() => window.confirm(th ? 'ยืนยันการลบรายการนี้?' : 'Delete this record?') && props.onDeleteTracking(item.id)}><Trash2/></button></div>
           </article>;
         })}</div> : <EmptyState title={th ? 'ยังไม่มีข้อมูลที่ตรงกับตัวกรอง' : 'No matching records'} detail={th ? 'กด “เพิ่มลูกค้าใหม่” เพื่อเริ่มติดตามกระบวนการ' : 'Add a customer to start the workflow.'}/>} 
@@ -1746,30 +1790,38 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         const packageReceivedAfter = previousBalancePaid + paymentDraft.amount;
         const packageDue = balanceInvoice?.amount ?? Math.max(0, packageSalesTotal(currentForm) - totalTicketPaymentsReceived(currentForm, invoices, payments));
         const fullyPaid = packageReceivedAfter >= packageDue - 0.01;
-        if (balanceInvoice) await onSaveInvoice({ ...balanceInvoice, status: fullyPaid ? 'paid' : 'invoiced', paidAt: fullyPaid ? paymentDraft.paidAt : balanceInvoice.paidAt, updatedAt: now });
-        next = { ...next, balanceStatus: fullyPaid ? 'paid' : (next.balanceStatus === 'pending' ? 'invoiced' : next.balanceStatus), fullPaymentReceivedAt: fullyPaid ? (next.fullPaymentReceivedAt || paymentDraft.paidAt) : next.fullPaymentReceivedAt };
+        const updatedBalanceInvoice = balanceInvoice ? { ...balanceInvoice, status: fullyPaid ? 'paid' as const : 'invoiced' as const, paidAt: fullyPaid ? paymentDraft.paidAt : balanceInvoice.paidAt, updatedAt: now } : undefined;
+        if (updatedBalanceInvoice) await onSaveInvoice(updatedBalanceInvoice);
+        const serviceInvoice = agentVatServiceInvoices(currentForm, invoices).find((invoice) => invoice.status !== 'cancelled');
+        const serviceComplete = !serviceInvoice || invoiceSettled(serviceInvoice, payments);
+        const collectionComplete = fullyPaid && serviceComplete;
+        next = { ...next, balanceStatus: collectionComplete ? 'paid' : 'invoiced', fullPaymentReceivedAt: collectionComplete ? (next.fullPaymentReceivedAt || paymentDraft.paidAt) : next.fullPaymentReceivedAt };
       }
       if (paymentDraft.type === 'full_payment') {
         const fullInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'full' && invoice.status !== 'cancelled');
         if (fullInvoice) {
           const previousPaid = invoicePaidAmount(fullInvoice.id, payments);
           const fullyPaid = previousPaid + paymentDraft.amount >= fullInvoice.amount - 0.01;
-          await onSaveInvoice({ ...fullInvoice, status: fullyPaid ? 'paid' : 'invoiced', paidAt: fullyPaid ? paymentDraft.paidAt : fullInvoice.paidAt, updatedAt: now });
+          const updatedFullInvoice = { ...fullInvoice, status: fullyPaid ? 'paid' as const : 'invoiced' as const, paidAt: fullyPaid ? paymentDraft.paidAt : fullInvoice.paidAt, updatedAt: now };
+          await onSaveInvoice(updatedFullInvoice);
+          const serviceInvoice = agentVatServiceInvoices(currentForm, invoices).find((invoice) => invoice.status !== 'cancelled');
+          const serviceComplete = !serviceInvoice || invoiceSettled(serviceInvoice, payments);
+          const collectionComplete = fullyPaid && serviceComplete;
           next = {
             ...next,
             paymentPlan: 'full_payment',
             depositStatus: fullyPaid ? 'paid' : 'invoiced',
-            balanceStatus: fullyPaid ? 'paid' : 'invoiced',
+            balanceStatus: collectionComplete ? 'paid' : 'invoiced',
             firstPaymentReceivedAt: fullyPaid ? (next.firstPaymentReceivedAt || paymentDraft.paidAt) : next.firstPaymentReceivedAt,
-            fullPaymentReceivedAt: fullyPaid ? (next.fullPaymentReceivedAt || paymentDraft.paidAt) : next.fullPaymentReceivedAt,
-            nextAction: fullyPaid
-              ? (th ? 'รับชำระ Full Payment ครบแล้ว — ออกตั๋วและส่งเอกสารให้ Land ยื่นวีซ่า' : 'Full payment received — issue tickets and submit documents to land for visa processing')
+            fullPaymentReceivedAt: collectionComplete ? (next.fullPaymentReceivedAt || paymentDraft.paidAt) : next.fullPaymentReceivedAt,
+            nextAction: collectionComplete
+              ? (th ? 'รับชำระ Full Payment และ Invoice ค่าบริการครบแล้ว — ออกตั๋วและส่งเอกสารให้ Land ยื่นวีซ่า' : 'Full payment and service-fee invoice are complete — issue tickets and submit documents to land for visa processing')
               : next.nextAction,
           };
         }
       }
       if (paymentDraft.type === 'supplemental' && paymentDraft.invoiceId) {
-        const targetInvoice = generalSupplementalInvoices(currentForm, invoices).find((x) => x.id === paymentDraft.invoiceId);
+        const targetInvoice = payableSupplementalInvoices(currentForm, invoices).find((x) => x.id === paymentDraft.invoiceId);
         if (targetInvoice) {
           const previousPaid = invoicePaidAmount(targetInvoice.id, payments);
           const fullyPaid = previousPaid + paymentDraft.amount >= targetInvoice.amount - 0.01;
@@ -1786,6 +1838,21 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
                 ? (th ? 'ค่าตั๋วผู้เดินทางทุกชุดชำระครบแล้ว — ส่ง Passport + รูป + ตั๋วทั้งหมดให้ Land เพื่อยื่นวีซ่า' : 'All ticket invoices are paid — submit every passport, photo and ticket to land for visa processing')
                 : (th ? 'ติดตามชำระค่าตั๋วของผู้เดินทางเพิ่มให้ครบก่อนยื่นวีซ่า' : 'Collect all added-traveller ticket payments before visa submission'),
               nextActionDueDate: allPaid ? '' : next.nextActionDueDate,
+            };
+          }
+          if (isAgentVatServiceInvoice(targetInvoice)) {
+            const projectedInvoices = invoices.map((invoice) => invoice.id === updatedInvoice.id ? updatedInvoice : invoice);
+            const projectedPayments = [...payments, transaction];
+            const linkedMain = projectedInvoices.find((invoice) => invoice.id === targetInvoice.documentData?.agentVatLinkedInvoiceId)
+              || projectedInvoices.find((invoice) => invoice.trackingId === currentForm.id && (invoice.installment === 'balance' || invoice.installment === 'full') && invoice.status !== 'cancelled');
+            const collectionComplete = fullyPaid && invoiceSettled(linkedMain, projectedPayments);
+            next = {
+              ...next,
+              balanceStatus: collectionComplete ? 'paid' : 'invoiced',
+              fullPaymentReceivedAt: collectionComplete ? (next.fullPaymentReceivedAt || paymentDraft.paidAt) : next.fullPaymentReceivedAt,
+              nextAction: collectionComplete
+                ? (th ? 'รับชำระค่าแพ็กเกจและ Invoice ค่าบริการ + VAT ครบแล้ว' : 'Package and service-fee VAT invoice are fully paid')
+                : next.nextAction,
             };
           }
         }
@@ -1935,8 +2002,10 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
   const combinedAirportTaxTotal = Math.max(0, form.airportTaxAmount || 0) + addedTravelerAirportTaxTotal(form);
   const combinedTicketAndTaxTotal = combinedAirfareTotal + combinedAirportTaxTotal;
   const grandTotal = combinedPackageTotal + generalSupplementalRevenue;
+  const vatAddOnTotal = customerVatAddOnTotal(form, invoices);
+  const receivableTotal = grandTotal + vatAddOnTotal;
   const supplementalNonTicketCosts = supplementalNonTicketCostTotal(form, invoices);
-  const balance = Math.max(0, grandTotal - totalPaid);
+  const balance = Math.max(0, receivableTotal - totalPaid);
   const availablePaymentTypes: PaymentTransactionType[] = (form.paymentPlan || 'installments') === 'full_payment'
     ? ['full_payment', 'supplemental', 'refund', 'other']
     : paymentTypes.filter((type) => type !== 'full_payment');
@@ -1966,7 +2035,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
       <button type="button" className="ghost-button tracking-save-draft" onClick={saveDraftNow}><FileText/>{th ? 'บันทึก Draft ตอนนี้' : 'Save draft now'}</button>
     </div>
     <div className="journey-editor">
-      <div className="journey-editor-summary"><div><span>{th ? 'สถานะปัจจุบัน' : 'Current stage'}</span><strong>{stageLabel(currentStage, th)}</strong><small>{form.opportunityName || form.customerName || '-'}</small></div><div><span>{th ? 'งานถัดไป' : 'Next action'}</span><strong>{form.nextAction || nextRecommendedAction(form, th)}</strong><small>{form.nextActionDueDate ? formatDate(form.nextActionDueDate, language) : th ? 'ยังไม่กำหนด Deadline' : 'No deadline'}</small></div><div><span>{th ? 'ยอดรับชำระ / คงเหลือ' : 'Paid / remaining'}</span><strong>{formatTHB(totalPaid, language)} / {formatTHB(Math.max(0, grandTotal - totalPaid), language)}</strong><small>{form.passengerCount + addedPassengerCount(form)} {th ? 'ท่านรวม' : 'total pax'}</small></div></div>
+      <div className="journey-editor-summary"><div><span>{th ? 'สถานะปัจจุบัน' : 'Current stage'}</span><strong>{stageLabel(currentStage, th)}</strong><small>{form.opportunityName || form.customerName || '-'}</small></div><div><span>{th ? 'งานถัดไป' : 'Next action'}</span><strong>{form.nextAction || nextRecommendedAction(form, th)}</strong><small>{form.nextActionDueDate ? formatDate(form.nextActionDueDate, language) : th ? 'ยังไม่กำหนด Deadline' : 'No deadline'}</small></div><div><span>{th ? 'ยอดรับชำระ / คงเหลือ' : 'Paid / remaining'}</span><strong>{formatTHB(totalPaid, language)} / {formatTHB(Math.max(0, receivableTotal - totalPaid), language)}</strong><small>{form.passengerCount + addedPassengerCount(form)} {th ? 'ท่านรวม' : 'total pax'}</small></div></div>
 
       <WorkflowSection number="01" icon={<MessageSquareText/>} title={th ? 'เสนอราคาและยืนยันการจอง' : 'Quotation & booking confirmation'} subtitle={th ? 'เริ่มจากแจ้งราคา จนลูกค้ายืนยันวันเดินทางและแพ็กเกจ' : 'From quotation to confirmed travel dates and package.'}>
         <div className="tracking-form-grid">
@@ -2152,7 +2221,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         <div className="payment-entry-form payment-entry-form-with-slip">
           <label className="field"><span>{th ? 'ประเภทรายการ' : 'Payment type'}</span><select value={availablePaymentTypes.includes(paymentDraft.type) ? paymentDraft.type : availablePaymentTypes[0]} onChange={(e) => {
             const type = e.target.value as PaymentTransactionType;
-            const firstGeneral = generalSupplementalInvoices(currentForm, invoices).find((x) => x.status !== 'cancelled');
+            const firstGeneral = payableSupplementalInvoices(currentForm, invoices).find((x) => x.status !== 'cancelled');
             const balanceInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'balance' && invoice.status !== 'cancelled');
             const fullInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'full' && invoice.status !== 'cancelled');
             const nextAmount = type === 'supplemental'
@@ -2160,12 +2229,12 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
               : type === 'package_balance'
                 ? Math.max(0, (balanceInvoice?.amount ?? balance) - (balanceInvoice ? invoicePaidAmount(balanceInvoice.id, payments) : paidPackage))
                 : type === 'full_payment'
-                  ? Math.max(0, (fullInvoice?.amount || grandTotal) - (fullInvoice ? invoicePaidAmount(fullInvoice.id, payments) : 0))
+                  ? Math.max(0, (fullInvoice?.amount || receivableTotal) - (fullInvoice ? invoicePaidAmount(fullInvoice.id, payments) : 0))
                   : paymentDraft.amount;
             setPaymentDraft({ ...paymentDraft, type, invoiceId: type === 'supplemental' ? (firstGeneral?.id || '') : type === 'package_balance' ? (balanceInvoice?.id || '') : type === 'full_payment' ? (fullInvoice?.id || '') : '', amount: nextAmount });
           }}>{availablePaymentTypes.map((x) => <option key={x} value={x}>{paymentTypeLabel(x, th)}</option>)}</select></label>
           {paymentDraft.type === 'ticket_deposit' && addedInvoice1Documents.length > 0 && <label className="field payment-invoice-link"><span>{th ? 'เลือก Invoice 1 ที่รับชำระ' : 'Invoice 1 being paid'}</span><select value={paymentDraft.invoiceId} onChange={(e) => { const invoiceId = e.target.value; const target = addedInvoice1Documents.find((x) => x.id === invoiceId); setPaymentDraft({ ...paymentDraft, invoiceId, amount: target ? Math.max(0, target.amount - invoicePaidAmount(target.id, payments)) : Math.max(0, deposit - ticketPaidAmount(currentForm, payments)) }); }}><option value="">{th ? `Invoice 1 — ผู้เดินทางชุดแรก (${formatTHB(Math.max(0, deposit - ticketPaidAmount(currentForm, payments)), language)})` : `Invoice 1 — original group (${formatTHB(Math.max(0, deposit - ticketPaidAmount(currentForm, payments)), language)})`}</option>{addedInvoice1Documents.filter((x) => x.status !== 'cancelled').map((x, index) => { const addition = activeTravelerAdditions(currentForm).find((entry) => entry.invoiceId === x.id); return <option key={x.id} value={x.id}>{`${th ? 'Invoice 1 ผู้เดินทางเพิ่ม' : 'Invoice 1 added travellers'} ${index + 1} · PNR ${addition?.pnr || '-'} · ${formatTHB(Math.max(0, x.amount - invoicePaidAmount(x.id, payments)), language)}`}</option>; })}</select></label>}
-          {paymentDraft.type === 'supplemental' && <label className="field payment-invoice-link"><span>{th ? 'เลือก Invoice เพิ่มเติม' : 'Supplemental invoice'}</span><select value={paymentDraft.invoiceId} onChange={(e) => { const invoiceId = e.target.value; const target = generalSupplementalInvoices(currentForm, invoices).find((x) => x.id === invoiceId); setPaymentDraft({ ...paymentDraft, invoiceId, amount: target ? Math.max(0, target.amount - invoicePaidAmount(target.id, payments)) : 0 }); }}><option value="">{th ? '— เลือก Invoice —' : '— Select invoice —'}</option>{generalSupplementalInvoices(currentForm, invoices).filter((x) => x.status !== 'cancelled').map((x) => <option key={x.id} value={x.id}>{`Invoice ${x.sequenceNumber} · ${x.invoiceNo} · ${formatTHB(Math.max(0, x.amount - invoicePaidAmount(x.id, payments)), language)}`}</option>)}</select></label>}
+          {paymentDraft.type === 'supplemental' && <label className="field payment-invoice-link"><span>{th ? 'เลือก Invoice เพิ่มเติม' : 'Supplemental invoice'}</span><select value={paymentDraft.invoiceId} onChange={(e) => { const invoiceId = e.target.value; const target = payableSupplementalInvoices(currentForm, invoices).find((x) => x.id === invoiceId); setPaymentDraft({ ...paymentDraft, invoiceId, amount: target ? Math.max(0, target.amount - invoicePaidAmount(target.id, payments)) : 0 }); }}><option value="">{th ? '— เลือก Invoice —' : '— Select invoice —'}</option>{payableSupplementalInvoices(currentForm, invoices).filter((x) => x.status !== 'cancelled').map((x) => <option key={x.id} value={x.id}>{`Invoice ${x.sequenceNumber} · ${x.invoiceNo} · ${formatTHB(Math.max(0, x.amount - invoicePaidAmount(x.id, payments)), language)}`}</option>)}</select></label>}
           <MoneyField label={th ? 'จำนวนเงิน' : 'Amount'} value={paymentDraft.amount} onChange={(amount) => setPaymentDraft({ ...paymentDraft, amount })}/>
           <label className="field"><span>{th ? 'วันที่รับชำระ' : 'Paid date'}</span><input type="date" value={paymentDraft.paidAt} onChange={(e) => setPaymentDraft({ ...paymentDraft, paidAt: e.target.value })}/></label>
           <label className="field"><span>{th ? 'เลขอ้างอิง / ผู้ชำระ' : 'Reference / payer'}</span><input value={paymentDraft.reference} onChange={(e) => setPaymentDraft({ ...paymentDraft, reference: e.target.value })}/></label>
@@ -2193,7 +2262,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
             </div>
             <button className="danger" disabled={Boolean(paymentBusy)} onClick={() => window.confirm(th ? 'ลบรายการรับชำระนี้และไฟล์สลิป?' : 'Delete this payment and its slip?') && onDeletePayment(payment.id)}><Trash2/></button>
           </div>) : <div className="payment-ledger-empty">{th ? 'ยังไม่มีประวัติรับชำระ' : 'No payment transactions yet'}</div>}
-          <div className="payment-ledger-total"><span>{th ? 'รับชำระรวม' : 'Total received'}</span><strong>{formatTHB(totalPaid, language)}</strong><span>{th ? 'ยอดคงเหลือ' : 'Balance'}</span><strong>{formatTHB(Math.max(0, grandTotal - totalPaid), language)}</strong></div>
+          <div className="payment-ledger-total"><span>{th ? 'รับชำระรวม' : 'Total received'}</span><strong>{formatTHB(totalPaid, language)}</strong><span>{th ? 'ยอดคงเหลือ' : 'Balance'}</span><strong>{formatTHB(Math.max(0, receivableTotal - totalPaid), language)}</strong></div>
         </div>
       </WorkflowSection>
 
@@ -2448,6 +2517,7 @@ function SupplementalInvoiceManager({ tracking, invoices, payments, language, dr
 }) {
   const th = language === 'th';
   const generalInvoices = generalSupplementalInvoices(tracking, invoices);
+  const vatServiceInvoices = agentVatServiceInvoices(tracking, invoices);
   const active = generalInvoices.filter((invoice) => invoice.status !== 'cancelled');
   const draftRevenue = draft.lineItems.reduce((sum, line) => sum + Math.max(1, Number(line.quantity || 1)) * Math.max(0, Number(line.unitPriceTHB || 0)), 0);
   const draftCost = draft.lineItems.reduce((sum, line) => sum + Math.max(1, Number(line.quantity || 1)) * Math.max(0, Number(line.costPerUnitTHB || 0)), 0);
@@ -2457,6 +2527,15 @@ function SupplementalInvoiceManager({ tracking, invoices, payments, language, dr
       <div><span>{th ? 'Invoice บริการเพิ่มเติมทั่วไป' : 'General supplemental invoices'}</span><strong>{formatTHB(generalSupplementalInvoices(tracking, invoices).reduce((sum, invoice) => sum + invoice.amount, 0), language)}</strong></div>
       <div className="featured"><span>{th ? 'ยอดขายรวมลูกค้า' : 'Customer grand total'}</span><strong>{formatTHB(tracking.grandTotalAmount || tracking.totalAmount, language)}</strong></div>
     </div>
+    {vatServiceInvoices.length > 0 && <div className="supplemental-invoice-list vat-service-invoice-list">{vatServiceInvoices.map((invoice) => {
+      const paid = invoicePaidAmount(invoice.id, payments);
+      const remaining = Math.max(0, invoice.amount - paid);
+      return <article key={invoice.id} className="vat-service-invoice-card">
+        <div><span>{th ? `Invoice ${invoice.sequenceNumber} · VAT บริการ` : `Invoice ${invoice.sequenceNumber} · Service VAT`}</span><strong>{invoice.title || (th ? 'ค่าบริการ + VAT' : 'Service fee + VAT')}</strong><small>{invoice.invoiceNo} · {paymentStatusLabel(effectiveStageStatus(invoice.status, invoice.dueDate), th)}</small></div>
+        <div><span>{th ? 'ยอด / รับแล้ว / คงเหลือ' : 'Amount / paid / balance'}</span><strong>{formatTHB(invoice.amount, language)}</strong><small>{formatTHB(paid, language)} / {formatTHB(remaining, language)}</small></div>
+        <div className="supplemental-invoice-actions"><button type="button" className="secondary-button" onClick={() => onOpen(invoice)}><FileText/>{th ? 'เปิด Invoice VAT' : 'Open VAT invoice'}</button></div>
+      </article>;
+    })}</div>}
     {generalInvoices.length > 0 && <div className="supplemental-invoice-list">{generalInvoices.map((invoice) => {
       const paid = invoicePaidAmount(invoice.id, payments);
       const remaining = Math.max(0, invoice.amount - paid);
@@ -2503,12 +2582,14 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
   const [status, setStatus] = useState<PaymentStageStatus>(value?.invoice.status || 'invoiced');
   const [paymentAccountType, setPaymentAccountType] = useState<PaymentAccountType>(value?.invoice.paymentAccountType || (value?.invoice.installment === 'balance' ? 'owner' : 'company'));
   const [vatEnabled, setVatEnabled] = useState(Boolean(value?.invoice.vatEnabled));
+  const [agentVatMode, setAgentVatMode] = useState<AgentVatMode>(agentVatModeFromInvoice(value?.invoice));
   React.useEffect(() => setStatus(value?.invoice.status || 'invoiced'), [value?.invoice.id, value?.invoice.status]);
   React.useEffect(() => {
     if (!value?.invoice) return;
     setPaymentAccountType(value.invoice.paymentAccountType || (value.invoice.installment === 'balance' ? 'owner' : 'company'));
     setVatEnabled(Boolean(value.invoice.vatEnabled));
-  }, [value?.invoice.id, value?.invoice.paymentAccountType, value?.invoice.vatEnabled]);
+    setAgentVatMode(agentVatModeFromInvoice(value.invoice));
+  }, [value?.invoice.id, value?.invoice.paymentAccountType, value?.invoice.vatEnabled, value?.invoice.documentData?.agentVatMode]);
   if (!value) return null;
   const { tracking, invoice } = value;
   const isDeposit = invoice.installment === 'deposit';
@@ -2517,7 +2598,8 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
   const isSupplemental = invoice.installment === 'supplemental';
   const travelerAddition = (tracking.travelerAdditions || []).find((entry) => entry.invoiceId === invoice.id);
   const isTravelerInvoice1 = Boolean(travelerAddition) || invoice.documentData?.kind === 'ticket_added';
-  const isGeneralSupplemental = isSupplemental && !isTravelerInvoice1;
+  const isAgentVatServiceDocument = isAgentVatServiceInvoice(invoice);
+  const isGeneralSupplemental = isSupplemental && !isTravelerInvoice1 && !isAgentVatServiceDocument;
   const isInvoice1 = isDeposit || isTravelerInvoice1;
   const needsPassengerCheck = isInvoice1 || isFull;
   const snapshot = invoice.documentData || null;
@@ -2529,25 +2611,41 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
   const deductions = snapshot?.deductions || (isBalance ? buildTicketDeductionSnapshot(tracking, invoices, payments) : []);
   const deductedTotal = deductions.reduce((sum, row) => sum + row.amountTHB, 0);
   const balanceDue = snapshot?.balanceDueTHB ?? Math.max(0, packageTotal - deductedTotal);
-  const baseSubtotal = isInvoice1
+  const calculatedBaseSubtotal = isInvoice1
     ? (ticketBatch?.totalDueTHB ?? invoice.subtotalAmount ?? invoice.amount)
     : isBalance
       ? balanceDue
       : isFull
         ? (invoice.subtotalAmount ?? customerGrandTotal(tracking, invoices))
         : (invoice.subtotalAmount ?? invoice.amount);
+  const baseSubtotal = (isBalance || isFull) && Number(snapshot?.agentVatOriginalSubtotalTHB) > 0
+    ? Number(snapshot?.agentVatOriginalSubtotalTHB)
+    : calculatedBaseSubtotal;
   const currentVatRate = Math.max(0, Number(invoice.vatRatePercent ?? settings.vatRatePercent ?? 7));
   const ticketComponentForFull = isFull ? Math.min(baseSubtotal, Math.max(0, ticketBatch?.totalDueTHB ?? tracking.depositAmount ?? 0)) : 0;
   const packagePortionForVat = isFull ? Math.max(0, baseSubtotal - ticketComponentForFull) : baseSubtotal;
   const currentAgentVatBreakdown = tracking.channel === 'agent' && (isBalance || isFull)
     ? agentVatPackageBreakdown(settings, tracking, packagePortionForVat, snapshot)
     : null;
-  const currentVatBase = currentAgentVatBreakdown ? currentAgentVatBreakdown.vatBaseTHB : packagePortionForVat;
-  const currentVatAmount = (isBalance || isFull) && vatEnabled
-    ? roundMoney(currentVatBase * currentVatRate / 100)
-    : 0;
-  const amountDue = roundMoney(baseSubtotal + currentVatAmount);
-  const selectedAccount = paymentAccountSnapshot(settings, (isBalance || isFull) && vatEnabled ? 'company' : paymentAccountType);
+  const activeVatServiceInvoice = agentVatServiceInvoices(tracking, invoices).find((item) => item.status !== 'cancelled');
+  const splitMainSubtotal = agentVatMode === 'service_split' && currentAgentVatBreakdown
+    ? Math.max(0, baseSubtotal - currentAgentVatBreakdown.serviceFeeTotal)
+    : baseSubtotal;
+  const currentVatBase = tracking.channel === 'agent' && (isBalance || isFull)
+    ? (agentVatMode === 'total_package' ? packagePortionForVat : agentVatMode === 'service_split' ? 0 : 0)
+    : packagePortionForVat;
+  const currentVatAmount = isAgentVatServiceDocument
+    ? Math.max(0, Number(invoice.vatAmount || 0))
+    : (isBalance || isFull) && (tracking.channel === 'agent' ? agentVatMode === 'total_package' : vatEnabled)
+      ? roundMoney(currentVatBase * currentVatRate / 100)
+      : 0;
+  const amountDue = isAgentVatServiceDocument
+    ? roundMoney((invoice.subtotalAmount ?? 0) + currentVatAmount)
+    : roundMoney(splitMainSubtotal + currentVatAmount);
+  const taxForcesCompany = isAgentVatServiceDocument
+    || ((isBalance || isFull) && tracking.channel === 'agent' && agentVatMode === 'total_package')
+    || ((isBalance || isFull) && tracking.channel !== 'agent' && vatEnabled);
+  const selectedAccount = paymentAccountSnapshot(settings, taxForcesCompany ? 'company' : paymentAccountType);
   const paymentDetails = invoice.paymentBankName && invoice.paymentAccountNumber && invoice.paymentAccountType === selectedAccount.paymentAccountType
     ? { ...selectedAccount, paymentBankName: invoice.paymentBankName, paymentAccountName: invoice.paymentAccountName, paymentAccountNumber: invoice.paymentAccountNumber, paymentQrUrl: invoice.paymentQrUrl || selectedAccount.paymentQrUrl }
     : selectedAccount;
@@ -2556,23 +2654,40 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
   const invoicePassengerNames = ticketBatch?.passengerNames || [];
 
   async function updateStatus(next: PaymentStageStatus) {
-    const previousStatus = status;
     setStatus(next);
     const now = new Date().toISOString();
-    await onSaveInvoice({ ...invoice, status: next, paidAt: next === 'paid' ? isoToday() : '', updatedAt: now });
+    const updatedInvoice = { ...invoice, status: next, paidAt: next === 'paid' ? isoToday() : '', updatedAt: now } as PaymentInvoice;
+    await onSaveInvoice(updatedInvoice);
+    const projectedInvoices = invoices.map((item) => item.id === invoice.id ? updatedInvoice : item);
+
+    if (isAgentVatServiceDocument) {
+      const linkedMain = projectedInvoices.find((item) => item.id === invoice.documentData?.agentVatLinkedInvoiceId)
+        || projectedInvoices.find((item) => item.trackingId === tracking.id && (item.installment === 'balance' || item.installment === 'full') && item.status !== 'cancelled');
+      const collectionComplete = next === 'paid' && invoiceSettled(linkedMain, payments);
+      const supplementalInvoiceTotal = customerSupplementalSalesTotal(tracking, projectedInvoices);
+      const supplementalCostTotal = customerSupplementalCostTotal(tracking, projectedInvoices);
+      const updatedTracking = {
+        ...tracking,
+        supplementalInvoiceTotal,
+        supplementalCostTotal,
+        grandTotalAmount: customerGrandTotal(tracking, projectedInvoices),
+        balanceStatus: collectionComplete ? 'paid' as const : (tracking.balanceStatus === 'paid' ? 'invoiced' as const : tracking.balanceStatus),
+        fullPaymentReceivedAt: collectionComplete ? (tracking.fullPaymentReceivedAt || isoToday()) : (tracking.balanceStatus === 'paid' ? '' : tracking.fullPaymentReceivedAt),
+        updatedAt: now,
+      } as CustomerTracking;
+      await onSaveTracking({
+        ...updatedTracking,
+        profitAmount: tracking.landPaidAt && tracking.landPayment > 0 ? realizedGrossProfit(updatedTracking, projectedInvoices, tracking.landPayment) : tracking.profitAmount,
+      });
+      return;
+    }
+
     if (isSupplemental) {
-      const wasActive = previousStatus !== 'cancelled';
-      const willBeActive = next !== 'cancelled';
-      const revenueValue = travelerAddition ? travelerAdditionPackageValue(travelerAddition, tracking.sellingPricePerPerson) : invoice.amount;
-      const costValue = travelerAddition ? travelerAdditionInternalCostValue(travelerAddition) : invoice.costAmount;
-      const revenueDelta = (willBeActive ? revenueValue : 0) - (wasActive ? revenueValue : 0);
-      const costDelta = (willBeActive ? costValue : 0) - (wasActive ? costValue : 0);
-      const supplementalInvoiceTotal = Math.max(0, (tracking.supplementalInvoiceTotal || 0) + revenueDelta);
-      const supplementalCostTotal = Math.max(0, (tracking.supplementalCostTotal || 0) + costDelta);
       const travelerAdditions = (tracking.travelerAdditions || []).map((entry) => entry.invoiceId === invoice.id ? { ...entry, status: next === 'cancelled' ? 'cancelled' as const : 'active' as const } : entry);
       const updatedTracking = { ...tracking, travelerAdditions } as CustomerTracking;
-      const projectedInvoices = invoices.map((item) => item.id === invoice.id ? { ...item, status: next, paidAt: next === 'paid' ? isoToday() : item.paidAt } : item);
       const ticketFlowComplete = travelerAddition ? allTicketPaymentsReceived(updatedTracking, projectedInvoices, payments) : false;
+      const supplementalInvoiceTotal = customerSupplementalSalesTotal(updatedTracking, projectedInvoices);
+      const supplementalCostTotal = customerSupplementalCostTotal(updatedTracking, projectedInvoices);
       const updatedTrackingFinancials = { ...updatedTracking, supplementalInvoiceTotal, supplementalCostTotal, grandTotalAmount: customerGrandTotal(updatedTracking, projectedInvoices) } as CustomerTracking;
       await onSaveTracking({
         ...updatedTrackingFinancials,
@@ -2586,45 +2701,43 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
       });
       return;
     }
+
+    const splitRequiresServiceInvoice = tracking.channel === 'agent' && agentVatMode === 'service_split' && (isBalance || isFull);
+    const splitServiceSettled = !splitRequiresServiceInvoice || invoiceSettled(activeVatServiceInvoice, payments);
+    const completionStatus: PaymentStageStatus = next === 'paid' && !splitServiceSettled ? 'invoiced' : next;
     await onSaveTracking({
       ...tracking,
       paymentPlan: isFull ? 'full_payment' : (tracking.paymentPlan || 'installments'),
       depositStatus: isFull ? next : isDeposit ? next : tracking.depositStatus,
-      balanceStatus: isFull ? next : isBalance ? next : tracking.balanceStatus,
+      balanceStatus: isFull ? completionStatus : isBalance ? completionStatus : tracking.balanceStatus,
       firstPaymentReceivedAt: (isDeposit || isFull) && next === 'paid' ? (tracking.firstPaymentReceivedAt || isoToday()) : tracking.firstPaymentReceivedAt,
-      fullPaymentReceivedAt: (isBalance || isFull) && next === 'paid' ? (tracking.fullPaymentReceivedAt || isoToday()) : tracking.fullPaymentReceivedAt,
+      fullPaymentReceivedAt: (isBalance || isFull) && completionStatus === 'paid' ? (tracking.fullPaymentReceivedAt || isoToday()) : tracking.fullPaymentReceivedAt,
       updatedAt: now,
+    });
+  }
+
+  async function updatePaymentAccount(nextAccountType: PaymentAccountType) {
+    const forcedType: PaymentAccountType = taxForcesCompany ? 'company' : nextAccountType;
+    setPaymentAccountType(forcedType);
+    await onSaveInvoice({
+      ...invoice,
+      ...paymentAccountSnapshot(settings, forcedType),
+      updatedAt: new Date().toISOString(),
     });
   }
 
   async function updatePaymentOptions(nextAccountType: PaymentAccountType, nextVatEnabled: boolean) {
     const vatAllowed = isBalance || isFull;
+    if (tracking.channel === 'agent' && vatAllowed) {
+      await updateAgentVatMode(nextVatEnabled ? 'total_package' : 'none');
+      return;
+    }
     const forcedAccountType: PaymentAccountType = vatAllowed && nextVatEnabled ? 'company' : nextAccountType;
     setPaymentAccountType(forcedAccountType);
     setVatEnabled(vatAllowed ? nextVatEnabled : false);
     const account = paymentAccountSnapshot(settings, forcedAccountType);
     const vatRatePercent = Math.max(0, Number(invoice.vatRatePercent ?? settings.vatRatePercent ?? 7));
-    const agentBreakdown = tracking.channel === 'agent' && vatAllowed
-      ? agentVatPackageBreakdown(settings, tracking, packagePortionForVat, invoice.documentData || null)
-      : null;
-    if (nextVatEnabled && tracking.channel === 'agent' && agentBreakdown && agentBreakdown.serviceFeePerPerson <= 0) {
-      window.alert(th
-        ? 'ยังไม่ได้กำหนดค่าบริการสำหรับระยะเวลาของแพ็กเกจนี้ กรุณาตรวจสอบชื่อแพ็กเกจหรือกำหนดค่าบริการในหลังบ้านก่อนเปิด VAT'
-        : 'No service fee is configured for this package duration. Please check the package duration or configure the service fee in Back Office before enabling VAT.');
-      return;
-    }
-    const vatBase = agentBreakdown ? agentBreakdown.vatBaseTHB : packagePortionForVat;
-    const vatAmount = vatAllowed && nextVatEnabled ? roundMoney(vatBase * vatRatePercent / 100) : 0;
-    const documentData = agentBreakdown && nextVatEnabled
-      ? {
-          ...(invoice.documentData || snapshot || buildInvoiceSnapshot(tracking, isFull ? 'full_payment' : 'package_balance', { invoices, payments, ticketBatch })),
-          agentServiceFeePerPersonTHB: agentBreakdown.serviceFeePerPerson,
-          agentServiceFeePassengerCount: agentBreakdown.passengerCount,
-          agentServiceFeeTotalTHB: agentBreakdown.serviceFeeTotal,
-          agentPackageAmountAfterServiceFeeTHB: agentBreakdown.packageAmountAfterServiceFee,
-          vatBaseTHB: agentBreakdown.vatBaseTHB,
-        }
-      : invoice.documentData;
+    const vatAmount = vatAllowed && nextVatEnabled ? roundMoney(packagePortionForVat * vatRatePercent / 100) : 0;
     await onSaveInvoice({
       ...invoice,
       subtotalAmount: baseSubtotal,
@@ -2632,35 +2745,213 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
       vatRatePercent,
       vatAmount,
       amount: roundMoney(baseSubtotal + vatAmount),
-      documentData,
       ...account,
       updatedAt: new Date().toISOString(),
     });
   }
 
+  async function updateAgentVatMode(nextMode: AgentVatMode) {
+    if (tracking.channel !== 'agent' || !(isBalance || isFull)) return;
+    const vatRatePercent = Math.max(0, Number(invoice.vatRatePercent ?? settings.vatRatePercent ?? 7));
+    const breakdown = agentVatPackageBreakdown(settings, tracking, packagePortionForVat, invoice.documentData || null);
+    const allServiceInvoices = supplementalInvoicesFor(tracking.id, invoices).filter(isAgentVatServiceInvoice);
+    const existingServiceInvoice = allServiceInvoices.find((item) => item.status !== 'cancelled') || allServiceInvoices[0];
+    const existingServicePaid = existingServiceInvoice
+      ? invoiceSettled(existingServiceInvoice, payments) || invoicePaidAmount(existingServiceInvoice.id, payments) > 0
+      : false;
+
+    if (nextMode !== 'service_split' && existingServiceInvoice?.status !== 'cancelled' && existingServicePaid) {
+      window.alert(th
+        ? 'Invoice ค่าบริการ + VAT มีการรับชำระแล้ว จึงไม่สามารถเปลี่ยนรูปแบบ VAT ได้ กรุณาตรวจสอบหรือย้อนรายการรับชำระก่อน'
+        : 'The service-fee VAT invoice already has payment activity. Reverse/check the payment before changing VAT mode.');
+      return;
+    }
+    if (nextMode === 'service_split' && (breakdown.serviceFeePerPerson <= 0 || breakdown.serviceFeeTotal <= 0)) {
+      window.alert(th
+        ? 'ยังไม่ได้กำหนดค่าบริการสำหรับระยะเวลาของแพ็กเกจนี้ กรุณาตรวจสอบ 4D3N / 5D4N / 6D5N ในหลังบ้านก่อน'
+        : 'No service fee is configured for this package duration. Check the 4D3N / 5D4N / 6D5N settings first.');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const baseDocument = invoice.documentData || snapshot || buildInvoiceSnapshot(tracking, isFull ? 'full_payment' : 'package_balance', { invoices, payments, ticketBatch });
+    let projectedInvoices = [...invoices];
+
+    if (nextMode === 'service_split') {
+      const serviceInvoiceId = existingServiceInvoice?.id || makeId('inv');
+      const sequenceNumber = existingServiceInvoice?.sequenceNumber || nextSupplementalSequence(tracking.id, invoices, 3);
+      const serviceVatAmount = roundMoney(breakdown.serviceFeeTotal * vatRatePercent / 100);
+      const serviceDocument: InvoiceDocumentSnapshot = {
+        version: 2,
+        kind: 'supplemental',
+        packageRows: [],
+        packageTotalTHB: 0,
+        totalPassengerCount: breakdown.passengerCount,
+        agentServiceFeePerPersonTHB: breakdown.serviceFeePerPerson,
+        agentServiceFeePassengerCount: breakdown.passengerCount,
+        agentServiceFeeTotalTHB: breakdown.serviceFeeTotal,
+        agentPackageAmountAfterServiceFeeTHB: breakdown.packageAmountAfterServiceFee,
+        agentVatOriginalSubtotalTHB: baseSubtotal,
+        agentVatMode: 'service_split_invoice',
+        agentVatLinkedInvoiceId: invoice.id,
+        vatBaseTHB: breakdown.serviceFeeTotal,
+        capturedAt: now,
+      };
+      const serviceInvoice: PaymentInvoice = {
+        id: serviceInvoiceId,
+        trackingId: tracking.id,
+        invoiceNo: existingServiceInvoice?.invoiceNo || makeInvoiceNo('supplemental', sequenceNumber),
+        installment: 'supplemental',
+        sequenceNumber,
+        title: th ? 'ค่าบริการ + VAT' : 'Service fee + VAT',
+        lineItems: [{
+          id: existingServiceInvoice?.lineItems?.[0]?.id || makeId('xline'),
+          description: th ? 'ค่าบริการแพ็กเกจ' : 'Package service fee',
+          quantity: breakdown.passengerCount,
+          unitPriceTHB: breakdown.serviceFeePerPerson,
+          totalTHB: breakdown.serviceFeeTotal,
+          costPerUnitTHB: 0,
+          totalCostTHB: 0,
+        }],
+        costAmount: 0,
+        issueDate: existingServiceInvoice?.issueDate || isoToday(),
+        dueDate: invoice.dueDate || existingServiceInvoice?.dueDate || '',
+        subtotalAmount: breakdown.serviceFeeTotal,
+        vatEnabled: true,
+        vatRatePercent,
+        vatAmount: serviceVatAmount,
+        amount: roundMoney(breakdown.serviceFeeTotal + serviceVatAmount),
+        ...paymentAccountSnapshot(settings, 'company'),
+        status: existingServiceInvoice?.status && existingServiceInvoice.status !== 'cancelled' ? existingServiceInvoice.status : 'invoiced',
+        paidAt: existingServiceInvoice?.paidAt || '',
+        note: th ? 'Invoice นี้เป็นการแยกค่าบริการออกจากค่าแพ็กเกจหลักเพื่อคำนวณ VAT เฉพาะค่าบริการ' : 'This invoice separates the service-fee portion from the main package for service-fee VAT.',
+        documentData: serviceDocument,
+        createdAt: existingServiceInvoice?.createdAt || now,
+        updatedAt: now,
+      };
+      await onSaveInvoice(serviceInvoice);
+      projectedInvoices = [serviceInvoice, ...projectedInvoices.filter((item) => item.id !== serviceInvoice.id)];
+
+      const mainAccountType: PaymentAccountType = isBalance ? 'owner' : paymentAccountType;
+      const mainDocument: InvoiceDocumentSnapshot = {
+        ...baseDocument,
+        agentServiceFeePerPersonTHB: breakdown.serviceFeePerPerson,
+        agentServiceFeePassengerCount: breakdown.passengerCount,
+        agentServiceFeeTotalTHB: breakdown.serviceFeeTotal,
+        agentPackageAmountAfterServiceFeeTHB: breakdown.packageAmountAfterServiceFee,
+        agentVatOriginalSubtotalTHB: baseSubtotal,
+        agentVatMode: 'service_split',
+        agentVatLinkedInvoiceId: serviceInvoice.id,
+        vatBaseTHB: breakdown.serviceFeeTotal,
+        capturedAt: now,
+      };
+      const mainSubtotal = Math.max(0, baseSubtotal - breakdown.serviceFeeTotal);
+      const updatedMain: PaymentInvoice = {
+        ...invoice,
+        subtotalAmount: mainSubtotal,
+        vatEnabled: false,
+        vatRatePercent,
+        vatAmount: 0,
+        amount: roundMoney(mainSubtotal),
+        documentData: mainDocument,
+        ...paymentAccountSnapshot(settings, mainAccountType),
+        updatedAt: now,
+      };
+      await onSaveInvoice(updatedMain);
+      projectedInvoices = [updatedMain, ...projectedInvoices.filter((item) => item.id !== updatedMain.id)];
+      setAgentVatMode('service_split');
+      setVatEnabled(false);
+      setPaymentAccountType(mainAccountType);
+    } else {
+      if (existingServiceInvoice?.status !== 'cancelled') {
+        const cancelledService = { ...existingServiceInvoice, status: 'cancelled' as const, updatedAt: now };
+        await onSaveInvoice(cancelledService);
+        projectedInvoices = [cancelledService, ...projectedInvoices.filter((item) => item.id !== cancelledService.id)];
+      }
+      const vatAmount = nextMode === 'total_package' ? roundMoney(packagePortionForVat * vatRatePercent / 100) : 0;
+      const accountType: PaymentAccountType = nextMode === 'total_package' ? 'company' : (isBalance ? 'owner' : paymentAccountType);
+      const mainDocument: InvoiceDocumentSnapshot = {
+        ...baseDocument,
+        agentServiceFeePerPersonTHB: breakdown.serviceFeePerPerson,
+        agentServiceFeePassengerCount: breakdown.passengerCount,
+        agentServiceFeeTotalTHB: breakdown.serviceFeeTotal,
+        agentPackageAmountAfterServiceFeeTHB: breakdown.packageAmountAfterServiceFee,
+        agentVatOriginalSubtotalTHB: baseSubtotal,
+        agentVatMode: nextMode,
+        agentVatLinkedInvoiceId: existingServiceInvoice?.id,
+        vatBaseTHB: nextMode === 'total_package' ? packagePortionForVat : 0,
+        capturedAt: now,
+      };
+      const updatedMain: PaymentInvoice = {
+        ...invoice,
+        subtotalAmount: baseSubtotal,
+        vatEnabled: nextMode === 'total_package',
+        vatRatePercent,
+        vatAmount,
+        amount: roundMoney(baseSubtotal + vatAmount),
+        documentData: mainDocument,
+        ...paymentAccountSnapshot(settings, accountType),
+        updatedAt: now,
+      };
+      await onSaveInvoice(updatedMain);
+      projectedInvoices = [updatedMain, ...projectedInvoices.filter((item) => item.id !== updatedMain.id)];
+      setAgentVatMode(nextMode);
+      setVatEnabled(nextMode === 'total_package');
+      setPaymentAccountType(accountType);
+    }
+
+    const supplementalInvoiceTotal = customerSupplementalSalesTotal(tracking, projectedInvoices);
+    const supplementalCostTotal = customerSupplementalCostTotal(tracking, projectedInvoices);
+    const updatedTracking = {
+      ...tracking,
+      supplementalInvoiceTotal,
+      supplementalCostTotal,
+      grandTotalAmount: customerGrandTotal(tracking, projectedInvoices),
+      updatedAt: now,
+    } as CustomerTracking;
+    await onSaveTracking({
+      ...updatedTracking,
+      profitAmount: tracking.landPaidAt && tracking.landPayment > 0 ? realizedGrossProfit(updatedTracking, projectedInvoices, tracking.landPayment) : tracking.profitAmount,
+    });
+  }
+
   const documentTitle = isTravelerInvoice1
     ? (th ? 'Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers')
-    : isFull
-      ? (th ? 'Invoice — ชำระเต็มจำนวน' : 'Invoice — Full Payment')
-      : isGeneralSupplemental
-        ? (th ? `Invoice เพิ่มเติม งวดที่ ${displaySequence}` : `Supplemental Invoice ${displaySequence}`)
-        : (th ? `Invoice งวดที่ ${displaySequence}` : `Invoice ${displaySequence}`);
+    : isAgentVatServiceDocument
+      ? (th ? `Invoice ${displaySequence} — ค่าบริการ + VAT` : `Invoice ${displaySequence} — Service fee + VAT`)
+      : isFull
+        ? (th ? 'Invoice — ชำระเต็มจำนวน' : 'Invoice — Full Payment')
+        : isGeneralSupplemental
+          ? (th ? `Invoice เพิ่มเติม งวดที่ ${displaySequence}` : `Supplemental Invoice ${displaySequence}`)
+          : (th ? `Invoice งวดที่ ${displaySequence}` : `Invoice ${displaySequence}`);
 
   return <Modal open title={documentTitle} onClose={onClose} wide>
-    <div className="invoice-toolbar invoice-toolbar-payment no-print"><button className="ghost-button" onClick={onClose}><ArrowLeft/>{th ? 'กลับ' : 'Back'}</button><label><span>{th ? 'สถานะเอกสาร' : 'Status'}</span><select value={status} onChange={(e) => void updateStatus(e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label><label><span>{th ? 'บัญชีรับเงิน' : 'Payment account'}</span><select value={(isBalance || isFull) && vatEnabled ? 'company' : paymentAccountType} disabled={(isBalance || isFull) && vatEnabled} onChange={(e) => void updatePaymentOptions(e.target.value as PaymentAccountType, vatEnabled)}><option value="company">{th ? 'บัญชีบริษัท · กสิกรไทย' : 'Company · Kasikornbank'}</option><option value="owner">{th ? 'บัญชีเจ้านาย · ไทยพาณิชย์' : 'Owner · SCB'}</option></select></label>{(isBalance || isFull) && <label className="invoice-vat-toggle"><span>{th ? 'ใบกำกับภาษี' : 'Tax invoice'}</span><button type="button" className={vatEnabled ? 'active' : ''} onClick={() => void updatePaymentOptions(vatEnabled ? paymentAccountType : 'company', !vatEnabled)}><BadgeCheck/>{vatEnabled ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% เปิดอยู่` : `VAT ${formatNumber(currentVatRate, 2)}% on`) : (th ? 'ไม่บวก VAT' : 'No VAT')}</button></label>}<button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF'}</button></div>
+    <div className="invoice-toolbar invoice-toolbar-payment no-print">
+      <button className="ghost-button" onClick={onClose}><ArrowLeft/>{th ? 'กลับ' : 'Back'}</button>
+      <label><span>{th ? 'สถานะเอกสาร' : 'Status'}</span><select value={status} onChange={(e) => void updateStatus(e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label>
+      <label><span>{th ? 'บัญชีรับเงิน' : 'Payment account'}</span><select value={taxForcesCompany ? 'company' : paymentAccountType} disabled={taxForcesCompany} onChange={(e) => void updatePaymentAccount(e.target.value as PaymentAccountType)}><option value="company">{th ? 'บัญชีบริษัท · กสิกรไทย' : 'Company · Kasikornbank'}</option><option value="owner">{th ? 'บัญชีเจ้านาย · ไทยพาณิชย์' : 'Owner · SCB'}</option></select></label>
+      {(isBalance || isFull) && tracking.channel === 'agent' && <label className="invoice-vat-toggle"><span>{th ? 'รูปแบบ VAT' : 'VAT mode'}</span><select value={agentVatMode} onChange={(e) => void updateAgentVatMode(e.target.value as AgentVatMode)}><option value="none">{th ? 'ไม่คิด VAT' : 'No VAT'}</option><option value="total_package">{th ? `VAT ${formatNumber(currentVatRate, 2)}% · ค่าแพ็กเกจทั้งหมด (Standard)` : `VAT ${formatNumber(currentVatRate, 2)}% · Total package (Standard)`}</option><option value="service_split">{th ? `VAT ${formatNumber(currentVatRate, 2)}% · ค่าบริการ (แยก Invoice 3)` : `VAT ${formatNumber(currentVatRate, 2)}% · Service fee (separate Invoice 3)`}</option></select></label>}
+      {(isBalance || isFull) && tracking.channel !== 'agent' && <label className="invoice-vat-toggle"><span>{th ? 'ใบกำกับภาษี' : 'Tax invoice'}</span><button type="button" className={vatEnabled ? 'active' : ''} onClick={() => void updatePaymentOptions(vatEnabled ? paymentAccountType : 'company', !vatEnabled)}><BadgeCheck/>{vatEnabled ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% เปิดอยู่` : `VAT ${formatNumber(currentVatRate, 2)}% on`) : (th ? 'ไม่บวก VAT' : 'No VAT')}</button></label>}
+      {isAgentVatServiceDocument && <label className="invoice-vat-toggle"><span>{th ? 'VAT ค่าบริการ' : 'Service VAT'}</span><button type="button" className="active" disabled><BadgeCheck/>{`VAT ${formatNumber(currentVatRate, 2)}%`}</button></label>}
+      <button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF'}</button>
+    </div>
     <article className="invoice-sheet journey-invoice-sheet" id="invoice-print-area">
-      <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{isGeneralSupplemental ? (invoice.title || documentTitle) : (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
+      <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{(isGeneralSupplemental || isAgentVatServiceDocument) ? (invoice.title || documentTitle) : (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
       <section className="invoice-meta"><div><span>{th ? 'เรียกเก็บจาก' : 'Bill to'}</span><strong>{tracking.customerName}</strong><small>{[tracking.phone, tracking.email].filter(Boolean).join(' · ') || '-'}</small>{tracking.invoiceAddress && <small className="invoice-billing-address">{tracking.invoiceAddress}</small>}</div><div><span>{th ? 'วันที่ออกเอกสาร' : 'Issue date'}</span><strong>{formatDate(invoice.issueDate, language)}</strong><small>{th ? 'ครบกำหนด' : 'Due'}: {invoice.dueDate ? formatDate(invoice.dueDate, language) : '-'}</small></div></section>
       <section className="invoice-trip-summary"><div><span>{th ? 'โปรแกรม' : 'Package'}</span><b>{tracking.packageName || '-'}</b></div><div><span>{th ? 'วันเดินทาง' : 'Travel date'}</span><b>{tracking.travelStartDate ? formatDate(tracking.travelStartDate, language) : '-'}</b></div><div><span>{th ? 'ผู้เดินทางรวม' : 'Total travellers'}</span><b>{totalTravellers} {th ? 'ท่าน' : 'pax'}</b></div></section>
 
-      {isGeneralSupplemental ? <>
+      {(isGeneralSupplemental || isAgentVatServiceDocument) ? <>
         <section className="journey-invoice-package supplemental-document-lines">
-          <h3>{th ? `รายการเรียกเก็บเพิ่มเติม — Invoice ${displaySequence}` : `Additional charges — Invoice ${displaySequence}`}</h3>
+          <h3>{isAgentVatServiceDocument ? (th ? `ค่าบริการ — Invoice ${displaySequence}` : `Service fee — Invoice ${displaySequence}`) : (th ? `รายการเรียกเก็บเพิ่มเติม — Invoice ${displaySequence}` : `Additional charges — Invoice ${displaySequence}`)}</h3>
           <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Passenger / Service'}</span><span>PTC</span><span>QTY</span><span>{th ? 'ราคาต่อหน่วย' : 'Selling / Unit'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
           {invoice.lineItems.map((line) => <div className="journey-invoice-package-row journey-invoice-single-row" key={line.id}><span><b>{line.description}</b></span><span>SRV</span><span>{formatNumber(line.quantity, 0)}</span><span>{formatNumber(line.unitPriceTHB, 2)}</span><span>{formatNumber(line.totalTHB, 2)}</span></div>)}
-          <div className="journey-invoice-package-total"><span>{th ? `รวม Invoice ${displaySequence}` : `Invoice ${displaySequence} total`}</span><strong>{formatNumber(invoice.amount, 2)}</strong></div>
+          {isAgentVatServiceDocument ? <>
+            <div className="invoice-balance-subtotal"><span>{th ? 'รวมค่าบริการก่อน VAT' : 'Service fee before VAT'}</span><b>{formatNumber(invoice.subtotalAmount, 2)}</b></div>
+            <div className="invoice-vat-row"><span>{th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าบริการ` : `VAT ${formatNumber(currentVatRate, 2)}% — service fee`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>
+            <div className="journey-invoice-package-total"><span>{th ? `ยอด Invoice ${displaySequence}` : `Invoice ${displaySequence} total`}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
+          </> : <div className="journey-invoice-package-total"><span>{th ? `รวม Invoice ${displaySequence}` : `Invoice ${displaySequence} total`}</span><strong>{formatNumber(invoice.amount, 2)}</strong></div>}
         </section>
-        <section className="supplemental-grand-summary"><div><span>{th ? 'แพ็กเกจหลัก' : 'Main package'}</span><b>{formatNumber(packageSalesTotal(tracking), 2)}</b></div><div><span>{th ? 'Invoice เพิ่มเติมสะสม' : 'Supplemental invoices'}</span><b>{formatNumber(tracking.supplementalInvoiceTotal || invoice.amount, 2)}</b></div><div className="featured"><span>{th ? 'ยอดขายรวมลูกค้า' : 'Customer grand total'}</span><strong>{formatNumber(tracking.grandTotalAmount || tracking.totalAmount + invoice.amount, 2)}</strong></div></section>
+        {isAgentVatServiceDocument ? <section className="invoice-service-split-note"><strong>{th ? 'เอกสาร VAT ค่าบริการ' : 'Service-fee VAT document'}</strong><span>{th ? 'ยอดค่าบริการนี้ถูกแยกออกจาก Invoice ค่าแพ็กเกจหลักแล้ว จึงไม่ถูกนับเป็นยอดขายเพิ่มซ้ำ' : 'This service-fee amount has been split out of the main package invoice and is not counted as additional sales.'}</span></section> : <section className="supplemental-grand-summary"><div><span>{th ? 'แพ็กเกจหลัก' : 'Main package'}</span><b>{formatNumber(packageSalesTotal(tracking), 2)}</b></div><div><span>{th ? 'Invoice เพิ่มเติมสะสม' : 'Supplemental invoices'}</span><b>{formatNumber(tracking.supplementalInvoiceTotal || invoice.amount, 2)}</b></div><div className="featured"><span>{th ? 'ยอดขายรวมลูกค้า' : 'Customer grand total'}</span><strong>{formatNumber(tracking.grandTotalAmount || tracking.totalAmount + invoice.amount, 2)}</strong></div></section>}
       </> : <>
         <section className="journey-invoice-package invoice-reference-layout">
           <h3>{th ? 'มูลค่าแพ็กเกจทั้งหมด' : 'Full package value'}</h3>
@@ -2692,13 +2983,14 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
 
         {isFull && <section className="journey-payment-breakdown invoice-full-payment-reference">
           <h3>{th ? 'Full Payment — ชำระทั้งหมดครั้งเดียว' : 'Full Payment — one-time collection'}</h3>
-          <div><span>{th ? 'ยอดรวมก่อน VAT' : 'Total before VAT'}</span><b>{formatNumber(baseSubtotal, 2)}</b></div>
-          {vatEnabled && currentAgentVatBreakdown && <>
-            <div><span>{th ? 'ค่าตั๋วเครื่องบินและภาษีสนามบิน' : 'Airfare and airport tax'}</span><b>{formatNumber(ticketComponentForFull, 2)}</b></div>
-            <div><span>{th ? 'ค่าแพ็กเกจ' : 'Package amount'}</span><b>{formatNumber(currentAgentVatBreakdown.packageAmountAfterServiceFee, 2)}</b></div>
-            <div className="invoice-service-fee-row"><span>{th ? `ค่าบริการ ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} บาท × ${currentAgentVatBreakdown.passengerCount} ท่าน` : `Service fee ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} × ${currentAgentVatBreakdown.passengerCount} pax`}</span><b>{formatNumber(currentAgentVatBreakdown.serviceFeeTotal, 2)}</b></div>
+          <div><span>{th ? 'ยอดรวมก่อนจัด VAT' : 'Total before VAT treatment'}</span><b>{formatNumber(baseSubtotal, 2)}</b></div>
+          {tracking.channel === 'agent' && <div><span>{th ? 'ค่าแพ็กเกจที่ใช้เป็นฐาน VAT (ไม่รวมตั๋ว/ภาษีสนามบิน)' : 'Package VAT base (excluding airfare/tax)'}</span><b>{formatNumber(packagePortionForVat, 2)}</b></div>}
+          {tracking.channel === 'agent' && agentVatMode === 'service_split' && currentAgentVatBreakdown && <>
+            <div className="deduction"><span>{th ? `หัก ค่าบริการที่แยกไป Invoice ${activeVatServiceInvoice?.sequenceNumber || 3}` : `Less service fee moved to Invoice ${activeVatServiceInvoice?.sequenceNumber || 3}`}</span><b>-{formatNumber(currentAgentVatBreakdown.serviceFeeTotal, 2)}</b></div>
+            <div className="invoice-balance-subtotal"><span>{th ? 'ยอดเอกสารนี้หลังแยกค่าบริการ' : 'This invoice after service-fee split'}</span><b>{formatNumber(splitMainSubtotal, 2)}</b></div>
           </>}
-          {vatEnabled && <div className="invoice-vat-row"><span>{currentAgentVatBreakdown ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าบริการ` : `VAT ${formatNumber(currentVatRate, 2)}% — service fee`) : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
+          {tracking.channel === 'agent' && agentVatMode === 'total_package' && <div className="invoice-vat-row"><span>{th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าแพ็กเกจทั้งหมด` : `VAT ${formatNumber(currentVatRate, 2)}% — total package`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
+          {tracking.channel !== 'agent' && vatEnabled && <div className="invoice-vat-row"><span>{`VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
           <div className="journey-payment-due"><span>{th ? 'Total Due (THB)' : 'Total Due (THB)'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
         </section>}
 
@@ -2707,19 +2999,20 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
           <div><span>{th ? 'ค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(packageTotal, 2)}</b></div>
           {deductions.map((deduction) => <div key={deduction.id} className="deduction"><span>{th ? deduction.labelTh : deduction.labelEn}{deduction.reference ? ` (${deduction.reference})` : ''}</span><b>-{formatNumber(deduction.amountTHB, 2)}</b></div>)}
           {!deductions.length && <div className="deduction"><span>{th ? 'หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว' : 'Less paid airfare'}</span><b>-{formatNumber(0, 2)}</b></div>}
-          <div className="invoice-balance-subtotal"><span>{th ? 'ยอดแพ็กเกจส่วนที่เหลือก่อน VAT' : 'Remaining package balance before VAT'}</span><b>{formatNumber(balanceDue, 2)}</b></div>
-          {vatEnabled && currentAgentVatBreakdown && <>
-            <div><span>{th ? 'ค่าแพ็กเกจ' : 'Package amount'}</span><b>{formatNumber(currentAgentVatBreakdown.packageAmountAfterServiceFee, 2)}</b></div>
-            <div className="invoice-service-fee-row"><span>{th ? `ค่าบริการ ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} บาท × ${currentAgentVatBreakdown.passengerCount} ท่าน` : `Service fee ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} × ${currentAgentVatBreakdown.passengerCount} pax`}</span><b>{formatNumber(currentAgentVatBreakdown.serviceFeeTotal, 2)}</b></div>
+          <div className="invoice-balance-subtotal"><span>{th ? 'ยอดแพ็กเกจส่วนที่เหลือก่อนจัด VAT' : 'Remaining package balance before VAT treatment'}</span><b>{formatNumber(balanceDue, 2)}</b></div>
+          {tracking.channel === 'agent' && agentVatMode === 'service_split' && currentAgentVatBreakdown && <>
+            <div className="deduction"><span>{th ? `หัก ค่าบริการที่แยกไป Invoice ${activeVatServiceInvoice?.sequenceNumber || 3} (${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} บาท × ${currentAgentVatBreakdown.passengerCount} ท่าน)` : `Less service fee moved to Invoice ${activeVatServiceInvoice?.sequenceNumber || 3} (${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} × ${currentAgentVatBreakdown.passengerCount} pax)`}</span><b>-{formatNumber(currentAgentVatBreakdown.serviceFeeTotal, 2)}</b></div>
+            <div className="invoice-balance-subtotal"><span>{th ? 'ยอดค่าแพ็กเกจใน Invoice 2' : 'Package amount in Invoice 2'}</span><b>{formatNumber(splitMainSubtotal, 2)}</b></div>
           </>}
-          {vatEnabled && <div className="invoice-vat-row"><span>{currentAgentVatBreakdown ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าบริการ` : `VAT ${formatNumber(currentVatRate, 2)}% — service fee`) : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
+          {tracking.channel === 'agent' && agentVatMode === 'total_package' && <div className="invoice-vat-row"><span>{th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าแพ็กเกจทั้งหมด` : `VAT ${formatNumber(currentVatRate, 2)}% — total package`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
+          {tracking.channel !== 'agent' && vatEnabled && <div className="invoice-vat-row"><span>{`VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
           <div className="journey-payment-due"><span>{th ? 'Total Package Due (THB)' : 'Total Package Due (THB)'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
         </section>}
 
         {needsPassengerCheck && ticketBatch && <section className="invoice-passenger-check"><div className="invoice-passenger-check-title"><div><Plane/><span>{th ? 'ข้อมูลการจองตั๋วสำหรับตรวจสอบชื่อ' : 'Flight booking details for name verification'}</span></div><b>{th ? ticketBatch.batchLabelTh : ticketBatch.batchLabelEn}</b></div><div className="invoice-passenger-booking-meta"><div><span>PNR</span><strong>{ticketBatch.pnr || '-'}</strong></div><div><span>{th ? 'สายการบิน' : 'Airline'}</span><strong>{ticketBatch.airline || '-'}</strong></div><div><span>{th ? 'จำนวนรายชื่อ' : 'Names listed'}</span><strong>{invoicePassengerNames.length} / {ticketBatch.passengerCount}</strong></div></div><div className="invoice-passenger-alert"><ShieldCheck/><span>{th ? 'กรุณาตรวจสอบชื่อ–นามสกุล คำนำหน้า และการสะกดทุกตัวอักษรให้ตรงกับหนังสือเดินทาง ก่อนยืนยันให้ออกตั๋วเครื่องบิน' : 'Please verify every passenger’s full name, title and spelling against the passport before ticket issuance.'}</span></div><ol className={`invoice-passenger-list ${invoicePassengerNames.length > 6 ? 'two-columns' : ''}`}>{invoicePassengerNames.length ? invoicePassengerNames.map((name, index) => <li key={`${name}-${index}`}>{name}</li>) : <li>{th ? 'ยังไม่มีรายชื่อผู้เดินทาง' : 'No passenger names recorded'}</li>}</ol></section>}
       </>}
 
-      <section className="invoice-total invoice-total-readable"><div><span>{isFull ? (th ? 'ยอดชำระทั้งหมด' : 'Full payment due') : isTravelerInvoice1 ? (th ? 'ยอดชำระ Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers amount due') : isGeneralSupplemental ? (th ? `ยอดชำระ Invoice ${displaySequence}` : `Invoice ${displaySequence} amount due`) : (th ? `ยอดชำระงวดที่ ${displaySequence}` : `Payment ${displaySequence} due`)}</span><strong>THB {formatNumber(amountDue, 2)}</strong></div><aside><span>{th ? 'กำหนดชำระ' : 'PAYMENT DEADLINE'}</span><b>{invoice.dueDate ? formatDate(invoice.dueDate, language) : (th ? 'กรุณากำหนดวันชำระ' : 'Please set a due date')}</b></aside></section>
+      <section className="invoice-total invoice-total-readable"><div><span>{isFull ? (th ? 'ยอดชำระทั้งหมด' : 'Full payment due') : isTravelerInvoice1 ? (th ? 'ยอดชำระ Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers amount due') : (isGeneralSupplemental || isAgentVatServiceDocument) ? (th ? `ยอดชำระ Invoice ${displaySequence}` : `Invoice ${displaySequence} amount due`) : (th ? `ยอดชำระงวดที่ ${displaySequence}` : `Payment ${displaySequence} due`)}</span><strong>THB {formatNumber(amountDue, 2)}</strong></div><aside><span>{th ? 'กำหนดชำระ' : 'PAYMENT DEADLINE'}</span><b>{invoice.dueDate ? formatDate(invoice.dueDate, language) : (th ? 'กรุณากำหนดวันชำระ' : 'Please set a due date')}</b></aside></section>
       <section className="invoice-bank-payment"><div className="invoice-bank-copy"><span>{th ? 'บัญชีสำหรับชำระเงิน' : 'PAYMENT ACCOUNT'}</span><h3>{th ? `กรุณาโอนเงินเข้าบัญชี${paymentDetails.paymentBankName}` : `Please transfer to ${paymentDetails.paymentBankName}`}</h3><dl><div><dt>{th ? 'ชื่อบัญชี' : 'Account name'}</dt><dd>{paymentDetails.paymentAccountName}</dd></div><div><dt>{th ? 'เลขที่บัญชี' : 'Account number'}</dt><dd>{paymentDetails.paymentAccountNumber}</dd></div></dl></div></section>
       <footer className="invoice-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div><div><span>{th ? 'ผู้จัดทำ' : 'Prepared by'}</span><b>{tracking.salesOwnerName || '-'}</b></div></footer>
     </article>

@@ -4736,3 +4736,42 @@ textarea{min-height:74px}
 @media print {
   .invoice-company-only-note { color: #111 !important; }
 }
+
+
+/* V13.14.9 — formal service-charge invoice + cleaner split-package presentation */
+.supplemental-document-lines .service-charge-summary-row {
+  min-height: 42px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-top: 1px solid #e2e8e5;
+  font-size: 14px;
+}
+.supplemental-document-lines .service-charge-summary-row span { color: #465d54; font-weight: 750; }
+.supplemental-document-lines .service-charge-summary-row b {
+  min-width: 120px;
+  text-align: right;
+  font-family: Inter,Arial,sans-serif;
+  font-size: 15px !important;
+  font-variant-numeric: tabular-nums;
+}
+.supplemental-document-lines .service-charge-grand-total {
+  min-height: 48px;
+  padding-inline: 14px;
+  justify-content: space-between;
+  background: #edf5f1;
+}
+.supplemental-document-lines .service-charge-grand-total span { text-transform: none; letter-spacing: 0; }
+.invoice-balance-simple-row {
+  min-height: 50px !important;
+  background: #f6faf8;
+}
+.invoice-balance-simple-row span { color: #294f43; font-weight: 800; }
+.invoice-balance-simple-row b { color: #153d31; font-size: 17px !important; }
+@media print {
+  .supplemental-document-lines .service-charge-summary-row { min-height: 38px !important; }
+  .supplemental-document-lines .service-charge-grand-total { min-height: 43px !important; }
+  .invoice-balance-simple-row { min-height: 45px !important; }
+}

@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
       { source: "/bhutan-the-ultimate-bhutan-3stars", destination: "/package?slug=the-ultimate-bhutan" },
       { source: "/hotelbhutan", destination: "/hotels" },
       { source: "/how-to-visabhutan", destination: "/visa" },
+      { source: "/bhutan-attractions/:city", destination: "/destinations/:city" },
       { source: "/bhutan-attractions", destination: "/destinations" },
       { source: "/bhutan", destination: "/about-bhutan" },
       { source: "/justletyouknow-bhutan", destination: "/travel-info" },

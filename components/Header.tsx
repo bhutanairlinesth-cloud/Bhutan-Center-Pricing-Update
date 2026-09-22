@@ -28,7 +28,7 @@ export default function Header() {
           <BrandMark />
         </Link>
         <nav className={`nav-main ${open ? "open" : ""}`} aria-label="Main navigation">
-          {nav.map((item) => { const active=item.match.some((path)=>pathname===path || (path === "/packages" && pathname.startsWith("/packages/"))); return <Link href={item.href} key={item.href} className={active ? "nav-active" : undefined} onClick={() => setOpen(false)}>{item.label}</Link>; })}
+          {nav.map((item) => { const active=item.match.some((path)=>pathname===path || (path === "/packages" && pathname.startsWith("/packages/")) || (path === publicPaths.destinations && pathname.startsWith(`${publicPaths.destinations}/`))); return <Link href={item.href} key={item.href} className={active ? "nav-active" : undefined} onClick={() => setOpen(false)}>{item.label}</Link>; })}
           <Link className="nav-mobile-contact" href={publicPaths.contact} onClick={() => setOpen(false)}>ติดต่อเรา</Link>
         </nav>
         <div className="nav-actions">

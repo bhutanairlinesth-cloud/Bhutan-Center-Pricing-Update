@@ -2632,6 +2632,9 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
   const linkedVatServiceInvoice = (isBalance || isFull) && agentVatMode === 'service_split'
     ? activeVatServiceInvoice
     : undefined;
+  const linkedMainInvoice = isAgentVatServiceDocument && snapshot?.agentVatLinkedInvoiceId
+    ? invoices.find((item) => item.id === snapshot.agentVatLinkedInvoiceId)
+    : undefined;
   const splitMainSubtotal = agentVatMode === 'service_split' && currentAgentVatBreakdown
     ? Math.max(0, baseSubtotal - currentAgentVatBreakdown.serviceFeeTotal)
     : baseSubtotal;
@@ -2945,6 +2948,14 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
       <section className="invoice-meta"><div><span>{th ? 'เรียกเก็บจาก' : 'Bill to'}</span><strong>{tracking.customerName}</strong><small>{[tracking.phone, tracking.email].filter(Boolean).join(' · ') || '-'}</small>{tracking.invoiceAddress && <small className="invoice-billing-address">{tracking.invoiceAddress}</small>}</div><div><span>{th ? 'วันที่ออกเอกสาร' : 'Issue date'}</span><strong>{formatDate(invoice.issueDate, language)}</strong><small>{th ? 'ครบกำหนด' : 'Due'}: {invoice.dueDate ? formatDate(invoice.dueDate, language) : '-'}</small></div></section>
       <section className="invoice-trip-summary"><div><span>{th ? 'โปรแกรม' : 'Package'}</span><b>{tracking.packageName || '-'}</b></div><div><span>{th ? 'วันเดินทาง' : 'Travel date'}</span><b>{tracking.travelStartDate ? formatDate(tracking.travelStartDate, language) : '-'}</b></div><div><span>{th ? 'ผู้เดินทางรวม' : 'Total travellers'}</span><b>{totalTravellers} {th ? 'ท่าน' : 'pax'}</b></div></section>
 
+      {isAgentVatServiceDocument && linkedMainInvoice && <section className="invoice-related-documents">
+        <div className="invoice-related-documents-title">{th ? 'เอกสารที่เกี่ยวข้อง' : 'Related document'}</div>
+        <div className="invoice-related-documents-copy">
+          <strong>{th ? 'เอกสารฉบับนี้เป็นส่วนหนึ่งของการชำระสำหรับแพ็กเกจเดียวกัน' : 'This document forms part of the payment for the same package.'}</strong>
+          <span>{th ? `อ้างอิงเอกสารเรียกเก็บค่าแพ็กเกจเลขที่ ${linkedMainInvoice.invoiceNo}` : `Reference package invoice: ${linkedMainInvoice.invoiceNo}`}</span>
+        </div>
+      </section>}
+
       {(isGeneralSupplemental || isAgentVatServiceDocument) ? <>
         <section className={`journey-invoice-package supplemental-document-lines ${isAgentVatServiceDocument ? 'service-charge-document-lines' : ''}`}>
           <h3>{isAgentVatServiceDocument ? (th ? 'รายละเอียดค่าบริการ' : 'Service charge details') : (th ? 'รายละเอียดรายการเรียกเก็บ' : 'Charge details')}</h3>
@@ -3002,8 +3013,12 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
 
         {isBalance && <section className="journey-payment-breakdown invoice-balance-reference">
           {tracking.channel === 'agent' && agentVatMode === 'service_split' && currentAgentVatBreakdown ? <>
-            <h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจ' : 'Payment 2 — Package'}</h3>
-            <div className="invoice-balance-subtotal invoice-balance-simple-row"><span>{th ? 'ค่าแพ็กเกจงวดที่ 2' : 'Payment 2 package amount'}</span><b>{formatNumber(splitMainSubtotal, 2)}</b></div>
+            <h3>{th ? 'สรุปการชำระค่าแพ็กเกจ' : 'Package payment summary'}</h3>
+            <div><span>{th ? 'มูลค่าแพ็กเกจทั้งหมด' : 'Full package value'}</span><b>{formatNumber(packageTotal, 2)}</b></div>
+            <div className="deduction"><span>{th ? 'ชำระแล้ว — งวดที่ 1 (ค่าตั๋วเครื่องบิน)' : 'Paid — Payment 1 (airfare)'}</span><b>-{formatNumber(deductedTotal, 2)}</b></div>
+            <div className="invoice-balance-subtotal"><span>{th ? 'ยอดคงเหลือหลังชำระงวดที่ 1' : 'Balance after Payment 1'}</span><b>{formatNumber(balanceDue, 2)}</b></div>
+            <div className="deduction invoice-linked-charge-row"><span>{th ? `แยกเรียกเก็บค่าบริการตามเอกสารเลขที่ ${linkedVatServiceInvoice?.invoiceNo || '-'}` : `Service charge billed separately under ${linkedVatServiceInvoice?.invoiceNo || '-'}`}</span><b>-{formatNumber(currentAgentVatBreakdown.serviceFeeTotal, 2)}</b></div>
+            <div className="journey-payment-due"><span>{th ? 'ยอดชำระค่าแพ็กเกจงวดที่ 2' : 'Package Payment 2 amount due'}</span><strong>{formatNumber(splitMainSubtotal, 2)}</strong></div>
           </> : <>
             <h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจ' : 'Payment 2 — Package'}</h3>
             <div><span>{th ? 'ค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(packageTotal, 2)}</b></div>
@@ -3014,6 +3029,14 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
             {tracking.channel !== 'agent' && vatEnabled && <div className="invoice-vat-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>}
             <div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 2' : 'Payment 2 amount due'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
           </>}
+        </section>}
+
+        {isBalance && tracking.channel === 'agent' && agentVatMode === 'service_split' && linkedVatServiceInvoice && <section className="invoice-related-documents invoice-related-documents-main">
+          <div className="invoice-related-documents-title">{th ? 'เอกสารที่เกี่ยวข้อง' : 'Related document'}</div>
+          <div className="invoice-related-documents-copy">
+            <strong>{th ? 'ค่าบริการสำหรับแพ็กเกจนี้เรียกเก็บแยกต่างหาก' : 'The service charge for this package is billed separately.'}</strong>
+            <span>{th ? `โปรดพิจารณาร่วมกับเอกสารเรียกเก็บค่าบริการเลขที่ ${linkedVatServiceInvoice.invoiceNo} ซึ่งเป็นส่วนหนึ่งของการชำระสำหรับแพ็กเกจเดียวกัน` : `Please review together with service-charge document ${linkedVatServiceInvoice.invoiceNo}, which forms part of the payment for the same package.`}</span>
+          </div>
         </section>}
 
         {needsPassengerCheck && ticketBatch && <section className="invoice-passenger-check"><div className="invoice-passenger-check-title"><div><Plane/><span>{th ? 'ข้อมูลการจองตั๋วสำหรับตรวจสอบชื่อ' : 'Flight booking details for name verification'}</span></div><b>{th ? ticketBatch.batchLabelTh : ticketBatch.batchLabelEn}</b></div><div className="invoice-passenger-booking-meta"><div><span>PNR</span><strong>{ticketBatch.pnr || '-'}</strong></div><div><span>{th ? 'สายการบิน' : 'Airline'}</span><strong>{ticketBatch.airline || '-'}</strong></div><div><span>{th ? 'จำนวนรายชื่อ' : 'Names listed'}</span><strong>{invoicePassengerNames.length} / {ticketBatch.passengerCount}</strong></div></div><div className="invoice-passenger-alert"><ShieldCheck/><span>{th ? 'กรุณาตรวจสอบชื่อ–นามสกุล คำนำหน้า และการสะกดทุกตัวอักษรให้ตรงกับหนังสือเดินทาง ก่อนยืนยันให้ออกตั๋วเครื่องบิน' : 'Please verify every passenger’s full name, title and spelling against the passport before ticket issuance.'}</span></div><ol className={`invoice-passenger-list ${invoicePassengerNames.length > 6 ? 'two-columns' : ''}`}>{invoicePassengerNames.length ? invoicePassengerNames.map((name, index) => <li key={`${name}-${index}`}>{name}</li>) : <li>{th ? 'ยังไม่มีรายชื่อผู้เดินทาง' : 'No passenger names recorded'}</li>}</ol></section>}

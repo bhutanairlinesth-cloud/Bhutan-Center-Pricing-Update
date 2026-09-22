@@ -4819,3 +4819,51 @@ textarea{min-height:74px}
   .service-charge-line-head { min-height: 31px !important; }
   .service-charge-line-row { min-height: 46px !important; }
 }
+
+/* V13.14.11 — linked package/service-charge documents for customer clarity */
+.invoice-related-documents {
+  margin-top: 13px;
+  padding: 13px 15px;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  border: 1px solid #d9e5df;
+  border-radius: 12px;
+  background: #f7fbf9;
+}
+.invoice-related-documents-title {
+  color: #315d50;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: .02em;
+}
+.invoice-related-documents-copy {
+  display: grid;
+  gap: 4px;
+}
+.invoice-related-documents-copy strong {
+  color: #163b30;
+  font-size: 14px;
+}
+.invoice-related-documents-copy span {
+  color: #5d6f67;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.invoice-linked-charge-row span {
+  color: #4f625a;
+  font-weight: 750;
+}
+@media print {
+  .invoice-related-documents {
+    margin-top: 10px !important;
+    padding: 10px 12px !important;
+    grid-template-columns: 135px minmax(0, 1fr) !important;
+    background: #f7fbf9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .invoice-related-documents-copy strong { font-size: 13px !important; }
+  .invoice-related-documents-copy span { font-size: 12.5px !important; }
+}

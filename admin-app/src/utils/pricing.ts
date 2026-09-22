@@ -53,6 +53,13 @@ function roundUpToStep(value: number, step = 500): number {
   return Math.ceil(value / step) * step;
 }
 
+export function getConfiguredMargin(settings: GlobalSettings, channel: 'retail' | 'agent', hotelCategory: HotelCategory): number {
+  if (hotelCategory === '5 Stars') return Math.max(0, Number(settings.hotel5StarMarginTHB ?? 10000));
+  return channel === 'agent'
+    ? Math.max(0, Number(settings.agentMarginTHB ?? 3000))
+    : Math.max(0, Number(settings.marginTHB || 0));
+}
+
 export interface GroupTLBreakdownInput {
   actualPassengerCount: number;
   chargeablePassengerCount: number;
@@ -192,7 +199,7 @@ export function calculatePrice(
   const tax = pricingMode === 'group_tl'
     ? numberOr(input.groupAirportTaxOverrideTHB, standardTax)
     : standardTax;
-  const standardMargin = input.channel === 'agent' ? Number(settings.agentMarginTHB ?? 3000) : Number(settings.marginTHB || 0);
+  const standardMargin = getConfiguredMargin(settings, input.channel, input.hotelCategory);
   const margin = pricingMode === 'group_tl'
     ? numberOr(input.groupMarginPerTravelerOverrideTHB, standardMargin)
     : standardMargin;

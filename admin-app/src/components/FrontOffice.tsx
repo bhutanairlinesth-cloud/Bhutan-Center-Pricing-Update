@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { CustomerDetails, GlobalSettings, HotelCategory, PricingChannel, PricingInput, QuotationRecord, TourPackage, User } from '../types';
 import { useI18n, LanguageSwitch } from '../i18n';
-import { calculatePrice, getPackageSingleSupplement } from '../utils/pricing';
+import { calculatePrice, getConfiguredMargin, getPackageSingleSupplement } from '../utils/pricing';
 import { formatDate, formatNumber, formatTHB, formatUSD, makeId, makeQuotationNo } from '../utils/format';
 import { printElementAsA4 } from '../utils/printA4';
 import { Brand } from './Brand';
@@ -116,7 +116,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     : baseChannelTicket;
   const effectiveGroupTicket = input.groupTicketPriceOverrideTHB ?? defaultGroupTicket;
   const effectiveGroupTax = input.groupAirportTaxOverrideTHB ?? settings.airportTaxTHB;
-  const effectiveGroupMargin = input.groupMarginPerTravelerOverrideTHB ?? (input.channel === 'agent' ? (settings.agentMarginTHB ?? 3000) : settings.marginTHB);
+  const effectiveGroupMargin = input.groupMarginPerTravelerOverrideTHB ?? getConfiguredMargin(settings, input.channel, input.hotelCategory);
 
   function update<K extends keyof PricingInput>(key: K, value: PricingInput[K]) {
     setInput((current) => ({ ...current, [key]: value }));
@@ -193,8 +193,8 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
           <div className="section-block">
             <div className="section-title"><span>01</span><div><h2>{t('channel')}</h2><p>Retail / Wholesale</p></div></div>
             <div className="channel-grid">
-              <ChannelCard active={input.channel === 'retail'} channel="retail" title={t('retail')} detail={t('retailHint')} meta={`${formatTHB(settings.ticketPriceTHB, language)} · ${t('margin')} ${formatTHB(settings.marginTHB, language)}`} onClick={() => update('channel', 'retail')}/>
-              <ChannelCard active={input.channel === 'agent'} channel="agent" title={t('agent')} detail={t('agentHint')} meta={`${formatTHB(settings.agentTicketPriceTHB ?? 25220, language)} · -${formatNumber(agentDiscount, 2)}%`} onClick={() => update('channel', 'agent')}/>
+              <ChannelCard active={input.channel === 'retail'} channel="retail" title={t('retail')} detail={t('retailHint')} meta={`${formatTHB(settings.ticketPriceTHB, language)} · ${t('margin')} ${formatTHB(getConfiguredMargin(settings, 'retail', input.hotelCategory), language)}`} onClick={() => update('channel', 'retail')}/>
+              <ChannelCard active={input.channel === 'agent'} channel="agent" title={t('agent')} detail={t('agentHint')} meta={`${formatTHB(settings.agentTicketPriceTHB ?? 25220, language)} · -${formatNumber(agentDiscount, 2)}% · ${t('margin')} ${formatTHB(getConfiguredMargin(settings, 'agent', input.hotelCategory), language)}`} onClick={() => update('channel', 'agent')}/>
             </div>
             <div className="pricing-mode-switch">
               <button type="button" className={!isGroupTL ? 'active' : ''} onClick={() => setPricingMode('standard')}>

@@ -1,6 +1,6 @@
 # Bhutan Center Unified V13
 
-ชุดนี้รวม **Bhutan Center Website + Bhutan Pricing v12.11.4** เป็น Repository / Vercel Project เดียว
+ชุดนี้รวม **Bhutan Center Website + Bhutan Pricing v12.12.0** เป็น Repository / Vercel Project เดียว
 โดยใช้ Bhutan Pricing เดิมเป็นระบบปฏิบัติการหลักและไม่ลบข้อมูล Production เดิม
 
 ## URL หลังรวม
@@ -13,7 +13,7 @@
 ## สิ่งที่รวมแล้ว
 
 1. Website V8.7 / SEO-safe Wix legacy URLs
-2. Bhutan Pricing v12.11.4 ทั้งระบบ
+2. Bhutan Pricing v12.12.0 ทั้งระบบ
 3. Customer Tracking / Quotation / Invoice / Payment เดิม
 4. ราคาแพ็กเกจหน้าเว็บอ่านจาก Tour Packages + App Settings เดิม
 5. Website Price Override จากหลังบ้าน (หลังรัน SQL V13)

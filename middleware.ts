@@ -1,21 +1,16 @@
+import { NextRequest, NextResponse } from 'next/server';
+
 type RedirectRule = {
   enabled?: boolean;
   from?: string;
   to?: string;
-  type?: number | string;
+  type?: 301 | 308 | number;
 };
 
-type SeoState = {
-  redirects?: RedirectRule[];
-};
-
-async function getSeoState(): Promise<SeoState> {
+async function loadRedirects(): Promise<RedirectRule[]> {
   const supabaseUrl = String(process.env.SUPABASE_URL || '').replace(/\/$/, '');
   const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '');
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return { redirects: [] };
-  }
+  if (!supabaseUrl || !serviceRoleKey) return [];
 
   try {
     const response = await fetch(
@@ -28,51 +23,34 @@ async function getSeoState(): Promise<SeoState> {
         cache: 'no-store',
       },
     );
-
-    if (!response.ok) {
-      return { redirects: [] };
-    }
-
+    if (!response.ok) return [];
     const rows = await response.json();
-    const payload = rows?.[0]?.payload;
-
-    if (!payload || typeof payload !== 'object') {
-      return { redirects: [] };
-    }
-
-    return payload as SeoState;
+    const redirects = rows?.[0]?.payload?.redirects;
+    return Array.isArray(redirects) ? redirects : [];
   } catch {
-    return { redirects: [] };
+    return [];
   }
 }
 
-export default async function middleware(request: Request) {
-  const requestUrl = new URL(request.url);
-  const state = await getSeoState();
-
-  const rule = (state.redirects || []).find(
+export default async function middleware(request: NextRequest) {
+  const redirects = await loadRedirects();
+  const rule = redirects.find(
     (item: RedirectRule) =>
-      item.enabled &&
-      item.from === requestUrl.pathname &&
+      item?.enabled &&
+      item.from === request.nextUrl.pathname &&
       typeof item.to === 'string' &&
-      item.to.length > 0,
+      item.to.trim().length > 0,
   );
 
-  // Returning nothing lets Vercel continue to the normal Vite route.
-  if (!rule?.to) return;
+  if (!rule?.to) return NextResponse.next();
 
   const destination = new URL(rule.to, request.url);
-  const requestedStatus = Number(rule.type);
-  const redirectStatus = [301, 302, 303, 307, 308].includes(requestedStatus)
-    ? requestedStatus
-    : 308;
-
-  return Response.redirect(destination, redirectStatus);
+  const status = rule.type === 301 ? 301 : 308;
+  return NextResponse.redirect(destination, status);
 }
 
 export const config = {
-  runtime: 'nodejs',
   matcher: [
-    '/((?!api|admin|assets|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)',
+    '/((?!api|admin|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|map|txt|xml)$).*)',
   ],
 };

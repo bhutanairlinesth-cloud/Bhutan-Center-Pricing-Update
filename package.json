@@ -1,7 +1,7 @@
 {
   "name": "bhutan-center-unified",
   "private": true,
-  "version": "13.15.0",
+  "version": "13.16.0",
   "type": "module",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 3000",

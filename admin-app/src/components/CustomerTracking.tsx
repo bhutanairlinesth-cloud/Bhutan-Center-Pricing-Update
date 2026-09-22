@@ -538,7 +538,14 @@ function buildOriginalTicketSnapshot(item: CustomerTracking): InvoiceTicketBatch
   const adultTax = Math.max(0, Number(item.airportTaxPerPerson || 0));
   const childFare = Math.max(0, Number(item.childTicketPricePerPerson || adultFare));
   const childTax = Math.max(0, Number(item.childAirportTaxPerPerson || adultTax));
-  const businessFare = adultFare + Math.max(0, Number(item.businessUpgradePerPerson || 0));
+  // Keep Invoice 1 consistent with the Journey payment amount.
+  // For standard pricing, the Business Class selling surcharge belongs to the package balance (Invoice 2),
+  // so Invoice 1 must collect only the base airfare + airport tax even when a traveller flies Business.
+  // Group/TL pricing is the exception because its deposit calculation already includes the business surcharge.
+  const invoice1BusinessSurchargePerPerson = item.pricingMode === 'group_tl'
+    ? Math.max(0, Number(item.businessUpgradePerPerson || 0))
+    : 0;
+  const businessFare = adultFare + invoice1BusinessSurchargePerPerson;
   const fareLines = [
     ...(adultEconomyCount > 0 ? [{ ptc: 'ADT' as const, cabinClass: 'Economy' as const, passengerCount: adultEconomyCount, farePerPersonTHB: adultFare, airportTaxPerPersonTHB: adultTax, totalPerPersonTHB: adultFare + adultTax, totalTHB: adultEconomyCount * (adultFare + adultTax) }] : []),
     ...(businessCount > 0 ? [{ ptc: 'ADT' as const, cabinClass: 'Business' as const, passengerCount: businessCount, farePerPersonTHB: businessFare, airportTaxPerPersonTHB: adultTax, totalPerPersonTHB: businessFare + adultTax, totalTHB: businessCount * (businessFare + adultTax) }] : []),

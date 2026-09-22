@@ -4775,3 +4775,47 @@ textarea{min-height:74px}
   .supplemental-document-lines .service-charge-grand-total { min-height: 43px !important; }
   .invoice-balance-simple-row { min-height: 45px !important; }
 }
+
+
+/* V13.14.10 — customer-facing invoice copy cleanup */
+.service-charge-line-head,
+.service-charge-line-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 120px 130px;
+  align-items: stretch;
+}
+.service-charge-line-head {
+  min-height: 34px;
+  color: #66776e;
+  background: #f2f6f4;
+  font-size: 13px;
+  font-weight: 850;
+}
+.service-charge-line-head span,
+.service-charge-line-row > span {
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #e1e7e3;
+}
+.service-charge-line-head span:last-child,
+.service-charge-line-row > span:last-child {
+  border-right: 0;
+  justify-content: flex-end;
+}
+.service-charge-line-row {
+  min-height: 52px;
+  border-top: 1px solid #e1e7e3;
+  font-size: 14px;
+}
+.service-charge-line-row > span:nth-child(2) { justify-content: center; }
+.service-charge-line-row > span:nth-child(3),
+.service-charge-line-row > span:nth-child(4) {
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+.invoice-footer { justify-content: flex-start; }
+@media print {
+  .service-charge-line-head { min-height: 31px !important; }
+  .service-charge-line-row { min-height: 46px !important; }
+}

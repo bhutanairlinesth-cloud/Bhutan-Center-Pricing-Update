@@ -2920,13 +2920,13 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
   }
 
   const documentTitle = isTravelerInvoice1
-    ? (th ? 'Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers')
+    ? (th ? 'เอกสารเรียกเก็บสำหรับผู้เดินทางเพิ่ม' : 'Additional Traveller Invoice')
     : isAgentVatServiceDocument
       ? (th ? 'เอกสารเรียกเก็บค่าบริการ' : 'Service Charge Invoice')
       : isFull
-        ? (th ? 'Invoice — ชำระเต็มจำนวน' : 'Invoice — Full Payment')
+        ? (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')
         : isGeneralSupplemental
-          ? (th ? `Invoice เพิ่มเติม งวดที่ ${displaySequence}` : `Supplemental Invoice ${displaySequence}`)
+          ? (th ? 'เอกสารเรียกเก็บเพิ่มเติม' : 'Additional Charge Invoice')
           : (th ? `Invoice งวดที่ ${displaySequence}` : `Invoice ${displaySequence}`);
 
   return <Modal open title={documentTitle} onClose={onClose} wide>
@@ -2941,36 +2941,40 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
       <button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF'}</button>
     </div>
     <article className="invoice-sheet journey-invoice-sheet" id="invoice-print-area">
-      <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{isAgentVatServiceDocument ? documentTitle : isGeneralSupplemental ? (invoice.title || documentTitle) : (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
+      <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{isAgentVatServiceDocument ? documentTitle : isGeneralSupplemental ? (th ? 'เอกสารเรียกเก็บเพิ่มเติม' : 'Additional Charge Invoice') : (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
       <section className="invoice-meta"><div><span>{th ? 'เรียกเก็บจาก' : 'Bill to'}</span><strong>{tracking.customerName}</strong><small>{[tracking.phone, tracking.email].filter(Boolean).join(' · ') || '-'}</small>{tracking.invoiceAddress && <small className="invoice-billing-address">{tracking.invoiceAddress}</small>}</div><div><span>{th ? 'วันที่ออกเอกสาร' : 'Issue date'}</span><strong>{formatDate(invoice.issueDate, language)}</strong><small>{th ? 'ครบกำหนด' : 'Due'}: {invoice.dueDate ? formatDate(invoice.dueDate, language) : '-'}</small></div></section>
       <section className="invoice-trip-summary"><div><span>{th ? 'โปรแกรม' : 'Package'}</span><b>{tracking.packageName || '-'}</b></div><div><span>{th ? 'วันเดินทาง' : 'Travel date'}</span><b>{tracking.travelStartDate ? formatDate(tracking.travelStartDate, language) : '-'}</b></div><div><span>{th ? 'ผู้เดินทางรวม' : 'Total travellers'}</span><b>{totalTravellers} {th ? 'ท่าน' : 'pax'}</b></div></section>
 
       {(isGeneralSupplemental || isAgentVatServiceDocument) ? <>
-        <section className="journey-invoice-package supplemental-document-lines">
-          <h3>{isAgentVatServiceDocument ? (th ? 'รายละเอียดค่าบริการ' : 'Service charge details') : (th ? `รายการเรียกเก็บเพิ่มเติม — Invoice ${displaySequence}` : `Additional charges — Invoice ${displaySequence}`)}</h3>
-          <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Passenger / Service'}</span><span>PTC</span><span>QTY</span><span>{th ? 'ราคาต่อหน่วย' : 'Selling / Unit'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
-          {invoice.lineItems.map((line) => <div className="journey-invoice-package-row journey-invoice-single-row" key={line.id}><span><b>{line.description}</b></span><span>SRV</span><span>{formatNumber(line.quantity, 0)}</span><span>{formatNumber(line.unitPriceTHB, 2)}</span><span>{formatNumber(line.totalTHB, 2)}</span></div>)}
+        <section className={`journey-invoice-package supplemental-document-lines ${isAgentVatServiceDocument ? 'service-charge-document-lines' : ''}`}>
+          <h3>{isAgentVatServiceDocument ? (th ? 'รายละเอียดค่าบริการ' : 'Service charge details') : (th ? 'รายละเอียดรายการเรียกเก็บ' : 'Charge details')}</h3>
+          {isAgentVatServiceDocument ? <>
+            <div className="service-charge-line-head"><span>{th ? 'รายการ' : 'Description'}</span><span>{th ? 'จำนวน' : 'Qty'}</span><span>{th ? 'ราคาต่อหน่วย' : 'Unit price'}</span><span>{th ? 'จำนวนเงิน (บาท)' : 'Amount (THB)'}</span></div>
+            {invoice.lineItems.map((line) => <div className="service-charge-line-row" key={line.id}><span><b>{line.description}</b></span><span>{formatNumber(line.quantity, 0)}</span><span>{formatNumber(line.unitPriceTHB, 2)}</span><span>{formatNumber(line.totalTHB, 2)}</span></div>)}
+          </> : <>
+            <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Description'}</span><span>{th ? 'ประเภท' : 'Type'}</span><span>{th ? 'จำนวน' : 'Qty'}</span><span>{th ? 'ราคาต่อหน่วย' : 'Unit price'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
+            {invoice.lineItems.map((line) => <div className="journey-invoice-package-row journey-invoice-single-row" key={line.id}><span><b>{line.description}</b></span><span>{th ? 'บริการ' : 'Service'}</span><span>{formatNumber(line.quantity, 0)}</span><span>{formatNumber(line.unitPriceTHB, 2)}</span><span>{formatNumber(line.totalTHB, 2)}</span></div>)}
+          </>}
           {isAgentVatServiceDocument ? <>
             <div className="invoice-balance-subtotal service-charge-summary-row"><span>{th ? 'รวมค่าบริการ' : 'Service charge subtotal'}</span><b>{formatNumber(invoice.subtotalAmount, 2)}</b></div>
-            <div className="invoice-vat-row service-charge-summary-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>
-            <div className="journey-invoice-package-total service-charge-grand-total"><span>{th ? 'ยอดชำระสุทธิ' : 'Net amount due'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
-          </> : <div className="journey-invoice-package-total"><span>{th ? `รวม Invoice ${displaySequence}` : `Invoice ${displaySequence} total`}</span><strong>{formatNumber(invoice.amount, 2)}</strong></div>}
+            <div className="invoice-vat-row service-charge-summary-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>
+            <div className="journey-invoice-package-total service-charge-grand-total"><span>{th ? 'ยอดชำระทั้งสิ้น' : 'Total amount due'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
+          </> : <div className="journey-invoice-package-total"><span>{th ? 'ยอดชำระรายการเพิ่มเติม' : 'Additional charge amount'}</span><strong>{formatNumber(invoice.amount, 2)}</strong></div>}
         </section>
-        {isAgentVatServiceDocument ? null : <section className="supplemental-grand-summary"><div><span>{th ? 'แพ็กเกจหลัก' : 'Main package'}</span><b>{formatNumber(packageSalesTotal(tracking), 2)}</b></div><div><span>{th ? 'Invoice เพิ่มเติมสะสม' : 'Supplemental invoices'}</span><b>{formatNumber(tracking.supplementalInvoiceTotal || invoice.amount, 2)}</b></div><div className="featured"><span>{th ? 'ยอดขายรวมลูกค้า' : 'Customer grand total'}</span><strong>{formatNumber(tracking.grandTotalAmount || tracking.totalAmount + invoice.amount, 2)}</strong></div></section>}
       </> : <>
         <section className="journey-invoice-package invoice-reference-layout">
           <h3>{th ? 'มูลค่าแพ็กเกจทั้งหมด' : 'Full package value'}</h3>
-          <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Passenger / Service'}</span><span>PTC</span><span>QTY</span><span>{th ? 'ราคาต่อท่าน' : 'Selling / Pax'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
-          {packageRows.map((row) => <div className="journey-invoice-package-row journey-invoice-single-row" key={row.id}><span><b>{th ? row.descriptionTh : row.descriptionEn}</b><small>{th ? row.detailTh : row.detailEn}</small></span><span>{row.ptc}</span><span>{formatNumber(row.quantity, 0)}</span><span>{formatNumber(row.unitPriceTHB, 2)}</span><span>{formatNumber(row.totalTHB, 2)}</span></div>)}
+          <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Description'}</span><span>{th ? 'ประเภท' : 'Type'}</span><span>{th ? 'จำนวน' : 'Qty'}</span><span>{th ? 'ราคาต่อท่าน' : 'Price / pax'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
+          {packageRows.map((row) => <div className="journey-invoice-package-row journey-invoice-single-row" key={row.id}><span><b>{th ? row.descriptionTh : row.descriptionEn}</b><small>{th ? row.detailTh : row.detailEn}</small></span><span>{row.ptc === 'CHD' ? (th ? 'เด็ก' : 'Child') : (th ? 'ผู้ใหญ่' : 'Adult')}</span><span>{formatNumber(row.quantity, 0)}</span><span>{formatNumber(row.unitPriceTHB, 2)}</span><span>{formatNumber(row.totalTHB, 2)}</span></div>)}
           <div className="journey-invoice-package-total"><span>{th ? 'รวมมูลค่าแพ็กเกจ' : 'Total package value'}</span><strong>{formatNumber(packageTotal, 2)}</strong></div>
         </section>
 
         {isInvoice1 && ticketBatch && <section className="journey-payment-breakdown invoice-ticket-reference">
           <h3>{th ? 'การชำระงวดที่ 1 — ค่าตั๋วเครื่องบิน' : 'Payment 1 — airfare'}</h3>
           {ticketBatch.fareLines?.length ? <div className="ticket-fare-lines">
-            <div className="ticket-fare-head"><span>{th ? 'ชั้นโดยสาร' : 'Cabin'}</span><span>QTY</span><span>{th ? 'ค่าโดยสาร' : 'Fare'}</span><span>{th ? 'ภาษี' : 'Tax'}</span><span>{th ? 'รวม/ท่าน' : 'Total/pax'}</span><span>{th ? 'รวม' : 'Total'}</span></div>
+            <div className="ticket-fare-head"><span>{th ? 'ชั้นโดยสาร' : 'Cabin'}</span><span>{th ? 'จำนวน' : 'Qty'}</span><span>{th ? 'ค่าโดยสาร' : 'Fare'}</span><span>{th ? 'ภาษีสนามบิน' : 'Airport tax'}</span><span>{th ? 'รวม/ท่าน' : 'Total/pax'}</span><span>{th ? 'รวม' : 'Total'}</span></div>
             {ticketBatch.fareLines.map((line) => <div className="ticket-fare-row" key={`${line.ptc || 'ADT'}-${line.cabinClass}`}>
-              <span><b>{line.ptc || 'ADT'} · {line.cabinClass}</b><small>{line.ptc === 'CHD' ? (th ? 'เด็ก' : 'Child') : line.cabinClass === 'Business' && th ? 'ผู้โดยสารที่อัปเกรดภายในกรุ๊ป' : ''}</small></span>
+              <span><b>{line.ptc === 'CHD' ? (th ? 'เด็ก' : 'Child') : (th ? 'ผู้ใหญ่' : 'Adult')} · {line.cabinClass}</b><small>{line.cabinClass === 'Business' && th ? 'ชั้นธุรกิจ' : ''}</small></span>
               <span>{line.passengerCount}</span>
               <span>{formatNumber(line.farePerPersonTHB, 2)}</span>
               <span>{formatNumber(line.airportTaxPerPersonTHB, 2)}</span>
@@ -2983,19 +2987,17 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
             <div><span>{th ? 'ภาษีสนามบิน / ท่าน' : 'Airport tax / pax'}</span><b>{formatNumber(ticketBatch.airportTaxPerPersonTHB, 2)}</b></div>
             <div><span>{th ? 'รวมค่าตั๋วและภาษี / ท่าน' : 'Airfare and tax / pax'}</span><b>{formatNumber(ticketBatch.farePerPersonTHB + ticketBatch.airportTaxPerPersonTHB, 2)}</b></div>
           </>}
-          <div className="journey-payment-due"><span>Total Ticket Due (THB)</span><strong>{formatNumber(ticketBatch.totalDueTHB, 2)}</strong></div>
+          <div className="journey-payment-due"><span>{th ? 'ยอดชำระค่าตั๋วเครื่องบิน' : 'Airfare amount due'}</span><strong>{formatNumber(ticketBatch.totalDueTHB, 2)}</strong></div>
         </section>}
 
         {isFull && <section className="journey-payment-breakdown invoice-full-payment-reference">
-          <h3>{th ? 'Full Payment — ชำระทั้งหมดครั้งเดียว' : 'Full Payment — one-time collection'}</h3>
-          <div><span>{th ? 'ยอดรวมก่อนจัด VAT' : 'Total before VAT treatment'}</span><b>{formatNumber(baseSubtotal, 2)}</b></div>
-          {tracking.channel === 'agent' && <div><span>{th ? 'ค่าแพ็กเกจที่ใช้เป็นฐาน VAT (ไม่รวมตั๋ว/ภาษีสนามบิน)' : 'Package VAT base (excluding airfare/tax)'}</span><b>{formatNumber(packagePortionForVat, 2)}</b></div>}
-          {tracking.channel === 'agent' && agentVatMode === 'service_split' && currentAgentVatBreakdown && <>
-            <div className="invoice-balance-subtotal invoice-balance-simple-row"><span>{th ? 'ยอดแพ็กเกจหลังแยกค่าบริการ' : 'Package amount after service-charge split'}</span><b>{formatNumber(splitMainSubtotal, 2)}</b></div>
-          </>}
-          {tracking.channel === 'agent' && agentVatMode === 'total_package' && <div className="invoice-vat-row"><span>{th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าแพ็กเกจทั้งหมด` : `VAT ${formatNumber(currentVatRate, 2)}% — total package`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
-          {tracking.channel !== 'agent' && vatEnabled && <div className="invoice-vat-row"><span>{`VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
-          <div className="journey-payment-due"><span>{th ? 'Total Due (THB)' : 'Total Due (THB)'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
+          <h3>{th ? 'รายละเอียดการชำระ' : 'Payment details'}</h3>
+          {tracking.channel === 'agent' && agentVatMode === 'service_split' && currentAgentVatBreakdown
+            ? <div className="invoice-balance-subtotal invoice-balance-simple-row"><span>{th ? 'ค่าแพ็กเกจ' : 'Package amount'}</span><b>{formatNumber(splitMainSubtotal, 2)}</b></div>
+            : <div><span>{(tracking.channel === 'agent' && agentVatMode === 'total_package') || (tracking.channel !== 'agent' && vatEnabled) ? (th ? 'ยอดก่อนภาษีมูลค่าเพิ่ม' : 'Amount before VAT') : (th ? 'ยอดค่าแพ็กเกจ' : 'Package amount')}</span><b>{formatNumber(baseSubtotal, 2)}</b></div>}
+          {tracking.channel === 'agent' && agentVatMode === 'total_package' && <div className="invoice-vat-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>}
+          {tracking.channel !== 'agent' && vatEnabled && <div className="invoice-vat-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>}
+          <div className="journey-payment-due"><span>{th ? 'ยอดชำระทั้งสิ้น' : 'Total amount due'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
         </section>}
 
         {isBalance && <section className="journey-payment-breakdown invoice-balance-reference">
@@ -3003,23 +3005,23 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
             <h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจ' : 'Payment 2 — Package'}</h3>
             <div className="invoice-balance-subtotal invoice-balance-simple-row"><span>{th ? 'ค่าแพ็กเกจงวดที่ 2' : 'Payment 2 package amount'}</span><b>{formatNumber(splitMainSubtotal, 2)}</b></div>
           </> : <>
-            <h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจส่วนที่เหลือ' : 'Payment 2 — remaining package balance'}</h3>
+            <h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจ' : 'Payment 2 — Package'}</h3>
             <div><span>{th ? 'ค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(packageTotal, 2)}</b></div>
             {deductions.map((deduction) => <div key={deduction.id} className="deduction"><span>{th ? deduction.labelTh : deduction.labelEn}{deduction.reference ? ` (${deduction.reference})` : ''}</span><b>-{formatNumber(deduction.amountTHB, 2)}</b></div>)}
             {!deductions.length && <div className="deduction"><span>{th ? 'หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว' : 'Less paid airfare'}</span><b>-{formatNumber(0, 2)}</b></div>}
-            <div className="invoice-balance-subtotal"><span>{th ? 'ยอดแพ็กเกจส่วนที่เหลือก่อนจัด VAT' : 'Remaining package balance before VAT treatment'}</span><b>{formatNumber(balanceDue, 2)}</b></div>
-            {tracking.channel === 'agent' && agentVatMode === 'total_package' && <div className="invoice-vat-row"><span>{th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าแพ็กเกจทั้งหมด` : `VAT ${formatNumber(currentVatRate, 2)}% — total package`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
-            {tracking.channel !== 'agent' && vatEnabled && <div className="invoice-vat-row"><span>{`VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
-            <div className="journey-payment-due"><span>Total Package Due (THB)</span><strong>{formatNumber(amountDue, 2)}</strong></div>
+            <div className="invoice-balance-subtotal"><span>{th ? 'ค่าแพ็กเกจงวดที่ 2' : 'Payment 2 package amount'}</span><b>{formatNumber(balanceDue, 2)}</b></div>
+            {tracking.channel === 'agent' && agentVatMode === 'total_package' && <div className="invoice-vat-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>}
+            {tracking.channel !== 'agent' && vatEnabled && <div className="invoice-vat-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>}
+            <div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 2' : 'Payment 2 amount due'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
           </>}
         </section>}
 
         {needsPassengerCheck && ticketBatch && <section className="invoice-passenger-check"><div className="invoice-passenger-check-title"><div><Plane/><span>{th ? 'ข้อมูลการจองตั๋วสำหรับตรวจสอบชื่อ' : 'Flight booking details for name verification'}</span></div><b>{th ? ticketBatch.batchLabelTh : ticketBatch.batchLabelEn}</b></div><div className="invoice-passenger-booking-meta"><div><span>PNR</span><strong>{ticketBatch.pnr || '-'}</strong></div><div><span>{th ? 'สายการบิน' : 'Airline'}</span><strong>{ticketBatch.airline || '-'}</strong></div><div><span>{th ? 'จำนวนรายชื่อ' : 'Names listed'}</span><strong>{invoicePassengerNames.length} / {ticketBatch.passengerCount}</strong></div></div><div className="invoice-passenger-alert"><ShieldCheck/><span>{th ? 'กรุณาตรวจสอบชื่อ–นามสกุล คำนำหน้า และการสะกดทุกตัวอักษรให้ตรงกับหนังสือเดินทาง ก่อนยืนยันให้ออกตั๋วเครื่องบิน' : 'Please verify every passenger’s full name, title and spelling against the passport before ticket issuance.'}</span></div><ol className={`invoice-passenger-list ${invoicePassengerNames.length > 6 ? 'two-columns' : ''}`}>{invoicePassengerNames.length ? invoicePassengerNames.map((name, index) => <li key={`${name}-${index}`}>{name}</li>) : <li>{th ? 'ยังไม่มีรายชื่อผู้เดินทาง' : 'No passenger names recorded'}</li>}</ol></section>}
       </>}
 
-      <section className="invoice-total invoice-total-readable"><div><span>{isFull ? (th ? 'ยอดชำระทั้งหมด' : 'Full payment due') : isTravelerInvoice1 ? (th ? 'ยอดชำระ Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers amount due') : isAgentVatServiceDocument ? (th ? 'ยอดชำระค่าบริการ' : 'Service charge amount due') : isGeneralSupplemental ? (th ? `ยอดชำระ Invoice ${displaySequence}` : `Invoice ${displaySequence} amount due`) : (th ? `ยอดชำระงวดที่ ${displaySequence}` : `Payment ${displaySequence} due`)}</span><strong>THB {formatNumber(amountDue, 2)}</strong></div><aside><span>{th ? 'กำหนดชำระ' : 'PAYMENT DEADLINE'}</span><b>{invoice.dueDate ? formatDate(invoice.dueDate, language) : (th ? 'กรุณากำหนดวันชำระ' : 'Please set a due date')}</b></aside></section>
-      <section className="invoice-bank-payment"><div className="invoice-bank-copy"><span>{th ? 'บัญชีสำหรับชำระเงิน' : 'PAYMENT ACCOUNT'}</span><h3>{th ? `กรุณาโอนเงินเข้าบัญชี${paymentDetails.paymentBankName}` : `Please transfer to ${paymentDetails.paymentBankName}`}</h3>{taxForcesCompany && <p className="invoice-company-only-note">{th ? 'รายการที่มี VAT รับชำระผ่านบัญชีบริษัทเท่านั้น' : 'VAT-bearing charges are payable to the company account only.'}</p>}<dl><div><dt>{th ? 'ชื่อบัญชี' : 'Account name'}</dt><dd>{paymentDetails.paymentAccountName}</dd></div><div><dt>{th ? 'เลขที่บัญชี' : 'Account number'}</dt><dd>{paymentDetails.paymentAccountNumber}</dd></div></dl></div></section>
-      <footer className="invoice-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div><div><span>{th ? 'ผู้จัดทำ' : 'Prepared by'}</span><b>{tracking.salesOwnerName || '-'}</b></div></footer>
+      <section className="invoice-total invoice-total-readable"><div><span>{isFull ? (th ? 'ยอดชำระทั้งหมด' : 'Full payment due') : (isTravelerInvoice1 || isAgentVatServiceDocument || isGeneralSupplemental) ? (th ? 'ยอดชำระทั้งสิ้น' : 'Total amount due') : (th ? `ยอดชำระงวดที่ ${displaySequence}` : `Payment ${displaySequence} due`)}</span><strong>THB {formatNumber(amountDue, 2)}</strong></div><aside><span>{th ? 'กำหนดชำระ' : 'PAYMENT DEADLINE'}</span><b>{invoice.dueDate ? formatDate(invoice.dueDate, language) : (th ? 'กรุณากำหนดวันชำระ' : 'Please set a due date')}</b></aside></section>
+      <section className="invoice-bank-payment"><div className="invoice-bank-copy"><span>{th ? 'บัญชีสำหรับชำระเงิน' : 'PAYMENT ACCOUNT'}</span><h3>{th ? 'กรุณาชำระเงินตามรายละเอียดบัญชีด้านล่าง' : 'Please make payment using the account details below'}</h3><dl><div><dt>{th ? 'ธนาคาร' : 'Bank'}</dt><dd>{paymentDetails.paymentBankName}</dd></div><div><dt>{th ? 'ชื่อบัญชี' : 'Account name'}</dt><dd>{paymentDetails.paymentAccountName}</dd></div><div><dt>{th ? 'เลขที่บัญชี' : 'Account number'}</dt><dd>{paymentDetails.paymentAccountNumber}</dd></div></dl></div></section>
+      <footer className="invoice-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div></footer>
     </article>
   </Modal>;
 }

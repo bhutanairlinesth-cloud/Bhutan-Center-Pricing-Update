@@ -2,7 +2,6 @@ import Link from "next/link";
 import PackageCard from "@/components/PackageCard";
 import BookingForm from "@/components/BookingForm";
 import LineCta from "@/components/LineCta";
-import { formatTHB } from "@/lib/packages";
 import { getPublicPackages } from "@/lib/pricing-source";
 import { metadataForPath } from "@/lib/seo-config";
 import { loadSeoState } from "@/lib/seo-store";
@@ -30,8 +29,6 @@ const cities = [
 
 export default async function HomePage() {
   const packages = await getPublicPackages();
-  const minPrice = packages.length ? Math.min(...packages.map((item) => item.priceFrom)) : 59000;
-
   return (
     <>
       <section className="home-hero">
@@ -41,19 +38,29 @@ export default async function HomePage() {
             <h1>เที่ยวภูฏาน<br/><em>ง่ายกว่าที่คิด</em></h1>
             <p>เลือกแพ็กเกจ 4–6 วันและวันเดินทางที่สะดวก แล้วให้ Bhutan Center ดูแลต่อทั้งเที่ยวบิน วีซ่า SDF โรงแรม ไกด์ รถ และรายละเอียดก่อนออกเดินทาง</p>
 
-            <div className="hero-price-callout">
-              <span>แพ็กเกจเริ่มต้น</span>
-              <strong>฿{formatTHB(minPrice)}</strong>
-              <small>/ ท่าน</small>
-              <em>ราคาเริ่มต้น · ทีมงานยืนยันราคาตามวันเดินทางจริง</em>
-            </div>
-
             <div className="hero-actions">
               <Link href="/packages" className="gold-button gold-button--large">ดูแพ็กเกจและราคา <span>↗</span></Link>
               <LineCta className="text-link text-link--large">ถามวันเดินทางทาง LINE <span>→</span></LineCta>
             </div>
 
             <div className="hero-benefits"><span>Private 2+</span><span>Bhutan Airlines</span><span>Visa + SDF</span><span>Hotel 3–5★</span></div>
+            <div className="hero-trust hero-trust--benefits">
+              <div>
+                <small>01</small>
+                <strong>ทัวร์ส่วนตัว</strong>
+                <span>เลือกวันเดินทางเองได้</span>
+              </div>
+              <div>
+                <small>02</small>
+                <strong>ผู้เชี่ยวชาญเส้นทางภูฏาน</strong>
+                <span>เกือบ 15 ปี</span>
+              </div>
+              <div>
+                <small>03</small>
+                <strong>One Stop Service</strong>
+                <span>เที่ยวบิน · วีซ่า · SDF · โรงแรม · รถ · ไกด์</span>
+              </div>
+            </div>
           </div>
 
 <HomeHeroGallery />

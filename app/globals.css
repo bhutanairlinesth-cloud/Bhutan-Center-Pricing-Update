@@ -238,13 +238,27 @@
   background:#e9dfd0;
   box-shadow:var(--shadow-soft);
 }
-.philosophy-media img{width:100%;height:100%;object-fit:cover}
-.philosophy-media::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 58%,rgba(42,34,26,.42))}
+.philosophy-media img{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:center;
+  display:block;
+}
+.philosophy-media::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg,rgba(0,0,0,0) 50%,rgba(42,34,26,.28) 100%);
+}
 .media-caption{
   position:absolute;z-index:2;left:24px;bottom:22px;
   padding:14px 17px;border-radius:16px;
-  background:rgba(255,253,249,.90);backdrop-filter:blur(12px);
+  background:rgba(255,253,249,.94);backdrop-filter:blur(12px);
   color:var(--ink);font-size:12px;
+  box-shadow:0 12px 28px rgba(38,28,17,.10);
 }
 .media-caption span{display:block;color:var(--gold-dark);font-size:11px;letter-spacing:.08em}
 .media-caption strong{display:block;margin-top:3px;font-size:17px;font-weight:500}
@@ -498,59 +512,11 @@ a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,te
 @media(max-width:650px){.bhutan-map-shell{padding:20px;border-radius:24px;gap:26px}.bhutan-map-copy h2{font-size:40px}.bhutan-map-stage{min-height:290px;border-radius:20px}.bhutan-map-marker{padding:5px;grid-template-columns:12px;gap:0;border-radius:50%}.bhutan-map-marker i{grid-row:auto;width:11px;height:11px;border-width:2px}.bhutan-map-marker strong,.bhutan-map-marker small{display:none}.bhutan-map-note{display:none}.bhutan-map-mobile-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}.bhutan-map-mobile-list a{padding:13px;border:1px solid var(--line);border-radius:14px;background:#fffdf9}.bhutan-map-mobile-list a.active{border-color:#87aa9d;background:#eef7f2}.bhutan-map-mobile-list span{display:block;color:#9c8a78;font-size:9px;letter-spacing:.08em}.bhutan-map-mobile-list strong{display:block;margin-top:2px;color:var(--ink);font-size:15px}.bhutan-map-mobile-list em{display:block;margin-top:7px;color:var(--gold-dark);font-size:10px;font-style:normal}.bhutan-map-credit{text-align:left}.city-guide-hero{min-height:590px}.city-guide-hero-content{padding-bottom:48px}.city-guide-back{margin-bottom:28px}.city-guide-hero h1{font-size:62px}.city-guide-hero-content>p{font-size:15px}.city-guide-hero-actions{flex-direction:column}.city-guide-hero-actions>*{width:100%}.city-guide-facts{grid-template-columns:1fr;margin-top:-18px}.city-guide-facts>div{border-right:0;border-bottom:1px solid var(--line)!important;padding:18px}.city-guide-facts>div:last-child{border-bottom:0!important}.city-guide-story-grid h2{font-size:43px}.city-guide-story-copy>p{font-size:16px}.city-attraction-grid{grid-template-columns:1fr}.city-attraction-card{min-height:240px;padding:24px}.city-attraction-card h3{margin-top:38px;font-size:24px}.city-guide-more-grid{grid-template-columns:1fr}.city-guide-more-grid>a:last-child{grid-column:auto}.city-guide-more-grid>a{min-height:240px}}
 
 
-/* ===== V13.18.6 Home hero cleanup ===== */
-/* Price callout removed from markup. Trust row is now customer-facing benefits. */
-.hero-trust--benefits{
-  margin-top:38px;
-  padding-top:24px;
-  grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:0;
+/* V13.18.8 philosophy image fill hotfix */
+@media(max-width:900px){
+  .philosophy-media{min-height:520px}
 }
-.hero-trust--benefits>div{
-  display:block;
-  min-width:0;
-  padding:0 22px;
-  border-right:1px solid var(--line);
-}
-.hero-trust--benefits>div:first-child{padding-left:0}
-.hero-trust--benefits>div:last-child{padding-right:0;border-right:0}
-.hero-trust--benefits small{
-  display:block;
-  margin-bottom:8px;
-  color:var(--gold-dark);
-  font-size:11px;
-  font-weight:600;
-  letter-spacing:.10em;
-}
-.hero-trust--benefits strong{
-  display:block;
-  color:var(--ink);
-  font-size:17px;
-  line-height:1.4;
-  font-weight:600;
-  letter-spacing:-.01em;
-}
-.hero-trust--benefits span{
-  display:block;
-  margin-top:6px;
-  color:#756b61;
-  font-size:12px;
-  line-height:1.55;
-}
-
-@media(max-width:650px){
-  .hero-trust--benefits{
-    grid-template-columns:1fr;
-    gap:0;
-    margin-top:30px;
-    padding-top:16px;
-  }
-  .hero-trust--benefits>div{
-    padding:14px 0;
-    border-right:0;
-    border-bottom:1px solid var(--line);
-  }
-  .hero-trust--benefits>div:last-child{border-bottom:0}
-  .hero-trust--benefits strong{font-size:16px}
-  .hero-trust--benefits span{font-size:12px}
+@media(max-width:640px){
+  .philosophy-media{min-height:400px}
+  .media-caption{left:18px;bottom:18px;padding:12px 14px}
 }

@@ -54,7 +54,6 @@ export default async function HomePage() {
             </div>
 
             <div className="hero-benefits"><span>Private 2+</span><span>Bhutan Airlines</span><span>Visa + SDF</span><span>Hotel 3–5★</span></div>
-            <div className="hero-trust"><div><strong>4–6</strong><span>วัน · เลือกให้พอดีกับเวลา</span></div><div><strong>2013</strong><span>เริ่มดูแลเส้นทางภูฏาน</span></div><div><strong>1 ทีม</strong><span>Flight · Visa · Land</span></div></div>
           </div>
 
 <HomeHeroGallery />

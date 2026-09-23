@@ -16,6 +16,16 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://www.bhutancenter.org"),
   applicationName: "Bhutan Center",
   category: "travel",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: [
+      { url: "/favicon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    shortcut: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

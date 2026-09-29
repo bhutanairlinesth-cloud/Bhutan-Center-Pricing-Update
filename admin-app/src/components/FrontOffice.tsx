@@ -452,7 +452,9 @@ function AgentRateSheetModal({ open, onClose, settings, packages, defaultPackage
   const [selectedHotels, setSelectedHotels] = useState<HotelCategory[]>([]);
   const [agentName, setAgentName] = useState('');
   const [validUntil, setValidUntil] = useState('');
-  const [note, setNote] = useState('ราคาสำหรับ Agent เท่านั้น กรุ๊ปตั้งแต่ 10 ท่านขึ้นไปกรุณาสอบถามราคาอีกครั้ง');
+  const [documentLanguage, setDocumentLanguage] = useState<'th' | 'en'>('th');
+  const [noteTh, setNoteTh] = useState('ราคาสำหรับ Agent เท่านั้น กรุ๊ปตั้งแต่ 10 ท่านขึ้นไปกรุณาสอบถามราคาอีกครั้ง');
+  const [noteEn, setNoteEn] = useState('Net rates for agents only. For groups of 10 passengers or more, please contact us for a quotation.');
   const [hotelExamples, setHotelExamples] = useState<Record<HotelCategory, string>>({ '3 Stars': '', '4 Stars': '', '5 Stars': '' });
 
   useEffect(() => {
@@ -472,51 +474,69 @@ function AgentRateSheetModal({ open, onClose, settings, packages, defaultPackage
     setSelectedHotels((current) => current.includes(hotelCategory) ? current.filter((item) => item !== hotelCategory) : [...current, hotelCategory]);
   }
 
-  const fileTitle = `Agent Rate Sheet - ${selectedPackageIds.length} Program${selectedPackageIds.length === 1 ? '' : 's'}`;
+  const isEnglishDocument = documentLanguage === 'en';
+  const activeNote = isEnglishDocument ? noteEn : noteTh;
+  const fileTitle = isEnglishDocument
+    ? `Agent Rate Sheet EN - ${selectedPackageIds.length} Program${selectedPackageIds.length === 1 ? '' : 's'}`
+    : `Agent Rate Sheet TH - ${selectedPackageIds.length} Program${selectedPackageIds.length === 1 ? '' : 's'}`;
 
   return <Modal open={open} title="Agent Rate Sheet / ใบราคาเอเจนต์" onClose={onClose} wide>
     <div className="agent-rate-builder no-print">
       <div className="agent-rate-builder__intro">
-        <div><span>AGENT SALES TOOL</span><h2>สร้างใบราคา Agent จากข้อมูล Pricing ปัจจุบัน</h2><p>เลือกหลายโปรแกรมและหลายระดับโรงแรมได้ในครั้งเดียว ระบบจะคำนวณ Net Agent จากสูตรเดียวกับหน้าคำนวณราคา และแยกแต่ละโปรแกรม/โรงแรมเป็นคนละหน้าใน PDF</p></div>
-        <button className="primary-button" disabled={!rows.length} onClick={() => { void printElementAsA4('agent-rate-sheet-print-area', fileTitle); }}><FileText/>ดาวน์โหลด / Print PDF</button>
+        <div>
+          <span>AGENT SALES TOOL</span>
+          <h2>{isEnglishDocument ? 'Create an English Agent Rate Sheet' : 'สร้างใบราคา Agent จากข้อมูล Pricing ปัจจุบัน'}</h2>
+          <p>{isEnglishDocument
+            ? 'Select multiple programmes and hotel categories. The system uses the current Net Agent pricing and creates one A4 page for each programme / hotel combination.'
+            : 'เลือกหลายโปรแกรมและหลายระดับโรงแรมได้ในครั้งเดียว ระบบจะคำนวณ Net Agent จากสูตรเดียวกับหน้าคำนวณราคา และแยกแต่ละโปรแกรม/โรงแรมเป็นคนละหน้าใน PDF'}</p>
+        </div>
+        <div style={{display:'flex', flexDirection:'column', gap:'9px', alignItems:'flex-end'}}>
+          <div className="agent-rate-hotel-options" aria-label="Agent rate sheet language">
+            <button type="button" className={documentLanguage === 'th' ? 'active' : ''} onClick={() => setDocumentLanguage('th')}>TH ไทย</button>
+            <button type="button" className={documentLanguage === 'en' ? 'active' : ''} onClick={() => setDocumentLanguage('en')}>EN English</button>
+          </div>
+          <button className="primary-button" disabled={!rows.length} onClick={() => { void printElementAsA4('agent-rate-sheet-print-area', fileTitle); }}><FileText/>{isEnglishDocument ? 'Save / Print PDF' : 'ดาวน์โหลด / Print PDF'}</button>
+        </div>
       </div>
       <div className="agent-rate-builder__grid">
         <section>
-          <h3>1. เลือกโปรแกรม</h3>
-          <div className="agent-rate-choice-list">{packages.map((pkg) => <button key={pkg.id} className={selectedPackageIds.includes(pkg.id) ? 'active' : ''} onClick={() => togglePackage(pkg.id)}><i>{selectedPackageIds.includes(pkg.id) ? <Check/> : null}</i><span><strong>{pkg.nights + 1} วัน {pkg.nights} คืน</strong><small>{pkg.name}</small></span></button>)}</div>
+          <h3>{isEnglishDocument ? '1. Select programmes' : '1. เลือกโปรแกรม'}</h3>
+          <div className="agent-rate-choice-list">{packages.map((pkg) => <button key={pkg.id} className={selectedPackageIds.includes(pkg.id) ? 'active' : ''} onClick={() => togglePackage(pkg.id)}><i>{selectedPackageIds.includes(pkg.id) ? <Check/> : null}</i><span><strong>{isEnglishDocument ? `${pkg.nights + 1} Days / ${pkg.nights} Nights` : `${pkg.nights + 1} วัน ${pkg.nights} คืน`}</strong><small>{pkg.name}</small></span></button>)}</div>
         </section>
         <section>
-          <h3>2. เลือกระดับโรงแรม</h3>
-          <div className="agent-rate-hotel-options">{AGENT_RATE_HOTELS.map((hotel) => <button key={hotel} className={selectedHotels.includes(hotel) ? 'active' : ''} onClick={() => toggleHotel(hotel)}><i>{selectedHotels.includes(hotel) ? <Check/> : null}</i>{hotel.replace(' Stars',' ดาว')}</button>)}</div>
+          <h3>{isEnglishDocument ? '2. Select hotel category' : '2. เลือกระดับโรงแรม'}</h3>
+          <div className="agent-rate-hotel-options">{AGENT_RATE_HOTELS.map((hotel) => <button key={hotel} className={selectedHotels.includes(hotel) ? 'active' : ''} onClick={() => toggleHotel(hotel)}><i>{selectedHotels.includes(hotel) ? <Check/> : null}</i>{isEnglishDocument ? hotel : hotel.replace(' Stars',' ดาว')}</button>)}</div>
           <div className="agent-rate-hotel-notes">
             {selectedHotels.map((hotel) => <label key={hotel}>
-              <span>โรงแรม {hotel.replace(' Stars',' ดาว')} สำหรับเอกสาร (ไม่บังคับ)</span>
-              <textarea rows={3} value={hotelExamples[hotel]} onChange={(e) => setHotelExamples((current) => ({ ...current, [hotel]: e.target.value }))} placeholder="ปล่อยว่าง = ใช้รายชื่อโรงแรมมาตรฐานของ Bhutan Center อัตโนมัติ"/>
-              <small>{hotel === '3 Stars' || hotel === '4 Stars' ? 'ระบบมีรายชื่อโรงแรมมาตรฐานให้แล้ว และจะแสดงเมืองตามโปรแกรมอัตโนมัติ' : '5 ดาวยังไม่มีรายชื่อมาตรฐานในชุดนี้ สามารถกรอกเองได้'}</small>
+              <span>{isEnglishDocument ? `${hotel} hotel examples for the document (optional)` : `โรงแรม ${hotel.replace(' Stars',' ดาว')} สำหรับเอกสาร (ไม่บังคับ)`}</span>
+              <textarea rows={3} value={hotelExamples[hotel]} onChange={(e) => setHotelExamples((current) => ({ ...current, [hotel]: e.target.value }))} placeholder={isEnglishDocument ? 'Leave blank to use Bhutan Center standard hotel examples automatically' : 'ปล่อยว่าง = ใช้รายชื่อโรงแรมมาตรฐานของ Bhutan Center อัตโนมัติ'}/>
+              <small>{isEnglishDocument
+                ? (hotel === '3 Stars' || hotel === '4 Stars' ? 'Standard hotel examples are already available and will be shown by city automatically.' : 'No standard 5-star hotel examples are stored yet. You can enter them manually.')
+                : (hotel === '3 Stars' || hotel === '4 Stars' ? 'ระบบมีรายชื่อโรงแรมมาตรฐานให้แล้ว และจะแสดงเมืองตามโปรแกรมอัตโนมัติ' : '5 ดาวยังไม่มีรายชื่อมาตรฐานในชุดนี้ สามารถกรอกเองได้')}</small>
             </label>)}
           </div>
         </section>
         <section>
-          <h3>3. ข้อมูลเอกสาร</h3>
-          <label><span>ชื่อ Agent / บริษัท (ไม่บังคับ)</span><input value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="เช่น Jasmine Travel"/></label>
-          <label><span>ราคาใช้ได้ถึงวันที่ (ไม่บังคับ)</span><input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}/></label>
-          <label><span>หมายเหตุ</span><textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)}/></label>
+          <h3>{isEnglishDocument ? '3. Document details' : '3. ข้อมูลเอกสาร'}</h3>
+          <label><span>{isEnglishDocument ? 'Agent / Company name (optional)' : 'ชื่อ Agent / บริษัท (ไม่บังคับ)'}</span><input value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder={isEnglishDocument ? 'e.g. Jasmine Travel' : 'เช่น Jasmine Travel'}/></label>
+          <label><span>{isEnglishDocument ? 'Rates valid until (optional)' : 'ราคาใช้ได้ถึงวันที่ (ไม่บังคับ)'}</span><input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}/></label>
+          <label><span>{isEnglishDocument ? 'Notes' : 'หมายเหตุ'}</span><textarea rows={3} value={activeNote} onChange={(e) => isEnglishDocument ? setNoteEn(e.target.value) : setNoteTh(e.target.value)}/></label>
         </section>
       </div>
-      <div className="agent-rate-builder__summary"><strong>{rows.length}</strong><span>หน้าที่จะออกใน PDF</span><small>{selectedPackageIds.length} โปรแกรม × {selectedHotels.length} ระดับโรงแรม</small></div>
+      <div className="agent-rate-builder__summary"><strong>{rows.length}</strong><span>{isEnglishDocument ? 'PDF pages' : 'หน้าที่จะออกใน PDF'}</span><small>{isEnglishDocument ? `${selectedPackageIds.length} programme${selectedPackageIds.length === 1 ? '' : 's'} × ${selectedHotels.length} hotel categor${selectedHotels.length === 1 ? 'y' : 'ies'}` : `${selectedPackageIds.length} โปรแกรม × ${selectedHotels.length} ระดับโรงแรม`}</small></div>
     </div>
 
     <div className="agent-rate-print-stack" id="agent-rate-sheet-print-area">
       {rows.length ? rows.map((row, index) => {
         const customHotels = hotelExamples[row.hotelCategory]?.trim() || '';
         const resolvedHotels = customHotels || getDefaultAgentHotelExamples(row.hotelCategory, row.nights);
-        return <AgentRateSheetPage key={`${row.packageId}-${row.hotelCategory}`} row={row} settings={settings} agentName={agentName} validUntil={validUntil} note={note} hotelExamples={resolvedHotels} page={index + 1} totalPages={rows.length}/>;
-      }) : <div className="agent-rate-empty">เลือกอย่างน้อย 1 โปรแกรม และ 1 ระดับโรงแรม</div>}
+        return <AgentRateSheetPage key={`${row.packageId}-${row.hotelCategory}`} row={row} settings={settings} agentName={agentName} validUntil={validUntil} note={activeNote} hotelExamples={resolvedHotels} page={index + 1} totalPages={rows.length} language={documentLanguage}/>;
+      }) : <div className="agent-rate-empty">{isEnglishDocument ? 'Select at least 1 programme and 1 hotel category.' : 'เลือกอย่างน้อย 1 โปรแกรม และ 1 ระดับโรงแรม'}</div>}
     </div>
   </Modal>;
 }
 
-function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelExamples, page, totalPages }: {
+function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelExamples, page, totalPages, language }: {
   row: AgentRateSheetRow;
   settings: GlobalSettings;
   agentName: string;
@@ -525,9 +545,22 @@ function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelE
   hotelExamples: string;
   page: number;
   totalPages: number;
+  language: 'th' | 'en';
 }) {
-  const hotelLabel = row.hotelCategory.replace(' Stars', ' ดาว');
-  const included = [
+  const isEnglish = language === 'en';
+  const hotelLabel = isEnglish ? row.hotelCategory : row.hotelCategory.replace(' Stars', ' ดาว');
+  const included = isEnglish ? [
+    'Round-trip economy class airfare with Bhutan Airlines',
+    `${hotelLabel} hotel accommodation`,
+    'All meals as specified in the programme',
+    'English-speaking local guide',
+    'Government Sustainable Development Fee (SDF)',
+    'Admission fees for sightseeing listed in the programme',
+    'Bhutan visa fee',
+    'Private transfers and sightseeing vehicle as scheduled',
+    'Paro Airport arrival and departure transfers',
+    'Travel insurance for the stated travel dates',
+  ] : [
     'ตั๋วเครื่องบินไป-กลับ ชั้นประหยัด Bhutan Airlines',
     `ที่พักโรงแรมระดับ ${hotelLabel}`,
     'อาหารทุกมื้อตามโปรแกรม',
@@ -539,7 +572,11 @@ function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelE
     'บริการรับ-ส่งสนามบินพาโร',
     'ประกันการเดินทางแบบระบุวัน',
   ];
-  const excluded = [
+  const excluded = isEnglish ? [
+    'Horse rental for the Tiger’s Nest hike',
+    'Tips for guide and driver',
+    'Personal expenses and any services not specified in the programme',
+  ] : [
     'ค่าเช่าม้าขึ้นวัดทักซัง',
     'ค่าทิปไกด์และคนขับรถ',
     'ค่าใช้จ่ายส่วนตัวและรายการอื่นนอกเหนือจากโปรแกรม',
@@ -551,39 +588,43 @@ function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelE
     </header>
     <section className="agent-rate-page__title">
       <span>{agentName.trim() ? `Prepared for: ${agentName.trim()}` : 'AGENT / PARTNER RATE'}</span>
-      <h1>ราคาโปรแกรมทัวร์ภูฏาน {row.nights + 1} วัน {row.nights} คืน</h1>
-      <h2>พักโรงแรม {hotelLabel} (Net Agent)</h2>
+      <h1>{isEnglish ? `Bhutan Tour Package ${row.nights + 1} Days / ${row.nights} Nights` : `ราคาโปรแกรมทัวร์ภูฏาน ${row.nights + 1} วัน ${row.nights} คืน`}</h1>
+      <h2>{isEnglish ? `${hotelLabel} Hotel (Net Agent Rate)` : `พักโรงแรม ${hotelLabel} (Net Agent)`}</h2>
       <p>{row.packageName}</p>
     </section>
     <table className="agent-rate-table">
-      <thead><tr><th>รายการ</th><th>ราคา (บาท)</th></tr></thead>
+      <thead><tr><th>{isEnglish ? 'Description' : 'รายการ'}</th><th>{isEnglish ? 'Rate (THB)' : 'ราคา (บาท)'}</th></tr></thead>
       <tbody>
-        <tr><td><b>1. Economy Ticket + Taxes (Bhutan Airlines)</b><small>Agent airfare + airport taxes สำหรับ 1-9 ท่าน</small></td><td>{formatNumber(row.ticketAndTax, 0)}</td></tr>
-        <tr><td className="indent">Upgrade Business Class (Optional)</td><td>{formatNumber(row.businessUpgrade, 0)}</td></tr>
-        <tr><td><b>2. Land + SDF + Visa (บาท/ท่าน)</b></td><td></td></tr>
-        <tr><td className="indent">เดินทาง 1 ท่าน</td><td>{formatNumber(row.landPax1, 0)}</td></tr>
-        <tr><td className="indent">เดินทาง 2 ท่าน</td><td>{formatNumber(row.landPax2, 0)}</td></tr>
-        <tr><td className="indent">เดินทาง 3 - 9 ท่าน</td><td>{formatNumber(row.landPax3Plus, 0)}</td></tr>
+        <tr><td><b>1. Economy Ticket + Taxes (Bhutan Airlines)</b><small>{isEnglish ? 'Agent airfare + airport taxes for 1–9 passengers' : 'Agent airfare + airport taxes สำหรับ 1-9 ท่าน'}</small></td><td>{formatNumber(row.ticketAndTax, 0)}</td></tr>
+        <tr><td className="indent">{isEnglish ? 'Business Class Upgrade (Optional)' : 'Upgrade Business Class (Optional)'}</td><td>{formatNumber(row.businessUpgrade, 0)}</td></tr>
+        <tr><td><b>{isEnglish ? '2. Land + SDF + Visa (THB / person)' : '2. Land + SDF + Visa (บาท/ท่าน)'}</b></td><td></td></tr>
+        <tr><td className="indent">{isEnglish ? '1 Passenger' : 'เดินทาง 1 ท่าน'}</td><td>{formatNumber(row.landPax1, 0)}</td></tr>
+        <tr><td className="indent">{isEnglish ? '2 Passengers' : 'เดินทาง 2 ท่าน'}</td><td>{formatNumber(row.landPax2, 0)}</td></tr>
+        <tr><td className="indent">{isEnglish ? '3–9 Passengers' : 'เดินทาง 3 - 9 ท่าน'}</td><td>{formatNumber(row.landPax3Plus, 0)}</td></tr>
         <tr><td className="indent">GIT 10 PAX+</td><td>On Request</td></tr>
-        <tr><td><b>Single Supplement (นอนเดี่ยว)</b></td><td>{row.singleSupplement > 0 ? formatNumber(row.singleSupplement, 0) : 'On Request'}</td></tr>
+        <tr><td><b>{isEnglish ? 'Single Supplement (Single Room)' : 'Single Supplement (นอนเดี่ยว)'}</b></td><td>{row.singleSupplement > 0 ? formatNumber(row.singleSupplement, 0) : 'On Request'}</td></tr>
       </tbody>
     </table>
     <section className="agent-rate-airfare-note">
-      <strong>หมายเหตุเรื่องตั๋วเครื่องบิน</strong>
-      <p>ราคา Economy Ticket + Taxes ด้านบนเป็นราคารวมตั๋ว Agent + Airport Tax แล้ว โดยค่าโดยสาร Agent พื้นฐานอยู่ที่ ฿{formatNumber(Number(settings.agentTicketPriceTHB ?? 25220), 0)} และ Airport Tax ฿{formatNumber(Number(settings.airportTaxTHB ?? 6500), 0)} / ท่าน</p>
+      <strong>{isEnglish ? 'Airfare Note' : 'หมายเหตุเรื่องตั๋วเครื่องบิน'}</strong>
+      <p>{isEnglish
+        ? `The Economy Ticket + Taxes rate above already includes the Agent airfare and Airport Tax. The current base Agent airfare is THB ${formatNumber(Number(settings.agentTicketPriceTHB ?? 25220), 0)} and Airport Tax is THB ${formatNumber(Number(settings.airportTaxTHB ?? 6500), 0)} per person.`
+        : `ราคา Economy Ticket + Taxes ด้านบนเป็นราคารวมตั๋ว Agent + Airport Tax แล้ว โดยค่าโดยสาร Agent พื้นฐานอยู่ที่ ฿${formatNumber(Number(settings.agentTicketPriceTHB ?? 25220), 0)} และ Airport Tax ฿${formatNumber(Number(settings.airportTaxTHB ?? 6500), 0)} / ท่าน`}</p>
     </section>
-    {hotelExamples.trim() && <section className="agent-rate-hotels"><h3>โรงแรมมาตรฐาน {hotelLabel}</h3><p>{hotelExamples}</p></section>}
+    {hotelExamples.trim() && <section className="agent-rate-hotels"><h3>{isEnglish ? `Standard ${hotelLabel} Hotels` : `โรงแรมมาตรฐาน ${hotelLabel}`}</h3><p>{hotelExamples}</p></section>}
     <section className="agent-rate-scope">
-      <div><h3>ราคารวม</h3><ul>{included.map((item) => <li key={item}>{item}</li>)}</ul></div>
-      <div><h3>ราคาไม่รวม</h3><ul>{excluded.map((item) => <li key={item}>{item}</li>)}</ul></div>
+      <div><h3>{isEnglish ? 'Rate Includes' : 'ราคารวม'}</h3><ul>{included.map((item) => <li key={item}>{item}</li>)}</ul></div>
+      <div><h3>{isEnglish ? 'Rate Excludes' : 'ราคาไม่รวม'}</h3><ul>{excluded.map((item) => <li key={item}>{item}</li>)}</ul></div>
     </section>
     <section className="agent-rate-notes">
-      <strong>หมายเหตุ</strong>
-      <p>{note || 'ราคาสำหรับ Agent เท่านั้น'}</p>
-      {validUntil && <p>ราคานี้ใช้ได้ถึงวันที่ {formatDate(validUntil, 'th')}</p>}
-      <small>ราคานี้ดึงจากข้อมูล Pricing ของ Bhutan Center ณ วันที่ออกเอกสาร ราคาตั๋ว อัตราแลกเปลี่ยน ภาษี วีซ่า LAND และ Margin อาจเปลี่ยนแปลงได้ตามวันที่ยืนยันการจอง</small>
+      <strong>{isEnglish ? 'Notes' : 'หมายเหตุ'}</strong>
+      <p>{note || (isEnglish ? 'Net rates for agents only.' : 'ราคาสำหรับ Agent เท่านั้น')}</p>
+      {validUntil && <p>{isEnglish ? `Rates valid until ${formatDate(validUntil, 'en')}` : `ราคานี้ใช้ได้ถึงวันที่ ${formatDate(validUntil, 'th')}`}</p>}
+      <small>{isEnglish
+        ? 'Rates are generated from the current Bhutan Center pricing data on the document issue date. Airfare, exchange rates, taxes, visa fees, land costs and margins are subject to change until the booking is confirmed.'
+        : 'ราคานี้ดึงจากข้อมูล Pricing ของ Bhutan Center ณ วันที่ออกเอกสาร ราคาตั๋ว อัตราแลกเปลี่ยน ภาษี วีซ่า LAND และ Margin อาจเปลี่ยนแปลงได้ตามวันที่ยืนยันการจอง'}</small>
     </section>
-    <footer><strong>Bhutan Center · OMG Experience Co., Ltd.</strong><span>Agent Rate Sheet · {new Date().toLocaleDateString('th-TH')}</span></footer>
+    <footer><strong>Bhutan Center · OMG Experience Co., Ltd.</strong><span>Agent Rate Sheet · {new Date().toLocaleDateString(isEnglish ? 'en-GB' : 'th-TH')}</span></footer>
   </article>;
 }
 

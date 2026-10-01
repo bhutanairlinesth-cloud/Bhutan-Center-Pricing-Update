@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, BadgeCheck, CalendarClock, Check, ChevronDown, CircleDollarSign, ClipboardCheck,
   ClipboardList, Download, Edit3, FileCheck2, FileText, Filter, Flag, Hourglass, Landmark,
@@ -18,8 +18,14 @@ import { printElementAsA4 } from '../utils/printA4';
 import { Brand } from './Brand';
 import { EmptyState, Modal } from './Ui';
 import { AdditionalItemsEditor } from './AdditionalItemsEditor';
+import { FormActionBar, PageHeader, SectionCard, SummaryCard } from '../shared/ui';
+import { StatusBadge, statusLabel, statusTone } from '../shared/StatusBadge';
+import { database } from '../db/database';
 
 interface Props {
+  /** full = legacy UI; list = list only; detail = open one booking */
+  embeddedMode?: 'full' | 'list' | 'detail';
+  detailId?: string;
   settings: GlobalSettings;
   packages: TourPackage[];
   users: User[];
@@ -42,6 +48,8 @@ interface Props {
   onUploadPaymentSlip: (trackingId: string, paymentId: string, file: File) => Promise<{ path: string; fileName: string; mimeType: string; size: number }>;
   onGetPaymentSlipUrl: (path: string) => Promise<string>;
   onDeletePaymentSlip: (path: string) => Promise<void>;
+  onOpenInvoiceDoc?: (id: string) => void;
+  onOpenPaymentDoc?: (id: string) => void;
 }
 
 const leadSources: LeadSource[] = ['LINE OA', 'LINE', 'Facebook', 'Call in', 'Referral', 'Walk in', 'Other'];
@@ -66,6 +74,7 @@ function paymentAccountSnapshot(settings: GlobalSettings, type: PaymentAccountTy
 }
 function roundMoney(value: number) { return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100; }
 const paymentTypes: PaymentTransactionType[] = ['ticket_deposit', 'package_balance', 'full_payment', 'supplemental', 'refund', 'other'];
+type AgentVatMode = 'none' | 'total_package' | 'service_split';
 
 const TRACKING_DRAFT_PREFIX = 'bhutan_customer_tracking_draft_v1:';
 const NEW_TRACKING_DRAFT_KEY = `${TRACKING_DRAFT_PREFIX}new`;
@@ -124,21 +133,6 @@ function minusOneMonth(value: string) {
   const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   d.setDate(Math.min(originalDay, maxDay));
   return d.toISOString().slice(0, 10);
-}
-function makeInvoiceNo(stage: InvoiceInstallment, sequenceNumber?: number) {
-  const date = new Date();
-  const y = date.getFullYear().toString().slice(-2);
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  const code = stage === 'deposit' ? 'T1' : stage === 'balance' ? 'P2' : stage === 'full' ? 'FULL' : `X${sequenceNumber || 3}`;
-  return `INV-BH-${y}${m}${d}-${code}-${Math.floor(100 + Math.random() * 900)}`;
-}
-function makeAddedTravelerInvoice1No(batchNumber: number) {
-  const date = new Date();
-  const y = date.getFullYear().toString().slice(-2);
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `INV-BH-${y}${m}${d}-T1A${Math.max(1, batchNumber)}-${Math.floor(100 + Math.random() * 900)}`;
 }
 function newSupplementalLine(): SupplementalInvoiceLine {
   return { id: makeId('xline'), description: '', quantity: 1, unitPriceTHB: 0, totalTHB: 0, costPerUnitTHB: 0, totalCostTHB: 0 };
@@ -300,11 +294,22 @@ function travelerAdditionInternalCostTotal(item: CustomerTracking) {
 function travelerAdditionTicketDepositTotal(entry: TravelerAddition) {
   return Math.max(0, entry.ticketDepositTotal ?? ((entry.ticketPricePerPerson + entry.airportTaxPerPerson) * entry.passengerCount));
 }
-function generalSupplementalInvoices(item: CustomerTracking, invoices: PaymentInvoice[]) {
+function isAgentVatServiceInvoice(invoice: PaymentInvoice) {
+  return invoice.documentData?.agentVatMode === 'service_split_invoice';
+}
+function agentVatServiceInvoices(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  return activeSupplementalInvoices(item.id, invoices).filter(isAgentVatServiceInvoice);
+}
+function payableSupplementalInvoices(item: CustomerTracking, invoices: PaymentInvoice[]) {
   const travelerInvoiceIds = travelerAdditionInvoiceIds(item);
   return activeSupplementalInvoices(item.id, invoices).filter((invoice) => !travelerInvoiceIds.has(invoice.id));
 }
+function generalSupplementalInvoices(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  return payableSupplementalInvoices(item, invoices).filter((invoice) => !isAgentVatServiceInvoice(invoice));
+}
 function customerSupplementalSalesTotal(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  // Agent VAT service Invoice 3 only reclassifies part of the package price and VAT;
+  // it must not be counted as new supplemental revenue.
   return travelerAdditionPackageTotal(item) + generalSupplementalInvoices(item, invoices).reduce((sum, invoice) => sum + Math.max(0, invoice.amount || 0), 0);
 }
 function customerSupplementalCostTotal(item: CustomerTracking, invoices: PaymentInvoice[]) {
@@ -350,6 +355,17 @@ function agentVatPackageBreakdown(settings: GlobalSettings, item: CustomerTracki
   const serviceFeeTotal = Math.min(packagePortion, configuredServiceFeeTotal);
   const packageAmountAfterServiceFee = Math.max(0, Number(snapshot?.agentPackageAmountAfterServiceFeeTHB ?? packagePortion - serviceFeeTotal));
   return { passengerCount, serviceFeePerPerson, serviceFeeTotal, packageAmountAfterServiceFee, vatBaseTHB: serviceFeeTotal };
+}
+function agentVatModeFromInvoice(invoice?: PaymentInvoice | null): AgentVatMode {
+  const mode = invoice?.documentData?.agentVatMode;
+  if (mode === 'service_split') return 'service_split';
+  if (mode === 'total_package') return 'total_package';
+  return invoice?.vatEnabled ? 'total_package' : 'none';
+}
+function nextSupplementalSequence(trackingId: string, invoices: PaymentInvoice[], preferred = 3) {
+  const all = supplementalInvoicesFor(trackingId, invoices);
+  if (!all.some((invoice) => invoice.sequenceNumber === preferred)) return preferred;
+  return Math.max(preferred, ...all.map((invoice) => invoice.sequenceNumber || preferred)) + 1;
 }
 function addedTravelerAirfareTotal(item: CustomerTracking) {
   return activeTravelerAdditions(item).reduce((sum, entry) => sum + Math.max(0, entry.ticketPricePerPerson || 0) * Math.max(0, entry.passengerCount || 0), 0);
@@ -515,7 +531,14 @@ function buildOriginalTicketSnapshot(item: CustomerTracking): InvoiceTicketBatch
   const adultTax = Math.max(0, Number(item.airportTaxPerPerson || 0));
   const childFare = Math.max(0, Number(item.childTicketPricePerPerson || adultFare));
   const childTax = Math.max(0, Number(item.childAirportTaxPerPerson || adultTax));
-  const businessFare = adultFare + Math.max(0, Number(item.businessUpgradePerPerson || 0));
+  // Keep Invoice 1 consistent with the Journey payment amount.
+  // For standard pricing, the Business Class selling surcharge belongs to the package balance (Invoice 2),
+  // so Invoice 1 must collect only the base airfare + airport tax even when a traveller flies Business.
+  // Group/TL pricing is the exception because its deposit calculation already includes the business surcharge.
+  const invoice1BusinessSurchargePerPerson = item.pricingMode === 'group_tl'
+    ? Math.max(0, Number(item.businessUpgradePerPerson || 0))
+    : 0;
+  const businessFare = adultFare + invoice1BusinessSurchargePerPerson;
   const fareLines = [
     ...(adultEconomyCount > 0 ? [{ ptc: 'ADT' as const, cabinClass: 'Economy' as const, passengerCount: adultEconomyCount, farePerPersonTHB: adultFare, airportTaxPerPersonTHB: adultTax, totalPerPersonTHB: adultFare + adultTax, totalTHB: adultEconomyCount * (adultFare + adultTax) }] : []),
     ...(businessCount > 0 ? [{ ptc: 'ADT' as const, cabinClass: 'Business' as const, passengerCount: businessCount, farePerPersonTHB: businessFare, airportTaxPerPersonTHB: adultTax, totalPerPersonTHB: businessFare + adultTax, totalTHB: businessCount * (businessFare + adultTax) }] : []),
@@ -585,11 +608,165 @@ function buildInvoiceSnapshot(item: CustomerTracking, kind: InvoiceDocumentSnaps
 function invoicePaidAmount(invoiceId: string, payments: PaymentTransaction[]) {
   return payments.filter((x) => x.invoiceId === invoiceId).reduce((sum, x) => sum + (x.type === 'refund' ? -Math.abs(x.amount) : x.amount), 0);
 }
-function paymentSummary(item: CustomerTracking, payments: PaymentTransaction[]) {
+export function paymentsForInvoice(invoice: PaymentInvoice, payments: PaymentTransaction[], allInvoices: PaymentInvoice[]) {
+  return payments.filter((p) => p.trackingId === invoice.trackingId && invoiceForPayment(p, allInvoices)?.id === invoice.id);
+}
+export function invoiceReceivedAmount(invoice: PaymentInvoice, payments: PaymentTransaction[], allInvoices: PaymentInvoice[]) {
+  return paymentsForInvoice(invoice, payments, allInvoices).reduce((sum, x) => sum + (x.type === 'refund' ? -Math.abs(x.amount) : x.amount), 0);
+}
+export function invoiceForPayment(payment: PaymentTransaction, invoices: PaymentInvoice[]): PaymentInvoice | undefined {
+  if (payment.invoiceId) return invoices.find((inv) => inv.id === payment.invoiceId);
+  if (payment.type === 'ticket_deposit') {
+    return invoices.find((inv) => inv.trackingId === payment.trackingId && inv.installment === 'deposit' && inv.status !== 'cancelled');
+  }
+  return undefined;
+}
+export function resolvePaymentInvoiceId(
+  tracking: CustomerTracking,
+  invoices: PaymentInvoice[],
+  type: PaymentTransactionType,
+  pickedInvoiceId: string,
+): string {
+  if (type === 'package_balance') {
+    return invoices.find((invoice) => invoice.trackingId === tracking.id && invoice.installment === 'balance' && invoice.status !== 'cancelled')?.id || '';
+  }
+  if (type === 'full_payment') {
+    return invoices.find((invoice) => invoice.trackingId === tracking.id && invoice.installment === 'full' && invoice.status !== 'cancelled')?.id || '';
+  }
+  if (type === 'supplemental' || type === 'ticket_deposit') return pickedInvoiceId;
+  return '';
+}
+export function paymentTypeForInstallment(installment: InvoiceInstallment): PaymentTransactionType {
+  if (installment === 'deposit') return 'ticket_deposit';
+  if (installment === 'balance') return 'package_balance';
+  if (installment === 'full') return 'full_payment';
+  return 'supplemental';
+}
+export function applyPaymentToBooking(
+  tracking: CustomerTracking,
+  invoices: PaymentInvoice[],
+  payments: PaymentTransaction[],
+  tx: PaymentTransaction,
+  th: boolean,
+): { tracking: CustomerTracking; invoiceUpdates: PaymentInvoice[] } {
+  const now = tx.updatedAt || new Date().toISOString();
+  let next = tracking;
+  const invoiceUpdates: PaymentInvoice[] = [];
+  const deposit = Math.max(0, tracking.ticketAmount) + Math.max(0, tracking.airportTaxAmount);
+  const paidTicket = ticketPaidAmount(tracking, payments);
+
+  if (tx.type === 'ticket_deposit') {
+    if (tx.invoiceId) {
+      const targetInvoice = invoices.find((invoice) => invoice.id === tx.invoiceId);
+      if (targetInvoice) {
+        const previousPaid = invoicePaidAmount(targetInvoice.id, payments);
+        const fullyPaid = previousPaid + tx.amount >= targetInvoice.amount - 0.01;
+        invoiceUpdates.push({ ...targetInvoice, status: fullyPaid ? 'paid' as const : 'invoiced' as const, paidAt: fullyPaid ? tx.paidAt : targetInvoice.paidAt, updatedAt: now });
+        const projectedInvoices = invoices.map((invoice) => invoice.id === targetInvoice.id ? invoiceUpdates[invoiceUpdates.length - 1] : invoice);
+        const projectedPayments = [...payments, tx];
+        const allPaid = allTicketPaymentsReceived(next, projectedInvoices, projectedPayments);
+        next = { ...next, nextAction: allPaid
+          ? (th ? 'Invoice 1 ค่าตั๋วครบทุกชุดแล้ว — ออกตั๋วและส่งเอกสารผู้เดินทางทั้งหมดให้ Land เพื่อยื่นวีซ่า' : 'All Invoice 1 ticket payments are complete — issue tickets and submit every traveller to land for visa processing')
+          : (th ? 'ติดตามชำระ Invoice 1 ของผู้เดินทางเพิ่มให้ครบก่อนยื่นวีซ่า' : 'Collect all added-traveller Invoice 1 payments before visa submission'), nextActionDueDate: allPaid ? '' : next.nextActionDueDate };
+      }
+    } else {
+      const receivedAfter = paidTicket + tx.amount;
+      const fullyPaid = receivedAfter >= deposit - 0.01;
+      next = { ...next, depositStatus: fullyPaid ? 'paid' : (next.depositStatus === 'pending' ? 'invoiced' : next.depositStatus), firstPaymentReceivedAt: fullyPaid ? (next.firstPaymentReceivedAt || tx.paidAt) : next.firstPaymentReceivedAt };
+    }
+  }
+  if (tx.type === 'package_balance') {
+    const balanceInvoice = invoices.find((invoice) => invoice.trackingId === tracking.id && invoice.installment === 'balance' && invoice.status !== 'cancelled');
+    const previousBalancePaid = balanceInvoice ? invoicePaidAmount(balanceInvoice.id, payments) : packagePaidAmount(tracking, payments);
+    const packageReceivedAfter = previousBalancePaid + tx.amount;
+    const packageDue = balanceInvoice?.amount ?? Math.max(0, packageSalesTotal(tracking) - totalTicketPaymentsReceived(tracking, invoices, payments));
+    const fullyPaid = packageReceivedAfter >= packageDue - 0.01;
+    if (balanceInvoice) {
+      invoiceUpdates.push({ ...balanceInvoice, status: fullyPaid ? 'paid' as const : 'invoiced' as const, paidAt: fullyPaid ? tx.paidAt : balanceInvoice.paidAt, updatedAt: now });
+    }
+    const serviceInvoice = agentVatServiceInvoices(tracking, invoices).find((invoice) => invoice.status !== 'cancelled');
+    const serviceComplete = !serviceInvoice || invoiceSettled(serviceInvoice, payments);
+    const collectionComplete = fullyPaid && serviceComplete;
+    next = { ...next, balanceStatus: collectionComplete ? 'paid' : 'invoiced', fullPaymentReceivedAt: collectionComplete ? (next.fullPaymentReceivedAt || tx.paidAt) : next.fullPaymentReceivedAt };
+  }
+  if (tx.type === 'full_payment') {
+    const fullInvoice = invoices.find((invoice) => invoice.trackingId === tracking.id && invoice.installment === 'full' && invoice.status !== 'cancelled');
+    if (fullInvoice) {
+      const previousPaid = invoicePaidAmount(fullInvoice.id, payments);
+      const fullyPaid = previousPaid + tx.amount >= fullInvoice.amount - 0.01;
+      invoiceUpdates.push({ ...fullInvoice, status: fullyPaid ? 'paid' as const : 'invoiced' as const, paidAt: fullyPaid ? tx.paidAt : fullInvoice.paidAt, updatedAt: now });
+      const serviceInvoice = agentVatServiceInvoices(tracking, invoices).find((invoice) => invoice.status !== 'cancelled');
+      const serviceComplete = !serviceInvoice || invoiceSettled(serviceInvoice, payments);
+      const collectionComplete = fullyPaid && serviceComplete;
+      next = {
+        ...next,
+        paymentPlan: 'full_payment',
+        depositStatus: fullyPaid ? 'paid' : 'invoiced',
+        balanceStatus: collectionComplete ? 'paid' : 'invoiced',
+        firstPaymentReceivedAt: fullyPaid ? (next.firstPaymentReceivedAt || tx.paidAt) : next.firstPaymentReceivedAt,
+        fullPaymentReceivedAt: collectionComplete ? (next.fullPaymentReceivedAt || tx.paidAt) : next.fullPaymentReceivedAt,
+        nextAction: collectionComplete
+          ? (th ? 'รับชำระ Full Payment และ Invoice ค่าบริการครบแล้ว — ออกตั๋วและส่งเอกสารให้ Land ยื่นวีซ่า' : 'Full payment and service-fee invoice are complete — issue tickets and submit documents to land for visa processing')
+          : next.nextAction,
+      };
+    }
+  }
+  if (tx.type === 'supplemental' && tx.invoiceId) {
+    const targetInvoice = payableSupplementalInvoices(tracking, invoices).find((x) => x.id === tx.invoiceId);
+    if (targetInvoice) {
+      const previousPaid = invoicePaidAmount(targetInvoice.id, payments);
+      const fullyPaid = previousPaid + tx.amount >= targetInvoice.amount - 0.01;
+      invoiceUpdates.push({ ...targetInvoice, status: fullyPaid ? 'paid' as const : 'invoiced' as const, paidAt: fullyPaid ? tx.paidAt : targetInvoice.paidAt, updatedAt: now });
+      const isAddedTravelerTicket = activeTravelerAdditions(tracking).some((entry) => entry.invoiceId === targetInvoice.id);
+      if (isAddedTravelerTicket) {
+        const projectedInvoices = invoices.map((invoice) => invoice.id === targetInvoice.id ? invoiceUpdates[invoiceUpdates.length - 1] : invoice);
+        const projectedPayments = [...payments, tx];
+        const allPaid = allTicketPaymentsReceived(next, projectedInvoices, projectedPayments);
+        next = {
+          ...next,
+          nextAction: allPaid
+            ? (th ? 'ค่าตั๋วผู้เดินทางทุกชุดชำระครบแล้ว — ส่ง Passport + รูป + ตั๋วทั้งหมดให้ Land เพื่อยื่นวีซ่า' : 'All ticket invoices are paid — submit every passport, photo and ticket to land for visa processing')
+            : (th ? 'ติดตามชำระค่าตั๋วของผู้เดินทางเพิ่มให้ครบก่อนยื่นวีซ่า' : 'Collect all added-traveller ticket payments before visa submission'),
+          nextActionDueDate: allPaid ? '' : next.nextActionDueDate,
+        };
+      }
+      if (isAgentVatServiceInvoice(targetInvoice)) {
+        const projectedInvoices = invoices.map((invoice) => invoice.id === targetInvoice.id ? invoiceUpdates[invoiceUpdates.length - 1] : invoice);
+        const projectedPayments = [...payments, tx];
+        const linkedMain = projectedInvoices.find((invoice) => invoice.id === targetInvoice.documentData?.agentVatLinkedInvoiceId)
+          || projectedInvoices.find((invoice) => invoice.trackingId === tracking.id && (invoice.installment === 'balance' || invoice.installment === 'full') && invoice.status !== 'cancelled');
+        const collectionComplete = fullyPaid && invoiceSettled(linkedMain, projectedPayments);
+        next = {
+          ...next,
+          balanceStatus: collectionComplete ? 'paid' : 'invoiced',
+          fullPaymentReceivedAt: collectionComplete ? (next.fullPaymentReceivedAt || tx.paidAt) : next.fullPaymentReceivedAt,
+          nextAction: collectionComplete
+            ? (th ? 'รับชำระค่าแพ็กเกจและค่าบริการครบแล้ว' : 'Package and service-fee VAT invoice are fully paid')
+            : next.nextAction,
+        };
+      }
+    }
+  }
+  return { tracking: next, invoiceUpdates };
+}
+function invoiceSettled(invoice: PaymentInvoice | undefined, payments: PaymentTransaction[]) {
+  if (!invoice || invoice.status === 'cancelled') return false;
+  return invoice.status === 'paid' || invoicePaidAmount(invoice.id, payments) >= Math.max(0, invoice.amount || 0) - 0.01;
+}
+function customerVatAddOnTotal(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  return invoices
+    .filter((invoice) => invoice.trackingId === item.id && invoice.status !== 'cancelled')
+    .filter((invoice) => invoice.installment === 'balance' || invoice.installment === 'full' || isAgentVatServiceInvoice(invoice))
+    .reduce((sum, invoice) => sum + Math.max(0, Number(invoice.vatAmount || 0)), 0);
+}
+function customerReceivableTotal(item: CustomerTracking, invoices: PaymentInvoice[]) {
+  return customerGrandTotal(item, invoices) + customerVatAddOnTotal(item, invoices);
+}
+function paymentSummary(item: CustomerTracking, payments: PaymentTransaction[], invoices: PaymentInvoice[]) {
   const deposit = effectiveStageStatus(item.depositStatus, item.depositDueDate);
   const balance = effectiveStageStatus(item.balanceStatus, item.balanceDueDate);
   const received = sumPayments(paymentsFor(item.id, payments));
-  const grandTotal = Math.max(packageSalesTotal(item), item.grandTotalAmount || 0);
+  const grandTotal = Math.max(packageSalesTotal(item), customerReceivableTotal(item, invoices));
   if (balance === 'paid' && received >= grandTotal - 0.01 && grandTotal > 0) return 'paid';
   if (received >= grandTotal - 0.01 && grandTotal > 0) return 'paid';
   if (deposit === 'overdue' || balance === 'overdue') return 'overdue';
@@ -598,13 +775,14 @@ function paymentSummary(item: CustomerTracking, payments: PaymentTransaction[]) 
   return 'pending';
 }
 
-function getJourneyStage(item: CustomerTracking): JourneyStage {
+export function getJourneyStage(item: CustomerTracking): JourneyStage {
   if (item.status === 'lost') return 'cancelled';
-  if (item.closedAt) return 'closed';
+  if (item.closedAt || item.status === 'completed') return 'closed';
   if (item.feedbackReceivedAt) return 'feedback_received';
   if (item.feedbackRequestedAt) return 'feedback_requested';
   if (item.tripReturnedAt) return 'returned';
   const today = isoToday();
+  if (item.travelEndDate && today > item.travelEndDate) return 'returned';
   if (item.travelStartDate && item.travelEndDate && today >= item.travelStartDate && today <= item.travelEndDate) return 'traveling';
   if (item.readyToTravelAt) return 'ready_to_travel';
   if (item.itinerarySentAt) return 'itinerary_sent';
@@ -624,7 +802,7 @@ function getJourneyStage(item: CustomerTracking): JourneyStage {
   return 'lead';
 }
 
-const stageGroup: Record<JourneyStage, 'sales' | 'booking' | 'visa' | 'travel' | 'after'> = {
+export const stageGroup: Record<JourneyStage, 'sales' | 'booking' | 'visa' | 'travel' | 'after'> = {
   lead: 'sales', quotation_sent: 'sales', booking_confirmed: 'booking', flight_reserved: 'booking', invoice_1_sent: 'booking',
   first_payment_received: 'booking', ticket_sent: 'booking', documents_sent_to_land: 'visa', land_invoice_received: 'visa', invoice_2_ready: 'visa',
   visa_received: 'visa', visa_sent: 'visa', full_payment_received: 'visa', land_payment_pending: 'visa', land_paid: 'visa', itinerary_sent: 'visa', ready_to_travel: 'travel',
@@ -653,26 +831,126 @@ function groupLabel(group: 'all' | 'sales' | 'booking' | 'visa' | 'travel' | 'af
     : { all: 'All', sales: 'Quotation', booking: 'Flight / Payment 1', visa: 'Visa / Payment 2', travel: 'Travel ready', after: 'Post-trip' };
   return labels[group];
 }
-function nextRecommendedAction(item: CustomerTracking, th: boolean) {
+export function stageTagKey(stage: JourneyStage): string {
+  if (stage === 'cancelled') return 'lost';
+  if (stage === 'closed') return 'closed';
+  return stageGroup[stage];
+}
+
+export function nextRecommendedAction(item: CustomerTracking, th: boolean) {
   const stage = getJourneyStage(item);
   const map: Record<JourneyStage, [string, string]> = {
     lead: ['แจ้งราคาแพ็กเกจให้ลูกค้า', 'Send package quotation'], quotation_sent: ['ติดตามการยืนยันวันเดินทางและแพ็กเกจ', 'Follow up booking confirmation'],
     booking_confirmed: ['รับ Passport และรูปถ่ายให้ครบ', 'Collect passport and photo'], flight_reserved: ['ออกและส่ง Invoice 1 ค่าตั๋ว', 'Issue Invoice 1 for airfare'],
-    invoice_1_sent: ['ติดตามชำระค่าตั๋วตาม Deadline', 'Follow up ticket payment'], first_payment_received: ['ส่งตั๋วเครื่องบินให้ลูกค้า', 'Send flight tickets'],
-    ticket_sent: ['ส่ง Passport + รูป + ตั๋วให้ Land', 'Submit passport, photo and ticket to land'], documents_sent_to_land: ['ติดตาม Land Invoice และยอด USD', 'Follow up land invoice and USD amount'],
-    land_invoice_received: ['ออก Invoice 2 ค่าแพ็กเกจคงเหลือ', 'Issue Invoice 2 for package balance'], invoice_2_ready: ['ติดตามวีซ่าจาก Land', 'Follow up visa with land'], visa_received: ['ส่งวีซ่าและ Invoice 2 ให้ลูกค้า', 'Send visa and Invoice 2'],
-    visa_sent: ['ติดตามชำระค่าแพ็กเกจส่วนที่เหลือ', 'Follow up final package payment'], full_payment_received: ['บันทึกอัตราแลกเปลี่ยนและโอนชำระ LAND', 'Record exchange rate and pay land supplier'],
-    land_payment_pending: ['โอนชำระ LAND ตาม Invoice USD', 'Pay land supplier against USD invoice'], land_paid: ['จัดทำและส่ง Itinerary', 'Prepare and send itinerary'],
-    itinerary_sent: ['ตรวจเอกสารทั้งหมดและทำสถานะพร้อมเดินทาง', 'Verify documents and mark ready'], ready_to_travel: ['ติดตามจนถึงวันเดินทาง', 'Monitor until departure'],
-    traveling: ['ดูแลระหว่างเดินทาง', 'Support during trip'], returned: ['ขอ Feedback จากลูกค้า', 'Request customer feedback'],
-    feedback_requested: ['ติดตาม Feedback', 'Follow up feedback'], feedback_received: ['ปิดจบงาน', 'Close the case'], closed: ['ดำเนินการครบแล้ว', 'Workflow complete'], cancelled: ['รายการยกเลิก', 'Cancelled'],
+    invoice_1_sent: ['ติดตามชำระค่าตั๋วตาม Deadline', 'Follow up ticket payment'],     first_payment_received: ['ส่งตั๋วและเอกสารให้ Land', 'Send ticket and documents to land'],
+    ticket_sent: ['ส่งตั๋วและเอกสารให้ Land', 'Send ticket and documents to land'], documents_sent_to_land: ['กรอกยอด Land Invoice (USD)', 'Enter land invoice USD amount'],
+    land_invoice_received: ['ออก Invoice 2 ค่าแพ็กเกจคงเหลือ', 'Issue Invoice 2 for package balance'],     invoice_2_ready: ['ยืนยันได้วีซ่าและส่งให้ลูกค้าแล้ว', 'Confirm visa received and sent to customer'], visa_received: ['ยืนยันได้วีซ่าและส่งให้ลูกค้าแล้ว', 'Confirm visa received and sent to customer'],
+    visa_sent: ['ติดตามชำระค่าแพ็กเกจส่วนที่เหลือ', 'Follow up final package payment'], full_payment_received: ['กรอกเรทแลกเงินแล้วโอน LAND', 'Enter FX rate and pay land supplier'],
+    land_payment_pending: ['กรอกเรทแลกเงินแล้วโอน LAND', 'Enter FX rate and pay land supplier'], land_paid: ['ยืนยันพร้อมเดินทาง', 'Mark ready to travel'],
+    itinerary_sent: ['ยืนยันพร้อมเดินทาง', 'Mark ready to travel'], ready_to_travel: ['รอวันเดินทาง', 'Waiting for departure'],
+    traveling: ['รอวันเดินทางกลับ', 'Waiting for return date'], returned: ['ปิดงาน', 'Close the case'],
+    feedback_requested: ['ปิดงาน', 'Close the case'], feedback_received: ['ปิดงาน', 'Close the case'], closed: ['ดำเนินการครบแล้ว', 'Workflow complete'], cancelled: ['รายการยกเลิก', 'Cancelled'],
   };
   return map[stage][th ? 0 : 1];
+}
+
+type JourneyDetailTab = 'customer' | 'package' | 'ticket' | 'invoices' | 'land' | 'travel';
+type ActiveJourneyStage = Exclude<JourneyStage, 'closed' | 'cancelled'>;
+type MilestoneDateKey = keyof Pick<CustomerTracking,
+  'quotationSentAt' | 'bookingConfirmedAt' | 'flightReservedAt' | 'invoice1SentAt' | 'firstPaymentReceivedAt' | 'ticketSentAt'
+  | 'documentsSentToLandAt' | 'landInvoiceReceivedAt' | 'invoice2PreparedAt' | 'visaReceivedAt' | 'visaSentAt' | 'fullPaymentReceivedAt'
+  | 'landPaidAt' | 'itinerarySentAt' | 'readyToTravelAt' | 'tripReturnedAt' | 'feedbackRequestedAt' | 'feedbackReceivedAt' | 'closedAt'
+>;
+
+type NextStepInput = 'pnr' | 'landUsd' | 'fxRate';
+
+type NextStepMeta = {
+  primaryLabel: { th: string; en: string };
+  markFields?: MilestoneDateKey[];
+  invoice?: InvoiceInstallment;
+  openTab?: JourneyDetailTab;
+  openPayment?: boolean;
+  input?: NextStepInput;
+  savePnr?: boolean;
+  waitOnly?: boolean;
+  guard?: 'canProceedToVisa' | 'landInvoiceUsd' | 'landPayReady';
+};
+
+const LEAN_MANUAL_TOTAL = 7;
+
+const NEXT_STEP_META: Record<ActiveJourneyStage, NextStepMeta> = {
+  lead: { primaryLabel: { th: 'บันทึก PNR', en: 'Save PNR' }, input: 'pnr', savePnr: true },
+  quotation_sent: { primaryLabel: { th: 'บันทึก PNR', en: 'Save PNR' }, input: 'pnr', savePnr: true },
+  booking_confirmed: { primaryLabel: { th: 'บันทึก PNR', en: 'Save PNR' }, input: 'pnr', savePnr: true },
+  flight_reserved: { primaryLabel: { th: 'ออก Invoice 1', en: 'Issue Invoice 1' }, invoice: 'deposit' },
+  invoice_1_sent: { primaryLabel: { th: 'บันทึกรับชำระ', en: 'Record payment' }, openTab: 'invoices', openPayment: true },
+  first_payment_received: { primaryLabel: { th: 'ส่งตั๋วและเอกสารให้ Land แล้ว', en: 'Ticket + docs sent to land' }, markFields: ['ticketSentAt', 'documentsSentToLandAt'], guard: 'canProceedToVisa' },
+  ticket_sent: { primaryLabel: { th: 'ส่งตั๋วและเอกสารให้ Land แล้ว', en: 'Ticket + docs sent to land' }, markFields: ['ticketSentAt', 'documentsSentToLandAt'], guard: 'canProceedToVisa' },
+  documents_sent_to_land: { primaryLabel: { th: 'บันทึกยอด Land', en: 'Save land amount' }, input: 'landUsd' },
+  land_invoice_received: { primaryLabel: { th: 'ออก Invoice 2', en: 'Issue Invoice 2' }, invoice: 'balance', guard: 'landInvoiceUsd' },
+  invoice_2_ready: { primaryLabel: { th: 'ได้วีซ่าและส่งให้ลูกค้าแล้ว', en: 'Visa received & sent' }, markFields: ['visaReceivedAt', 'visaSentAt'] },
+  visa_received: { primaryLabel: { th: 'ได้วีซ่าและส่งให้ลูกค้าแล้ว', en: 'Visa received & sent' }, markFields: ['visaReceivedAt', 'visaSentAt'] },
+  visa_sent: { primaryLabel: { th: 'บันทึกรับชำระ', en: 'Record payment' }, openTab: 'invoices', openPayment: true },
+  full_payment_received: { primaryLabel: { th: 'โอน LAND แล้ว', en: 'Land paid' }, input: 'fxRate', markFields: ['landPaidAt'], guard: 'landPayReady' },
+  land_payment_pending: { primaryLabel: { th: 'โอน LAND แล้ว', en: 'Land paid' }, input: 'fxRate', markFields: ['landPaidAt'], guard: 'landPayReady' },
+  land_paid: { primaryLabel: { th: 'พร้อมเดินทาง', en: 'Ready to travel' }, markFields: ['itinerarySentAt', 'readyToTravelAt'] },
+  itinerary_sent: { primaryLabel: { th: 'พร้อมเดินทาง', en: 'Ready to travel' }, markFields: ['itinerarySentAt', 'readyToTravelAt'] },
+  ready_to_travel: { primaryLabel: { th: '', en: '' }, waitOnly: true },
+  traveling: { primaryLabel: { th: '', en: '' }, waitOnly: true },
+  returned: { primaryLabel: { th: 'ปิดงาน', en: 'Close case' }, markFields: ['closedAt'] },
+  feedback_requested: { primaryLabel: { th: 'ปิดงาน', en: 'Close case' }, markFields: ['closedAt'] },
+  feedback_received: { primaryLabel: { th: 'ปิดงาน', en: 'Close case' }, markFields: ['closedAt'] },
+};
+
+function leanManualProgress(form: CustomerTracking): number {
+  let done = 0;
+  if (form.flightPnr?.trim()) done++;
+  if (form.ticketSentAt && form.documentsSentToLandAt) done++;
+  if (form.landInvoiceAmountUSD > 0) done++;
+  if (form.visaReceivedAt && form.visaSentAt) done++;
+  if (form.landPaidAt) done++;
+  if (form.itinerarySentAt && form.readyToTravelAt) done++;
+  if (form.closedAt || form.status === 'completed') done++;
+  return done;
+}
+
+function resolveNextStepMeta(stage: ActiveJourneyStage, form: CustomerTracking): NextStepMeta {
+  const meta = NEXT_STEP_META[stage];
+  if (stage === 'flight_reserved' && (form.paymentPlan || 'installments') === 'full_payment') {
+    return { primaryLabel: { th: 'ออก Invoice Full Payment', en: 'Issue full payment invoice' }, invoice: 'full' };
+  }
+  return meta;
+}
+
+function nextStepDisabledReason(meta: NextStepMeta, ctx: { canProceedToVisa: boolean; th: boolean; form: CustomerTracking }): string | null {
+  if (meta.guard === 'canProceedToVisa' && !ctx.canProceedToVisa) {
+    return ctx.th ? 'รับชำระค่าตั๋วทุก Invoice ให้ครบก่อน' : 'Collect every ticket invoice first';
+  }
+  if (meta.invoice === 'balance' && !ctx.canProceedToVisa) {
+    return ctx.th ? 'รับชำระค่าตั๋วทุกชุดให้ครบก่อนออก Invoice 2' : 'Collect every ticket invoice before Invoice 2';
+  }
+  if (meta.guard === 'landInvoiceUsd' && !ctx.form.landInvoiceAmountUSD) {
+    return ctx.th ? 'กรอกยอด Land Invoice (USD) ก่อน' : 'Enter land invoice USD amount first';
+  }
+  if (meta.guard === 'landPayReady' && (!(ctx.form.landInvoiceAmountUSD > 0) || !(ctx.form.landExchangeRate > 0))) {
+    return ctx.th ? 'กรอกยอด USD และอัตราแลกเปลี่ยนก่อน' : 'Enter USD amount and FX rate first';
+  }
+  if (meta.input === 'pnr' && !ctx.form.flightPnr?.trim()) {
+    return ctx.th ? 'กรอก PNR ก่อน' : 'Enter PNR first';
+  }
+  if (meta.input === 'landUsd' && !(ctx.form.landInvoiceAmountUSD > 0)) {
+    return ctx.th ? 'กรอกยอด Land Invoice (USD) ก่อน' : 'Enter land invoice USD amount first';
+  }
+  if (meta.input === 'fxRate' && !(ctx.form.landExchangeRate > 0)) {
+    return ctx.th ? 'กรอกอัตราแลกเปลี่ยนก่อน' : 'Enter FX rate first';
+  }
+  return null;
 }
 
 export function CustomerTrackingWorkspace(props: Props) {
   const { language } = useI18n();
   const th = language === 'th';
+  const mode = props.embeddedMode ?? 'full';
   const [editing, setEditing] = useState<CustomerTracking | null>(null);
   const [editingIsNew, setEditingIsNew] = useState(false);
   const [invoicePreview, setInvoicePreview] = useState<{ tracking: CustomerTracking; invoice: PaymentInvoice } | null>(null);
@@ -681,6 +959,21 @@ export function CustomerTrackingWorkspace(props: Props) {
   const [paymentFilter, setPaymentFilter] = useState<'all' | ReturnType<typeof paymentSummary>>('all');
   const [quotationArchiveOpen, setQuotationArchiveOpen] = useState(false);
   const [quotationSearch, setQuotationSearch] = useState('');
+
+  useEffect(() => {
+    if (mode !== 'detail' || !props.detailId) return;
+    if (props.detailId === 'new') {
+      const pendingDraft = readTrackingDraft(NEW_TRACKING_DRAFT_KEY);
+      setEditingIsNew(true);
+      setEditing(pendingDraft ? { ...pendingDraft.data } : newTracking());
+      return;
+    }
+    const item = props.trackings.find((t) => t.id === props.detailId);
+    if (item) {
+      setEditingIsNew(false);
+      setEditing(item);
+    }
+  }, [mode, props.detailId, props.trackings]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -692,7 +985,7 @@ export function CustomerTrackingWorkspace(props: Props) {
       const matchSearch = !q || [item.opportunityName, item.customerName, item.phone, item.email, item.packageName, item.airline, item.flightPnr, item.landSupplier, item.landInvoiceNo, item.landTransferReference, ...(item.travelerAdditions || []).flatMap((entry) => [entry.pnr, entry.passengerNames, entry.airline])]
         .join(' ').toLowerCase().includes(q);
       const matchGroup = groupFilter === 'all' || stageGroup[stage] === groupFilter;
-      const matchPayment = paymentFilter === 'all' || paymentSummary(item, props.payments) === paymentFilter;
+      const matchPayment = paymentFilter === 'all' || paymentSummary(item, props.payments, props.invoices) === paymentFilter;
       return matchSearch && matchGroup && matchPayment;
     });
 
@@ -892,28 +1185,36 @@ export function CustomerTrackingWorkspace(props: Props) {
         : documentData.balanceDueTHB ?? Math.max(0, packageSalesTotal(tracking) - totalTicketPaymentsReceived(tracking, props.invoices, props.payments));
 
     const sequenceNumber = installment === 'balance' ? 2 : 1;
-    const vatEnabled = installment === 'balance' || installment === 'full' ? Boolean(existing?.vatEnabled) : false;
+    const vatAllowed = installment === 'balance' || installment === 'full';
+    const existingAgentVatMode = tracking.channel === 'agent' && vatAllowed ? agentVatModeFromInvoice(existing) : 'none';
+    const vatEnabled = vatAllowed ? (tracking.channel === 'agent' ? existingAgentVatMode === 'total_package' : Boolean(existing?.vatEnabled)) : false;
     const vatRatePercent = Math.max(0, Number(existing?.vatRatePercent ?? props.settings.vatRatePercent ?? 7));
     const ticketComponent = installment === 'full'
       ? Math.min(subtotalAmount, Math.max(0, documentData.ticketBatch?.totalDueTHB ?? tracking.depositAmount ?? 0))
       : 0;
     const packagePortionForVat = installment === 'full' ? Math.max(0, subtotalAmount - ticketComponent) : subtotalAmount;
-    const agentVatBreakdown = tracking.channel === 'agent' && (installment === 'balance' || installment === 'full')
-      ? agentVatPackageBreakdown(props.settings, tracking, packagePortionForVat, null)
+    const agentVatBreakdown = tracking.channel === 'agent' && vatAllowed
+      ? agentVatPackageBreakdown(props.settings, tracking, packagePortionForVat, existing?.documentData || null)
       : null;
-    const vatBaseAmount = agentVatBreakdown ? agentVatBreakdown.vatBaseTHB : packagePortionForVat;
-    if (agentVatBreakdown && vatEnabled) {
+    if (agentVatBreakdown) {
       documentData = {
         ...documentData,
         agentServiceFeePerPersonTHB: agentVatBreakdown.serviceFeePerPerson,
         agentServiceFeePassengerCount: agentVatBreakdown.passengerCount,
         agentServiceFeeTotalTHB: agentVatBreakdown.serviceFeeTotal,
         agentPackageAmountAfterServiceFeeTHB: agentVatBreakdown.packageAmountAfterServiceFee,
-        vatBaseTHB: agentVatBreakdown.vatBaseTHB,
+        agentVatOriginalSubtotalTHB: subtotalAmount,
+        agentVatMode: existingAgentVatMode,
+        agentVatLinkedInvoiceId: existing?.documentData?.agentVatLinkedInvoiceId,
+        vatBaseTHB: existingAgentVatMode === 'total_package' ? packagePortionForVat : existingAgentVatMode === 'service_split' ? agentVatBreakdown.serviceFeeTotal : 0,
       };
     }
+    const invoiceSubtotalAmount = existingAgentVatMode === 'service_split' && agentVatBreakdown
+      ? Math.max(0, subtotalAmount - agentVatBreakdown.serviceFeeTotal)
+      : subtotalAmount;
+    const vatBaseAmount = tracking.channel === 'agent' && vatAllowed ? packagePortionForVat : packagePortionForVat;
     const vatAmount = vatEnabled ? roundMoney(vatBaseAmount * vatRatePercent / 100) : 0;
-    const amount = roundMoney(subtotalAmount + vatAmount);
+    const amount = roundMoney(invoiceSubtotalAmount + vatAmount);
     const preferredAccountType: PaymentAccountType = vatEnabled
       ? 'company'
       : (existing?.paymentAccountType || (installment === 'balance' ? 'owner' : 'company'));
@@ -936,7 +1237,7 @@ export function CustomerTrackingWorkspace(props: Props) {
       documentData,
       issueDate: existing.issueDate || isoToday(),
       dueDate,
-      subtotalAmount,
+      subtotalAmount: invoiceSubtotalAmount,
       vatEnabled,
       vatRatePercent,
       vatAmount,
@@ -947,7 +1248,7 @@ export function CustomerTrackingWorkspace(props: Props) {
     } : {
       id: makeId('inv'),
       trackingId: tracking.id,
-      invoiceNo: makeInvoiceNo(installment, sequenceNumber),
+      invoiceNo: await database.allocateDocNumber('INV'),
       installment,
       sequenceNumber,
       title: defaultTitle,
@@ -956,7 +1257,7 @@ export function CustomerTrackingWorkspace(props: Props) {
       documentData,
       issueDate: isoToday(),
       dueDate,
-      subtotalAmount,
+      subtotalAmount: invoiceSubtotalAmount,
       vatEnabled,
       vatRatePercent,
       vatAmount,
@@ -1018,7 +1319,7 @@ export function CustomerTrackingWorkspace(props: Props) {
     const amount = lines.reduce((sum, x) => sum + x.totalTHB, 0);
     const costAmount = lines.reduce((sum, x) => sum + x.totalCostTHB, 0);
     const invoice: PaymentInvoice = {
-      id: makeId('inv'), trackingId: tracking.id, invoiceNo: makeInvoiceNo('supplemental', sequenceNumber), installment: 'supplemental', sequenceNumber,
+      id: makeId('inv'), trackingId: tracking.id, invoiceNo: await database.allocateDocNumber('INV'), installment: 'supplemental', sequenceNumber,
       title: draft.title.trim() || (th ? 'บริการเพิ่มเติมภายหลัง' : 'Additional services'), lineItems: lines, costAmount,
       issueDate: isoToday(), dueDate: draft.dueDate, subtotalAmount: amount, vatEnabled: false, vatRatePercent: props.settings.vatRatePercent ?? 7, vatAmount: 0, amount, ...paymentAccountSnapshot(props.settings, 'company'), status: 'invoiced', paidAt: '', note: draft.note.trim(), createdAt: now, updatedAt: now,
     };
@@ -1095,7 +1396,7 @@ export function CustomerTrackingWorkspace(props: Props) {
     ].filter((line) => line.totalTHB > 0);
     const documentData = buildInvoiceSnapshot(trackingWithAddition, 'ticket_added', { ticketBatch: buildAddedTicketSnapshot(addition, addedBatchNumber) });
     const invoice: PaymentInvoice = {
-      id: invoiceId, trackingId: tracking.id, invoiceNo: makeAddedTravelerInvoice1No(addedBatchNumber), installment: 'supplemental', sequenceNumber,
+      id: invoiceId, trackingId: tracking.id, invoiceNo: await database.allocateDocNumber('INV'), installment: 'supplemental', sequenceNumber,
       title: th ? `Invoice 1 — ค่าตั๋วผู้เดินทางเพิ่ม ชุดที่ ${addedBatchNumber} (${draft.passengerCount} ท่าน)` : `Invoice 1 — added-traveller tickets, batch ${addedBatchNumber} (${draft.passengerCount} pax)`, lineItems, costAmount: draft.ticketDepositTotal || 0, documentData,
       issueDate: isoToday(), dueDate, subtotalAmount: draft.ticketDepositTotal || 0, vatEnabled: false, vatRatePercent: props.settings.vatRatePercent ?? 7, vatAmount: 0, amount: draft.ticketDepositTotal || 0, ...paymentAccountSnapshot(props.settings, 'company'), status: 'invoiced', paidAt: '',
       note: [
@@ -1182,34 +1483,36 @@ export function CustomerTrackingWorkspace(props: Props) {
     setEditing({ ...draft.data });
   }
 
-  return <div className="tracking-shell journey-shell">
-    <header className="tracking-header">
-      <Brand/>
-      <div className="tracking-header-actions"><LanguageSwitch compact/><button className="ghost-button" onClick={props.onBack}><ArrowLeft/>{th ? 'หน้าคำนวณราคา' : 'Price calculator'}</button>{props.currentUser.role === 'admin' && <button className="ghost-button desktop-only" onClick={props.onOpenAdmin}><Settings2/>{th ? 'หลังบ้าน' : 'Back office'}</button>}<button className="icon-button" onClick={props.onLogout}><LogOut/></button></div>
-    </header>
+  const showList = mode === 'full' || mode === 'list';
+  const showDetailChrome = mode === 'detail';
 
+  return <div className="tracking-shell journey-shell unified-module-view">
     <main className="tracking-main journey-main">
-      <section className="tracking-page-head journey-page-head">
-        <div><span className="eyebrow"><Sparkles/> CUSTOMER JOURNEY</span><h1>{th ? 'ติดตามลูกค้าตั้งแต่เสนอราคา ถึงปิดจบทริป' : 'Track every customer from quotation to trip closure'}</h1><p>{th ? 'เห็นขั้นตอนปัจจุบัน งานถัดไป เอกสาร การชำระเงิน วีซ่า และ Feedback ในหน้าจอเดียว' : 'Manage next actions, documents, payments, visas, travel readiness and feedback in one workspace.'}</p></div>
-        <div className="tracking-head-actions">
-          {pendingNewDraft && <button className="ghost-button tracking-draft-resume" onClick={resumeNewDraft}><FileCheck2/><span>{th ? 'Draft ล่าสุด' : 'Latest draft'}</span><small>{formatDraftTime(pendingNewDraft.savedAt, th)}</small></button>}
-          <button className="ghost-button quotation-archive-trigger" onClick={() => setQuotationArchiveOpen(true)}><FileText/><span>{th ? 'ใบเสนอราคาที่บันทึก' : 'Saved quotations'}</span><b>{props.quotations.filter((q) => q.status !== 'converted' && q.status !== 'lost').length}</b></button>
-          <button className="primary-button tracking-add" onClick={startNewTracking}><Plus/>{th ? 'เพิ่มลูกค้าใหม่' : 'Add customer'}</button>
-        </div>
-      </section>
+      {showList && <div className="module-list-page bo-list-page">
+        <PageHeader
+          title={th ? 'ติดตามลูกค้า' : 'Customer tracking'}
+          subtitle={th ? 'เห็นขั้นตอนปัจจุบัน งานถัดไป เอกสาร การชำระเงิน วีซ่า และ Feedback ในหน้าจอเดียว' : 'Manage next actions, documents, payments, visas, travel readiness and feedback in one workspace.'}
+          actions={(
+            <>
+              {pendingNewDraft && <button type="button" className="ghost-button tracking-draft-resume" onClick={resumeNewDraft}><FileCheck2/><span>{th ? 'Draft ล่าสุด' : 'Latest draft'}</span><small>{formatDraftTime(pendingNewDraft.savedAt, th)}</small></button>}
+              <button type="button" className="ghost-button quotation-archive-trigger" onClick={() => setQuotationArchiveOpen(true)}><FileText/><span>{th ? 'ใบเสนอราคาที่บันทึก' : 'Saved quotations'}</span><b>{props.quotations.filter((q) => q.status !== 'converted' && q.status !== 'lost').length}</b></button>
+              <button type="button" className="primary-button tracking-add" onClick={startNewTracking}><Plus/>{th ? 'เพิ่มลูกค้าใหม่' : 'Add customer'}</button>
+            </>
+          )}
+        />
 
-      <section className="tracking-stats journey-stats">
+      {showList && <section className="tracking-stats journey-stats">
         <TrackingStat icon={<Users/>} label={th ? 'ลูกค้าทั้งหมด' : 'All customers'} value={totals.all.toString()} note={th ? 'รายการในระบบ' : 'records'}/>
         <TrackingStat icon={<ClipboardCheck/>} label={th ? 'กำลังดำเนินการ' : 'Active journeys'} value={totals.action.toString()} note={th ? 'ยังไม่ปิดงาน' : 'open workflows'}/>
         <TrackingStat icon={<Hourglass/>} label={th ? 'งานครบกำหนดวันนี้' : 'Action due'} value={totals.due.toString()} note={th ? 'ต้องติดตามทันที' : 'need attention'}/>
         <TrackingStat icon={<Plane/>} label={th ? 'พร้อม / กำลังเดินทาง' : 'Ready / traveling'} value={totals.ready.toString()} note={th ? 'เตรียมออกเดินทาง' : 'travel stage'}/>
-      </section>
+      </section>}
 
-      <section className="journey-filter-tabs">
+      {showList && <section className="journey-filter-tabs">
         {(['all', 'sales', 'booking', 'visa', 'travel', 'after'] as const).map((group) => <button key={group} className={groupFilter === group ? 'active' : ''} onClick={() => setGroupFilter(group)}>{groupLabel(group, th)}</button>)}
-      </section>
+      </section>}
 
-      <section className="tracking-panel journey-panel">
+      {showList && <section className="tracking-panel journey-panel">
         <div className="tracking-toolbar journey-toolbar">
           <div className="tracking-search"><Search/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={th ? 'ค้นหาลูกค้า PNR โปรแกรม Land หรือเบอร์โทร...' : 'Search customer, PNR, package, land or phone...'}/></div>
           <label className="tracking-filter"><Filter/><select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as typeof paymentFilter)}><option value="all">{th ? 'ทุกสถานะชำระเงิน' : 'All payment status'}</option><option value="pending">{th ? 'ยังไม่ออก Invoice' : 'Not invoiced'}</option><option value="invoiced">{th ? 'ออก Invoice แล้ว' : 'Invoiced'}</option><option value="partial">{th ? 'ชำระบางส่วน' : 'Partially paid'}</option><option value="paid">{th ? 'ชำระครบ' : 'Paid'}</option><option value="overdue">{th ? 'เกินกำหนด' : 'Overdue'}</option></select><ChevronDown/></label>
@@ -1219,7 +1522,7 @@ export function CustomerTrackingWorkspace(props: Props) {
           const stage = getJourneyStage(item);
           const itemPayments = paymentsFor(item.id, props.payments);
           const paid = sumPayments(itemPayments);
-          const remaining = Math.max(0, customerGrandTotal(item, props.invoices) - paid);
+          const remaining = Math.max(0, customerReceivableTotal(item, props.invoices) - paid);
           const recommended = item.nextAction || nextRecommendedAction(item, th);
           const localDraft = readTrackingDraft(trackingDraftKey(item.id, false));
           const hasNewerLocalDraft = Boolean(localDraft && new Date(localDraft.savedAt).getTime() > new Date(item.updatedAt || item.createdAt || 0).getTime());
@@ -1227,11 +1530,12 @@ export function CustomerTrackingWorkspace(props: Props) {
             <div className="journey-card-customer"><span>{item.customerName?.[0]?.toUpperCase() || '?'}</span><div><b>{item.opportunityName || item.customerName || '-'}</b><small>{item.customerName}{item.leadSource ? ` · ${item.leadSource}` : ''}</small><em>{item.phone || item.email || '-'}</em></div></div>
             <div className="journey-card-stage"><div className="journey-stage-line"><span className={`journey-stage stage-${stageGroup[stage]}`}>{stageLabel(stage, th)}</span>{hasNewerLocalDraft && <span className="local-draft-badge"><FileCheck2/>Draft</span>}</div><small>{item.packageName || '-'} · {item.passengerCount + addedPassengerCount(item)} {th ? 'ท่าน' : 'pax'}</small><em>{item.travelStartDate ? formatDate(item.travelStartDate, language) : th ? 'ยังไม่กำหนดวันเดินทาง' : 'Travel date not set'}</em></div>
             <div className="journey-card-action"><small>{th ? 'งานถัดไป' : 'Next action'}</small><b>{recommended}</b><em className={item.nextActionDueDate && item.nextActionDueDate <= isoToday() ? 'overdue' : ''}>{item.nextActionDueDate ? `${th ? 'ภายใน' : 'Due'} ${formatDate(item.nextActionDueDate, language)}` : th ? 'ยังไม่กำหนด Deadline' : 'No deadline'}</em></div>
-            <div className="journey-card-payment"><small>{th ? `แพ็กเกจรวม ${totalPackagePassengerCount(item)} ท่าน` : `Package total — ${totalPackagePassengerCount(item)} pax`}</small><b>{formatTHB(packageSalesTotal(item), language)}</b><em>{th ? `รับแล้ว ${formatTHB(paid, language)} · คงเหลือ ${formatTHB(remaining, language)}` : `Paid ${formatTHB(paid, language)} · Balance ${formatTHB(remaining, language)}`}</em><PaymentBadge status={paymentSummary(item, props.payments)} th={th}/></div>
+            <div className="journey-card-payment"><small>{th ? `แพ็กเกจรวม ${totalPackagePassengerCount(item)} ท่าน` : `Package total — ${totalPackagePassengerCount(item)} pax`}</small><b>{formatTHB(packageSalesTotal(item), language)}</b><em>{th ? `รับแล้ว ${formatTHB(paid, language)} · คงเหลือ ${formatTHB(remaining, language)}` : `Paid ${formatTHB(paid, language)} · Balance ${formatTHB(remaining, language)}`}</em><PaymentBadge status={paymentSummary(item, props.payments, props.invoices)} th={th}/></div>
             <div className="journey-card-actions"><button className="invoice-one" onClick={() => issueInvoice(item, 'deposit')}><ReceiptText/><span>{th ? 'Invoice 1' : 'Invoice 1'}</span></button><button className="invoice-two" onClick={() => issueInvoice(item, 'balance')}><FileText/><span>{th ? 'Invoice 2' : 'Invoice 2'}</span></button><button onClick={() => { setEditingIsNew(false); setEditing(item); }} title={th ? 'เปิดรายละเอียด' : 'Open details'}><Edit3/></button><button className="danger" onClick={() => window.confirm(th ? 'ยืนยันการลบรายการนี้?' : 'Delete this record?') && props.onDeleteTracking(item.id)}><Trash2/></button></div>
           </article>;
         })}</div> : <EmptyState title={th ? 'ยังไม่มีข้อมูลที่ตรงกับตัวกรอง' : 'No matching records'} detail={th ? 'กด “เพิ่มลูกค้าใหม่” เพื่อเริ่มติดตามกระบวนการ' : 'Add a customer to start the workflow.'}/>} 
-      </section>
+      </section>}
+      </div>}
     </main>
 
     <Modal open={quotationArchiveOpen} title={th ? 'ประวัติใบเสนอราคา' : 'Quotation archive'} onClose={() => setQuotationArchiveOpen(false)} wide>
@@ -1263,13 +1567,14 @@ export function CustomerTrackingWorkspace(props: Props) {
       </div>
     </Modal>
 
-    <TrackingEditor open={Boolean(editing)} item={editing} isNewRecord={editingIsNew} settings={props.settings} packages={props.packages} users={props.users} currentUser={props.currentUser}
-      payments={editing ? paymentsFor(editing.id, props.payments) : []} invoices={editing ? supplementalInvoicesFor(editing.id, props.invoices) : []}
-      onClose={() => { setEditing(null); setEditingIsNew(false); }} onSave={async (item) => { await props.onSaveTracking(item); setEditingIsNew(false); setEditing(item); }}
+    <TrackingEditor open={Boolean(editing)} asPage={mode === 'detail'} item={editing} isNewRecord={editingIsNew} settings={props.settings} packages={props.packages} users={props.users} currentUser={props.currentUser}
+      payments={editing ? paymentsFor(editing.id, props.payments) : []} invoices={editing ? props.invoices.filter((inv) => inv.trackingId === editing.id) : []}
+      onClose={() => { setEditing(null); setEditingIsNew(false); if (mode === 'detail') props.onBack(); }} onSave={async (item) => { await props.onSaveTracking(item); setEditingIsNew(false); setEditing(item); }}
       onSavePayment={props.onSavePayment} onDeletePayment={props.onDeletePayment} onSaveInvoice={props.onSaveInvoice} onIssueInvoice={issueInvoice}
       onCreateSupplementalInvoice={createSupplementalInvoice} onCreateTravelerAddition={createTravelerAdditionInvoice} onOpenInvoice={openExistingInvoice} onDeleteSupplementalInvoice={deleteSupplementalInvoice}
-      onUploadPaymentSlip={props.onUploadPaymentSlip} onGetPaymentSlipUrl={props.onGetPaymentSlipUrl} onDeletePaymentSlip={props.onDeletePaymentSlip}/>
-    <InvoicePreview value={invoicePreview} settings={props.settings} language={language} payments={invoicePreview ? paymentsFor(invoicePreview.tracking.id, props.payments) : []} invoices={invoicePreview ? props.invoices.filter((invoice) => invoice.trackingId === invoicePreview.tracking.id) : []} onClose={() => setInvoicePreview(null)} onSaveInvoice={props.onSaveInvoice} onSaveTracking={props.onSaveTracking}/>
+      onUploadPaymentSlip={props.onUploadPaymentSlip} onGetPaymentSlipUrl={props.onGetPaymentSlipUrl} onDeletePaymentSlip={props.onDeletePaymentSlip}
+      onOpenInvoiceDoc={props.onOpenInvoiceDoc} onOpenPaymentDoc={props.onOpenPaymentDoc}/>
+    <InvoicePreview value={invoicePreview} settings={props.settings} language={language} payments={invoicePreview ? paymentsFor(invoicePreview.tracking.id, props.payments) : []} invoices={invoicePreview ? props.invoices.filter((invoice) => invoice.trackingId === invoicePreview.tracking.id) : []} onClose={() => setInvoicePreview(null)} onOpenInvoice={(invoice) => setInvoicePreview((current) => current ? { tracking: current.tracking, invoice } : null)} onSaveInvoice={props.onSaveInvoice} onSaveTracking={props.onSaveTracking}/>
   </div>;
 }
 
@@ -1277,24 +1582,21 @@ function TrackingStat({ icon, label, value, note }: { icon: React.ReactNode; lab
   return <div className="tracking-stat"><span>{icon}</span><div><small>{label}</small><strong>{value}</strong><em>{note}</em></div></div>;
 }
 function trackingStatusLabel(status: TrackingStatus, th: boolean) {
-  const labels = th ? { new: 'ลูกค้าใหม่', following: 'กำลังติดตาม', quote_sent: 'ส่งใบเสนอราคาแล้ว', won: 'ยืนยันจอง', lost: 'ยกเลิก / Lost', completed: 'ปิดจบงาน' } : { new: 'New lead', following: 'Following', quote_sent: 'Quote sent', won: 'Booking confirmed', lost: 'Lost / cancelled', completed: 'Closed' };
-  return labels[status];
+  return statusLabel(status, th);
 }
 function paymentStatusLabel(status: PaymentStageStatus, th: boolean) {
-  const labels = th ? { pending: 'รอดำเนินการ', invoiced: 'ออก Invoice แล้ว', paid: 'ชำระแล้ว', overdue: 'เกินกำหนด', cancelled: 'ยกเลิก' } : { pending: 'Pending', invoiced: 'Invoiced', paid: 'Paid', overdue: 'Overdue', cancelled: 'Cancelled' };
-  return labels[status];
+  return statusLabel(status, th);
 }
 function PaymentBadge({ status, th }: { status: ReturnType<typeof paymentSummary>; th: boolean }) {
   const labels = th ? { pending: 'ยังไม่ออก Invoice', invoiced: 'ออก Invoice แล้ว', partial: 'ชำระบางส่วน', paid: 'ชำระครบ', overdue: 'เกินกำหนด' } : { pending: 'Not invoiced', invoiced: 'Invoiced', partial: 'Partially paid', paid: 'Paid', overdue: 'Overdue' };
   return <span className={`tracking-badge pay-${status}`}>{labels[status]}</span>;
 }
-function paymentTypeLabel(type: PaymentTransactionType, th: boolean) {
-  const labels = th ? { ticket_deposit: 'ค่าตั๋ว / งวดที่ 1', package_balance: 'ค่าแพ็กเกจ / งวดที่ 2', full_payment: 'ชำระเต็มจำนวนครั้งเดียว', supplemental: 'Invoice เพิ่มเติม (งวด 3+)', refund: 'คืนเงิน', other: 'อื่น ๆ' } : { ticket_deposit: 'Ticket payment / Stage 1', package_balance: 'Package payment / Stage 2', full_payment: 'One-time full payment', supplemental: 'Supplemental invoice (3+)', refund: 'Refund', other: 'Other' };
-  return labels[type];
+export function paymentTypeLabel(type: PaymentTransactionType, th: boolean) {
+  return statusLabel(type, th);
 }
 
-function TrackingEditor({ open, item, isNewRecord, settings, packages, users, currentUser, payments, invoices, onClose, onSave, onSavePayment, onDeletePayment, onSaveInvoice, onIssueInvoice, onCreateSupplementalInvoice, onCreateTravelerAddition, onOpenInvoice, onDeleteSupplementalInvoice, onUploadPaymentSlip, onGetPaymentSlipUrl, onDeletePaymentSlip }: {
-  open: boolean; item: CustomerTracking | null; isNewRecord: boolean; settings: GlobalSettings; packages: TourPackage[]; users: User[]; currentUser: User; payments: PaymentTransaction[]; invoices: PaymentInvoice[];
+function TrackingEditor({ open, asPage = false, item, isNewRecord, settings, packages, users, currentUser, payments, invoices, onClose, onSave, onSavePayment, onDeletePayment, onSaveInvoice, onIssueInvoice, onCreateSupplementalInvoice, onCreateTravelerAddition, onOpenInvoice, onDeleteSupplementalInvoice, onUploadPaymentSlip, onGetPaymentSlipUrl, onDeletePaymentSlip, onOpenInvoiceDoc, onOpenPaymentDoc }: {
+  open: boolean; asPage?: boolean; item: CustomerTracking | null; isNewRecord: boolean; settings: GlobalSettings; packages: TourPackage[]; users: User[]; currentUser: User; payments: PaymentTransaction[]; invoices: PaymentInvoice[];
   onClose: () => void; onSave: (item: CustomerTracking) => Promise<void>; onSavePayment: (item: PaymentTransaction) => Promise<void>; onDeletePayment: (id: string) => Promise<void>; onSaveInvoice: (item: PaymentInvoice) => Promise<void>;
   onIssueInvoice: (tracking: CustomerTracking, installment: InvoiceInstallment) => Promise<void>;
   onCreateSupplementalInvoice: (tracking: CustomerTracking, draft: { title: string; dueDate: string; note: string; lineItems: SupplementalInvoiceLine[] }) => Promise<void>;
@@ -1304,6 +1606,8 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
   onUploadPaymentSlip: (trackingId: string, paymentId: string, file: File) => Promise<{ path: string; fileName: string; mimeType: string; size: number }>;
   onGetPaymentSlipUrl: (path: string) => Promise<string>;
   onDeletePaymentSlip: (path: string) => Promise<void>;
+  onOpenInvoiceDoc?: (id: string) => void;
+  onOpenPaymentDoc?: (id: string) => void;
 }) {
   const { language } = useI18n();
   const th = language === 'th';
@@ -1319,7 +1623,8 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
   const [ticketChangeDueDate, setTicketChangeDueDate] = useState('');
   const [ticketChangeBusy, setTicketChangeBusy] = useState(false);
   const [ticketChangePanelOpen, setTicketChangePanelOpen] = useState(false);
-  const [supplementalPanelOpen, setSupplementalPanelOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<JourneyDetailTab>('customer');
+  const [paymentFormOpen, setPaymentFormOpen] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState<string>('');
   const [slipInputKey, setSlipInputKey] = useState(0);
   const [draftSavedAt, setDraftSavedAt] = useState('');
@@ -1339,7 +1644,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     setDraftSavedAt(savedDraft?.savedAt || '');
     setDraftRestored(shouldRestore);
     setHasUnsavedChanges(Boolean(initialForm && baselineRef.current && JSON.stringify(initialForm) !== baselineRef.current));
-    setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setSupplementalPanelOpen(false); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); setTravelerPanelOpen(false); setTicketChangeDraft(newTicketChangeDraft(item)); setTicketChangeDueDate(''); setTicketChangePanelOpen(false); }, [item, isNewRecord]);
+    setSupplementalDraft({ title: '', dueDate: '', note: '', lineItems: [newSupplementalLine()] }); setActiveTab('customer'); setTravelerDraft(newTravelerAdditionDraft(item)); setTravelerDueDate(''); setTravelerPanelOpen(false); setTicketChangeDraft(newTicketChangeDraft(item)); setTicketChangeDueDate(''); setTicketChangePanelOpen(false); }, [item, isNewRecord]);
   React.useEffect(() => {
     if (!open || !form) return;
     const serialized = JSON.stringify(form);
@@ -1674,6 +1979,61 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     setForm(next);
     await onSave({ ...next, updatedAt: new Date().toISOString() });
   }
+  async function markMany(keys: MilestoneDateKey[]) {
+    const today = isoToday();
+    let next = { ...currentForm } as CustomerTracking;
+    for (const key of keys) next = { ...next, [key]: today };
+    if (keys.includes('landPaidAt')) {
+      const landPayment = next.landInvoiceAmountUSD > 0 && next.landExchangeRate > 0
+        ? Math.max(0, next.landInvoiceAmountUSD * next.landExchangeRate + Math.max(0, next.landTransferFeeTHB || 0))
+        : Math.max(0, next.landPayment || 0);
+      const supplementalInvoiceTotal = customerSupplementalSalesTotal(next, invoices);
+      const supplementalCostTotal = customerSupplementalCostTotal(next, invoices);
+      next = { ...next, landPayment, supplementalInvoiceTotal, supplementalCostTotal, grandTotalAmount: customerGrandTotal(next, invoices), profitAmount: landPayment > 0 ? realizedGrossProfit(next, invoices, landPayment) : 0 };
+    }
+    if (keys.includes('closedAt')) next = { ...next, status: 'completed' };
+    setForm(next);
+    await onSave({ ...next, updatedAt: new Date().toISOString() });
+  }
+  async function savePnrStep() {
+    const pnr = currentForm.flightPnr?.trim();
+    if (!pnr) return;
+    const next = { ...currentForm, flightPnr: pnr, flightReservedAt: currentForm.flightReservedAt || isoToday() };
+    setForm(next);
+    await onSave({ ...next, updatedAt: new Date().toISOString() });
+  }
+  async function saveLandUsdStep() {
+    if (!(currentForm.landInvoiceAmountUSD > 0)) return;
+    const next = { ...currentForm, landInvoiceReceivedAt: currentForm.landInvoiceReceivedAt || isoToday() };
+    setForm(next);
+    await onSave({ ...next, updatedAt: new Date().toISOString() });
+  }
+  async function runNextStepAction() {
+    if (currentStage === 'closed' || currentStage === 'cancelled') return;
+    const meta = resolveNextStepMeta(currentStage, currentForm);
+    if (meta.waitOnly) return;
+    if (meta.openTab) setActiveTab(meta.openTab);
+    if (meta.openPayment) setPaymentFormOpen(true);
+    if (meta.invoice) {
+      await onIssueInvoice(normalizeBeforeSave(), meta.invoice);
+      return;
+    }
+    if (meta.savePnr) {
+      await savePnrStep();
+      return;
+    }
+    if (meta.input === 'landUsd') {
+      await saveLandUsdStep();
+      return;
+    }
+    if (meta.markFields?.length) await markMany(meta.markFields);
+  }
+  const nextStepMeta = (currentStage === 'closed' || currentStage === 'cancelled')
+    ? null
+    : resolveNextStepMeta(currentStage, currentForm);
+  const nextStepBlocked = nextStepMeta
+    ? nextStepDisabledReason(nextStepMeta, { canProceedToVisa, th, form: currentForm })
+    : null;
   function validatePaymentSlipFile(file: File): string {
     const allowed = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'];
     if (!allowed.includes(file.type)) return th ? 'รองรับเฉพาะ PNG, JPG, WEBP หรือ PDF' : 'Only PNG, JPG, WEBP or PDF files are supported.';
@@ -1700,11 +2060,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
       const transaction: PaymentTransaction = {
         id: paymentId,
         trackingId: currentForm.id,
-        invoiceId: paymentDraft.type === 'package_balance'
-          ? (invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'balance' && invoice.status !== 'cancelled')?.id || '')
-          : paymentDraft.type === 'full_payment'
-            ? (invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'full' && invoice.status !== 'cancelled')?.id || '')
-            : ['supplemental', 'ticket_deposit'].includes(paymentDraft.type) ? paymentDraft.invoiceId : '',
+        invoiceId: resolvePaymentInvoiceId(currentForm, invoices, paymentDraft.type, paymentDraft.invoiceId),
         type: paymentDraft.type,
         amount: paymentDraft.amount,
         paidAt: paymentDraft.paidAt,
@@ -1718,78 +2074,8 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         updatedAt: now,
       };
       await onSavePayment(transaction);
-      let next = currentForm;
-      if (paymentDraft.type === 'ticket_deposit') {
-        if (paymentDraft.invoiceId) {
-          const targetInvoice = invoices.find((invoice) => invoice.id === paymentDraft.invoiceId);
-          if (targetInvoice) {
-            const previousPaid = invoicePaidAmount(targetInvoice.id, payments);
-            const fullyPaid = previousPaid + paymentDraft.amount >= targetInvoice.amount - 0.01;
-            const updatedInvoice = { ...targetInvoice, status: fullyPaid ? 'paid' as const : 'invoiced' as const, paidAt: fullyPaid ? paymentDraft.paidAt : targetInvoice.paidAt, updatedAt: now };
-            await onSaveInvoice(updatedInvoice);
-            const projectedInvoices = invoices.map((invoice) => invoice.id === updatedInvoice.id ? updatedInvoice : invoice);
-            const projectedPayments = [...payments, transaction];
-            const allPaid = allTicketPaymentsReceived(next, projectedInvoices, projectedPayments);
-            next = { ...next, nextAction: allPaid
-              ? (th ? 'Invoice 1 ค่าตั๋วครบทุกชุดแล้ว — ออกตั๋วและส่งเอกสารผู้เดินทางทั้งหมดให้ Land เพื่อยื่นวีซ่า' : 'All Invoice 1 ticket payments are complete — issue tickets and submit every traveller to land for visa processing')
-              : (th ? 'ติดตามชำระ Invoice 1 ของผู้เดินทางเพิ่มให้ครบก่อนยื่นวีซ่า' : 'Collect all added-traveller Invoice 1 payments before visa submission'), nextActionDueDate: allPaid ? '' : next.nextActionDueDate };
-          }
-        } else {
-          const receivedAfter = paidTicket + paymentDraft.amount;
-          const fullyPaid = receivedAfter >= deposit - 0.01;
-          next = { ...next, depositStatus: fullyPaid ? 'paid' : (next.depositStatus === 'pending' ? 'invoiced' : next.depositStatus), firstPaymentReceivedAt: fullyPaid ? (next.firstPaymentReceivedAt || paymentDraft.paidAt) : next.firstPaymentReceivedAt };
-        }
-      }
-      if (paymentDraft.type === 'package_balance') {
-        const balanceInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'balance' && invoice.status !== 'cancelled');
-        const previousBalancePaid = balanceInvoice ? invoicePaidAmount(balanceInvoice.id, payments) : paidPackage;
-        const packageReceivedAfter = previousBalancePaid + paymentDraft.amount;
-        const packageDue = balanceInvoice?.amount ?? Math.max(0, packageSalesTotal(currentForm) - totalTicketPaymentsReceived(currentForm, invoices, payments));
-        const fullyPaid = packageReceivedAfter >= packageDue - 0.01;
-        if (balanceInvoice) await onSaveInvoice({ ...balanceInvoice, status: fullyPaid ? 'paid' : 'invoiced', paidAt: fullyPaid ? paymentDraft.paidAt : balanceInvoice.paidAt, updatedAt: now });
-        next = { ...next, balanceStatus: fullyPaid ? 'paid' : (next.balanceStatus === 'pending' ? 'invoiced' : next.balanceStatus), fullPaymentReceivedAt: fullyPaid ? (next.fullPaymentReceivedAt || paymentDraft.paidAt) : next.fullPaymentReceivedAt };
-      }
-      if (paymentDraft.type === 'full_payment') {
-        const fullInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'full' && invoice.status !== 'cancelled');
-        if (fullInvoice) {
-          const previousPaid = invoicePaidAmount(fullInvoice.id, payments);
-          const fullyPaid = previousPaid + paymentDraft.amount >= fullInvoice.amount - 0.01;
-          await onSaveInvoice({ ...fullInvoice, status: fullyPaid ? 'paid' : 'invoiced', paidAt: fullyPaid ? paymentDraft.paidAt : fullInvoice.paidAt, updatedAt: now });
-          next = {
-            ...next,
-            paymentPlan: 'full_payment',
-            depositStatus: fullyPaid ? 'paid' : 'invoiced',
-            balanceStatus: fullyPaid ? 'paid' : 'invoiced',
-            firstPaymentReceivedAt: fullyPaid ? (next.firstPaymentReceivedAt || paymentDraft.paidAt) : next.firstPaymentReceivedAt,
-            fullPaymentReceivedAt: fullyPaid ? (next.fullPaymentReceivedAt || paymentDraft.paidAt) : next.fullPaymentReceivedAt,
-            nextAction: fullyPaid
-              ? (th ? 'รับชำระ Full Payment ครบแล้ว — ออกตั๋วและส่งเอกสารให้ Land ยื่นวีซ่า' : 'Full payment received — issue tickets and submit documents to land for visa processing')
-              : next.nextAction,
-          };
-        }
-      }
-      if (paymentDraft.type === 'supplemental' && paymentDraft.invoiceId) {
-        const targetInvoice = generalSupplementalInvoices(currentForm, invoices).find((x) => x.id === paymentDraft.invoiceId);
-        if (targetInvoice) {
-          const previousPaid = invoicePaidAmount(targetInvoice.id, payments);
-          const fullyPaid = previousPaid + paymentDraft.amount >= targetInvoice.amount - 0.01;
-          const updatedInvoice = { ...targetInvoice, status: fullyPaid ? 'paid' as const : 'invoiced' as const, paidAt: fullyPaid ? paymentDraft.paidAt : targetInvoice.paidAt, updatedAt: now };
-          await onSaveInvoice(updatedInvoice);
-          const isAddedTravelerTicket = activeTravelerAdditions(currentForm).some((entry) => entry.invoiceId === targetInvoice.id);
-          if (isAddedTravelerTicket) {
-            const projectedInvoices = invoices.map((invoice) => invoice.id === updatedInvoice.id ? updatedInvoice : invoice);
-            const projectedPayments = [...payments, transaction];
-            const allPaid = allTicketPaymentsReceived(next, projectedInvoices, projectedPayments);
-            next = {
-              ...next,
-              nextAction: allPaid
-                ? (th ? 'ค่าตั๋วผู้เดินทางทุกชุดชำระครบแล้ว — ส่ง Passport + รูป + ตั๋วทั้งหมดให้ Land เพื่อยื่นวีซ่า' : 'All ticket invoices are paid — submit every passport, photo and ticket to land for visa processing')
-                : (th ? 'ติดตามชำระค่าตั๋วของผู้เดินทางเพิ่มให้ครบก่อนยื่นวีซ่า' : 'Collect all added-traveller ticket payments before visa submission'),
-              nextActionDueDate: allPaid ? '' : next.nextActionDueDate,
-            };
-          }
-        }
-      }
+      const { tracking: next, invoiceUpdates } = applyPaymentToBooking(currentForm, invoices, payments, transaction, th);
+      for (const updatedInvoice of invoiceUpdates) await onSaveInvoice(updatedInvoice);
       setForm(next);
       await onSave({ ...next, updatedAt: now });
       setPaymentDraft({ type: (next.paymentPlan || 'installments') === 'full_payment' ? 'full_payment' : 'ticket_deposit', invoiceId: '', amount: 0, paidAt: isoToday(), reference: '', note: '', slipFile: null });
@@ -1935,8 +2221,10 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
   const combinedAirportTaxTotal = Math.max(0, form.airportTaxAmount || 0) + addedTravelerAirportTaxTotal(form);
   const combinedTicketAndTaxTotal = combinedAirfareTotal + combinedAirportTaxTotal;
   const grandTotal = combinedPackageTotal + generalSupplementalRevenue;
+  const vatAddOnTotal = customerVatAddOnTotal(form, invoices);
+  const receivableTotal = grandTotal + vatAddOnTotal;
   const supplementalNonTicketCosts = supplementalNonTicketCostTotal(form, invoices);
-  const balance = Math.max(0, grandTotal - totalPaid);
+  const balance = Math.max(0, receivableTotal - totalPaid);
   const availablePaymentTypes: PaymentTransactionType[] = (form.paymentPlan || 'installments') === 'full_payment'
     ? ['full_payment', 'supplemental', 'refund', 'other']
     : paymentTypes.filter((type) => type !== 'full_payment');
@@ -1956,34 +2244,65 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     additionalItemsTotal: form.additionalItemsTotal,
   }) : null;
 
-  return <Modal open={open} title={th ? 'Customer Journey — รายละเอียดและขั้นตอนดำเนินงาน' : 'Customer Journey — workflow details'} onClose={requestClose} wide closeOnBackdrop={false} closeOnEscape={false}>
-    <div className={`tracking-draft-status ${hasUnsavedChanges || draftRestored ? 'active' : ''}`}>
+  const currentGroup = stageGroup[currentStage];
+  const stageStepOrder: Record<'sales' | 'booking' | 'visa' | 'travel' | 'after', number> = { sales: 0, booking: 1, visa: 2, travel: 3, after: 4 };
+  const currentStepIdx = stageStepOrder[currentGroup];
+  const detailTabs: { id: JourneyDetailTab; label: string }[] = [
+    { id: 'customer', label: th ? 'ลูกค้า' : 'Customer' },
+    { id: 'package', label: th ? 'แพ็กเกจและราคา' : 'Package & pricing' },
+    { id: 'ticket', label: th ? 'ตั๋วและวีซ่า' : 'Tickets & visa' },
+    { id: 'invoices', label: th ? 'ใบแจ้งหนี้และรับชำระ' : 'Invoices & payments' },
+    { id: 'land', label: th ? 'Land และกำไร' : 'Land & profit' },
+    { id: 'travel', label: th ? 'เดินทางและปิดงาน' : 'Travel & close' },
+  ];
+
+  const tabBar = (
+    <div className={asPage ? 'bo-tabs' : 'journey-detail-tabs'} role="tablist">
+      {detailTabs.map((tab) => (
+        <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>
+      ))}
+    </div>
+  );
+
+  const editorInner = <>
+    {!asPage && <div className={`tracking-draft-status ${hasUnsavedChanges || draftRestored ? 'active' : ''}`}>
       <div className="tracking-draft-status-icon"><FileCheck2/></div>
       <div className="tracking-draft-status-copy">
         <b>{hasUnsavedChanges ? (th ? 'กำลังบันทึก Draft อัตโนมัติ' : 'Auto-saving draft') : draftRestored ? (th ? 'กู้ Draft ล่าสุดกลับมาแล้ว' : 'Latest draft restored') : (th ? 'Draft พร้อมใช้งาน' : 'Draft protection ready')}</b>
         <span>{draftSavedAt ? `${th ? 'บันทึกล่าสุด' : 'Last saved'} ${formatDraftTime(draftSavedAt, th)}` : (th ? 'ข้อมูลที่แก้ไขจะถูกเก็บอัตโนมัติใน Browser เครื่องนี้' : 'Changes are automatically kept in this browser')}</span>
       </div>
       <button type="button" className="ghost-button tracking-save-draft" onClick={saveDraftNow}><FileText/>{th ? 'บันทึก Draft ตอนนี้' : 'Save draft now'}</button>
-    </div>
+    </div>}
     <div className="journey-editor">
-      <div className="journey-editor-summary"><div><span>{th ? 'สถานะปัจจุบัน' : 'Current stage'}</span><strong>{stageLabel(currentStage, th)}</strong><small>{form.opportunityName || form.customerName || '-'}</small></div><div><span>{th ? 'งานถัดไป' : 'Next action'}</span><strong>{form.nextAction || nextRecommendedAction(form, th)}</strong><small>{form.nextActionDueDate ? formatDate(form.nextActionDueDate, language) : th ? 'ยังไม่กำหนด Deadline' : 'No deadline'}</small></div><div><span>{th ? 'ยอดรับชำระ / คงเหลือ' : 'Paid / remaining'}</span><strong>{formatTHB(totalPaid, language)} / {formatTHB(Math.max(0, grandTotal - totalPaid), language)}</strong><small>{form.passengerCount + addedPassengerCount(form)} {th ? 'ท่านรวม' : 'total pax'}</small></div></div>
+      {!asPage && <div className="journey-editor-summary"><div><span>{th ? 'สถานะปัจจุบัน' : 'Current stage'}</span><strong>{stageLabel(currentStage, th)}</strong><small>{form.opportunityName || form.customerName || '-'}</small></div><div><span>{th ? 'งานถัดไป' : 'Next action'}</span><strong>{form.nextAction || nextRecommendedAction(form, th)}</strong><small>{form.nextActionDueDate ? formatDate(form.nextActionDueDate, language) : th ? 'ยังไม่กำหนด Deadline' : 'No deadline'}</small></div><div><span>{th ? 'ยอดรับชำระ / คงเหลือ' : 'Paid / remaining'}</span><strong>{formatTHB(totalPaid, language)} / {formatTHB(Math.max(0, receivableTotal - totalPaid), language)}</strong><small>{form.passengerCount + addedPassengerCount(form)} {th ? 'ท่านรวม' : 'total pax'}</small></div></div>}
+      {!asPage && tabBar}
 
-      <WorkflowSection number="01" icon={<MessageSquareText/>} title={th ? 'เสนอราคาและยืนยันการจอง' : 'Quotation & booking confirmation'} subtitle={th ? 'เริ่มจากแจ้งราคา จนลูกค้ายืนยันวันเดินทางและแพ็กเกจ' : 'From quotation to confirmed travel dates and package.'}>
+      {activeTab === 'customer' && <>
+      <WorkflowSection title={th ? 'ข้อมูลลูกค้า' : 'Customer info'}>
         <div className="tracking-form-grid">
-          <label className="field span-2"><span>{th ? 'Opportunity Name / ชื่อรายการ' : 'Opportunity name'}</span><input value={form.opportunityName} onChange={(e) => set('opportunityName', e.target.value)} placeholder={th ? 'เช่น คุณสมชาย 5D4N เดือนตุลาคม' : 'e.g. Mr. Smith 5D4N October'}/></label>
-          <label className="field"><span>{th ? 'ชื่อลูกค้า / บริษัท' : 'Customer / company'}</span><input value={form.customerName} onChange={(e) => set('customerName', e.target.value)}/></label>
+          <label className="field span-2"><span>{th ? 'ชื่อรายการ' : 'Opportunity name'}</span><input value={form.opportunityName} onChange={(e) => set('opportunityName', e.target.value)}/></label>
+          <label className="field"><span>{th ? 'ชื่อลูกค้า' : 'Customer'}</span><input value={form.customerName} onChange={(e) => set('customerName', e.target.value)}/></label>
           <label className="field"><span>{th ? 'Lead Source' : 'Lead source'}</span><select value={form.leadSource} onChange={(e) => set('leadSource', e.target.value as LeadSource)}>{leadSources.map((x) => <option key={x}>{x}</option>)}</select></label>
           <label className="field"><span>{th ? 'เบอร์โทร' : 'Phone'}</span><input value={form.phone} onChange={(e) => set('phone', e.target.value)}/></label>
           <label className="field"><span>Email</span><input value={form.email} onChange={(e) => set('email', e.target.value)}/></label>
-          <label className="field span-2"><span>{th ? 'ที่อยู่สำหรับออก Invoice / Quotation (ไม่บังคับ)' : 'Billing address for invoices / quotations (optional)'}</span><textarea rows={3} value={form.invoiceAddress || ''} onChange={(e) => set('invoiceAddress', e.target.value)} placeholder={th ? 'ชื่อบริษัท ที่อยู่ เลขประจำตัวผู้เสียภาษี หรือเว้นว่างได้' : 'Company, address, tax ID, or leave blank'}/></label>
-          <label className="field"><span>{th ? 'พนักงานผู้ดูแล' : 'Sales owner'}</span><select value={form.salesOwnerId} onChange={(e) => set('salesOwnerId', e.target.value)}>{users.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-          <label className="field"><span>{th ? 'สถานะการขาย' : 'Sales status'}</span><select value={form.status} onChange={(e) => set('status', e.target.value as TrackingStatus)}>{statuses.map((x) => <option key={x} value={x}>{trackingStatusLabel(x, th)}</option>)}</select></label>
-          <MilestoneField label={th ? 'วันที่ส่งราคาให้ลูกค้า' : 'Quotation sent'} value={form.quotationSentAt} onChange={(v) => set('quotationSentAt', v)} onToday={() => markToday('quotationSentAt')} th={th}/>
-          <MilestoneField label={th ? 'วันที่ลูกค้ายืนยันจอง' : 'Booking confirmed'} value={form.bookingConfirmedAt} onChange={(v) => set('bookingConfirmedAt', v)} onToday={() => markToday('bookingConfirmedAt')} th={th}/>
+          <label className="field span-2"><span>{th ? 'ที่อยู่ออก Invoice' : 'Billing address'}</span><textarea rows={2} value={form.invoiceAddress || ''} onChange={(e) => set('invoiceAddress', e.target.value)}/></label>
         </div>
       </WorkflowSection>
+      <WorkflowSection title={th ? 'ดีล' : 'Deal'}>
+        <div className="tracking-form-grid">
+          <label className="field"><span>{th ? 'พนักงานผู้ดูแล' : 'Sales owner'}</span><select value={form.salesOwnerId} onChange={(e) => set('salesOwnerId', e.target.value)}>{users.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <label className="field"><span>{th ? 'สถานะ' : 'Status'}</span><select value={form.status} onChange={(e) => set('status', e.target.value as TrackingStatus)}>{statuses.map((x) => <option key={x} value={x}>{trackingStatusLabel(x, th)}</option>)}</select></label>
+          <MilestoneField label={th ? 'ส่งราคา' : 'Quotation sent'} value={form.quotationSentAt} onChange={(v) => set('quotationSentAt', v)} onToday={() => markToday('quotationSentAt')} th={th}/>
+          <MilestoneField label={th ? 'ยืนยันจอง' : 'Booking confirmed'} value={form.bookingConfirmedAt} onChange={(v) => set('bookingConfirmedAt', v)} onToday={() => markToday('bookingConfirmedAt')} th={th}/>
+          <label className="field span-2"><span>{th ? 'งานถัดไป' : 'Next action'}</span><input value={form.nextAction} onChange={(e) => set('nextAction', e.target.value)} placeholder={nextRecommendedAction(form, th)}/></label>
+          <label className="field"><span>{th ? 'Deadline' : 'Due date'}</span><input type="date" value={form.nextActionDueDate} onChange={(e) => set('nextActionDueDate', e.target.value)}/></label>
+          <label className="field span-2"><span>{th ? 'หมายเหตุ' : 'Note'}</span><textarea rows={3} value={form.note} onChange={(e) => set('note', e.target.value)}/></label>
+        </div>
+      </WorkflowSection>
+      </>}
 
-      <WorkflowSection number="02" icon={<ClipboardList/>} title={th ? 'ข้อมูลการเดินทางและราคาที่ตกลง' : 'Trip details & agreed price'} subtitle={th ? 'ข้อมูลนี้ใช้คำนวณราคา ออก Invoice และติดตาม Deadline' : 'Used for pricing, invoices and deadline tracking.'}>
+      {activeTab === 'package' && <>
+      <WorkflowSection icon={<ClipboardList/>} title={th ? 'ข้อมูลการเดินทางและราคาที่ตกลง' : 'Trip details & agreed price'} subtitle={th ? 'ข้อมูลนี้ใช้คำนวณราคา ออก Invoice และติดตาม Deadline' : 'Used for pricing, invoices and deadline tracking.'}>
         <div className="tracking-form-grid">
           <label className="field span-2"><span>{th ? 'โปรแกรมทัวร์' : 'Tour package'}</span><select value={form.packageId} onChange={(e) => syncPackage(e.target.value)}>{packages.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
           <label className="field"><span>{th ? 'ช่องทางราคา' : 'Pricing channel'}</span><select value={form.channel} onChange={(e) => set('channel', e.target.value as PricingChannel)}><option value="retail">Retail / Customer</option><option value="agent">Agent / Partner</option></select></label>
@@ -2001,24 +2320,6 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
           {form.pricingMode === 'group_tl' && <div className="group-tl-stat tracking-group-tl-stat"><span>Tour Leader</span><strong>{Math.max(0, form.passengerCount - (form.chargeablePassengerCount || form.passengerCount))}</strong><small>{th ? 'ฟรีเฉพาะที่พัก' : 'hotel-only complimentary'}</small></div>}
           <label className="field"><span>{th ? 'จำนวนผู้พักเดี่ยว' : 'Single-room travellers'}</span><input type="number" min="0" max={Math.max(1, form.passengerCount)} value={form.singleRoomCount} onChange={(e) => updateSingleRoomDetails(Number(e.target.value), form.singleSupplementPerPerson)}/></label>
           <div className="tracking-calc-action"><button className="secondary-button" type="button" onClick={calculateFromPricing}><CircleDollarSign/>{form.pricingMode === 'group_tl' ? (th ? 'คำนวณราคาเฉลี่ยกรุ๊ป TL' : 'Calculate TL group average') : (th ? 'ดึงราคามาตรฐานจากระบบ' : 'Load standard pricing')}</button></div>
-        </div>
-        <div className="traveler-addition-inline-action">
-          <div className="traveler-addition-inline-copy">
-            <span className="traveler-addition-inline-icon"><Users/></span>
-            <div>
-              <b>{th ? 'มีผู้เดินทางเพิ่มหลังออกตั๋วชุดแรก?' : 'Travellers added after the first ticket issue?'}</b>
-              <small>{travelerAdditionLocked
-                ? (th ? 'ปิดการเพิ่มผู้เดินทางแล้ว เพราะรายการเข้าสู่ขั้นส่งเอกสารยื่นวีซ่าหรือขั้นหลังจากนั้น' : 'Adding travellers is closed because the booking has reached visa submission or a later stage.')
-                : (th ? 'กดเพิ่มเพื่อออก Invoice ค่าตั๋วของผู้เดินทางชุดใหม่ก่อน จากนั้นระบบจะรวมมูลค่าแพ็กเกจของทุกคนไว้ใน Invoice 2' : 'Create a ticket invoice for the new group first; the system then consolidates every traveller’s package value into Invoice 2.')}</small>
-            </div>
-          </div>
-          <div className="traveler-addition-inline-stats">
-            {addedPassengerCount(form) > 0 && <span>{th ? `เพิ่มแล้ว ${addedPassengerCount(form)} ท่าน` : `${addedPassengerCount(form)} added`}</span>}
-            {pendingAddedTicketInvoices.length > 0 && <span className="traveler-payment-pending">{th ? `รอชำระ Invoice 1 เพิ่มผู้เดินทาง ${pendingAddedTicketInvoices.length} รายการ` : `${pendingAddedTicketInvoices.length} added Invoice 1 item(s) pending`}</span>}
-            <button type="button" className="secondary-button traveler-addition-open-button" disabled={travelerAdditionLocked} onClick={() => setTravelerPanelOpen(true)}><Plus/>{th ? 'เพิ่มผู้เดินทาง' : 'Add travellers'}</button>
-            <button type="button" className="secondary-button traveler-addition-open-button supplemental-open-button" onClick={() => setSupplementalPanelOpen(true)}><ReceiptText/>{th ? 'เรียกเก็บเพิ่มเติม' : 'Additional charge'}{generalSupplementalInvoices(form, invoices).filter((x) => x.status !== 'cancelled').length > 0 && <em>{generalSupplementalInvoices(form, invoices).filter((x) => x.status !== 'cancelled').length}</em>}</button>
-            <button type="button" className="secondary-button traveler-addition-open-button" onClick={() => setTicketChangePanelOpen(true)}><CalendarClock/>{th ? 'เลื่อนตั๋ว / เดินทางล่าช้า' : 'Ticket change / delayed travel'}</button>
-          </div>
         </div>
         {form.pricingMode === 'group_tl' && groupTLBreakdown && <section className="group-tl-pricing-panel tracking-group-tl-panel">
           <div className="group-tl-pricing-head"><div><span>{th ? 'สูตรกรุ๊ปใหญ่' : 'Large-group formula'}</span><h4>{originalBilledPax}+{form.tourLeaderCount} TL</h4><p>{th ? `เดินทางจริง ${form.passengerCount} ท่าน แต่เฉลี่ยยอดรวมให้ผู้ชำระ ${originalBilledPax} ท่าน` : `${form.passengerCount} actual travellers; all costs are averaged over ${originalBilledPax} paying travellers.`}</p></div><div className="group-tl-average-box"><small>{th ? 'ราคาขายจริง / ผู้ชำระ' : 'Final selling / paying pax'}</small><strong>{formatTHB(form.sellingPricePerPerson, language)}</strong><span>{th ? `แนะนำ ${formatTHB(groupTLBreakdown.sellingPricePerChargeablePerson, language)} · ยอดเรียกเก็บ ${formatTHB(form.totalAmount, language)}` : `Customer total ${formatTHB(form.totalAmount, language)}`}</span></div></div>
@@ -2083,13 +2384,13 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
             <AutoTotal label={th ? 'ค่าตั๋วเครื่องบินรวมทุกชุด' : 'Total airfare — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAirfareTotal} language={language}/>
             <AutoTotal label={th ? 'ภาษีสนามบินรวมทุกชุด' : 'Total airport tax — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedAirportTaxTotal} language={language}/>
             <AutoTotal featured label={th ? 'ยอด Invoice 1 รวมทุกชุด' : 'Invoice 1 total — all groups'} formula={th ? 'ค่าตั๋วตาม PNR + ภาษีสนามบินของผู้เดินทางทุกชุด' : 'PNR airfare + airport tax for every traveller group'} value={combinedTicketAndTaxTotal} language={language}/>
-            <div className="calculated-money land-cost-pending"><span>{th ? 'ต้นทุน LAND จริง' : 'Actual land cost'}</span><strong>{form.landPayment > 0 ? formatTHB(form.landPayment, language) : (th ? 'รอ Land Invoice' : 'Awaiting land invoice')}</strong><small>{th ? 'บันทึกยอด USD และอัตราแลกเปลี่ยนใน Step 4–6' : 'Record the USD invoice and actual exchange rate in Steps 4–6.'}</small></div>
-            <div className={`calculated-money ${profit !== null && profit < 0 ? 'negative' : ''}`}><span>{th ? 'กำไรจริงจากการขาย' : 'Realized sales profit'}</span><strong>{profit === null ? (th ? 'รอชำระ LAND' : 'Pending land payment') : formatTHB(profit, language)}</strong><small>{th ? 'ยอดขาย − ค่าตั๋วจริง − ภาษี − LAND ที่โอนจริง (ส่วนเพิ่ม BC เป็นรายได้)' : 'Sales − actual airfare − tax − actual land transfer (BC surcharge is revenue)'}</small></div>
           </div>
         </div>
       </WorkflowSection>
+      </>}
 
-      <WorkflowSection number="03" icon={<Plane/>} title={th ? 'จองตั๋วและ Invoice งวดที่ 1' : 'Flight reservation & Invoice 1'} subtitle={th ? 'รับเอกสารลูกค้า จองตั๋ว บันทึก PNR และเก็บค่าตั๋วทั้งหมด' : 'Collect documents, reserve flights, record PNR and collect full airfare.'}>
+      {activeTab === 'ticket' && <>
+      <WorkflowSection icon={<Plane/>} title={th ? 'จองตั๋วและเอกสารผู้เดินทาง' : 'Flight reservation & traveller documents'} subtitle={th ? 'รับเอกสารลูกค้า จองตั๋ว บันทึก PNR และติดตามการส่งตั๋ว' : 'Collect documents, reserve flights, record PNR and track ticket delivery.'}>
         <div className="journey-check-grid">
           <MilestoneField label={th ? 'ได้รับหน้า Passport ครบ' : 'Passports received'} value={form.passportReceivedAt} onChange={(v) => set('passportReceivedAt', v)} onToday={() => markToday('passportReceivedAt')} th={th}/><MilestoneField label={th ? 'ได้รับรูปถ่ายครบ' : 'Photos received'} value={form.photoReceivedAt} onChange={(v) => set('photoReceivedAt', v)} onToday={() => markToday('photoReceivedAt')} th={th}/><MilestoneField label={th ? 'วันที่จองตั๋ว / ได้ PNR' : 'Flight reserved / PNR date'} value={form.flightReservedAt} onChange={(v) => set('flightReservedAt', v)} onToday={() => markToday('flightReservedAt')} th={th}/><MilestoneField label={th ? 'วันที่ส่งตั๋วให้ลูกค้า' : 'Ticket sent to customer'} value={form.ticketSentAt} onChange={(v) => set('ticketSentAt', v)} onToday={() => markToday('ticketSentAt')} th={th}/>
         </div>
@@ -2102,6 +2403,44 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
             <div className="child-invoice-price-row child"><span><b>CHD</b></span><span>{form.childPassengerCount || 0}</span><span>{formatNumber(form.childTicketPricePerPerson || 0, 2)}</span><span>{formatNumber(form.childAirportTaxPerPerson || 0, 2)}</span><span>{formatNumber((form.childPassengerCount || 0) * ((form.childTicketPricePerPerson || 0) + (form.childAirportTaxPerPerson || 0)), 2)}</span></div>
           </div>
         </section>}
+      </WorkflowSection>
+
+      <WorkflowSection icon={<ShieldCheck/>} title={(form.paymentPlan || 'installments') === 'full_payment' ? (th ? 'ส่งเอกสารให้ Land และดำเนินการวีซ่า' : 'Submit to land & process visa') : (th ? 'ส่งเอกสารให้ Land และดำเนินการวีซ่า' : 'Submit to land & process visa')} subtitle={(form.paymentPlan || 'installments') === 'full_payment' ? (th ? 'หลังรับ Full Payment แล้ว ส่งเอกสารให้ Land และดำเนินการวีซ่าได้ทันที' : 'After full payment, submit documents to land for visa processing.') : (th ? 'ต้องรับชำระค่าตั๋วทุกชุดให้ครบก่อน แล้วจึงส่งเอกสารทั้งหมดให้ Land ยื่นวีซ่า' : 'Collect every ticket invoice before submitting all documents to land for visa processing.')}>
+        {!canProceedToVisa && <div className="visa-readiness-alert"><Hourglass/><div><b>{th ? 'ยังไป Step ยื่นวีซ่าไม่ได้' : 'Visa step is not ready'}</b><span>{(form.paymentPlan || 'installments') === 'full_payment'
+          ? (th ? 'รอรับชำระ Full Payment ให้ครบก่อนออกตั๋วและส่งเอกสารให้ Land' : 'Receive the full payment before ticketing and land submission.')
+          : !originalTicketPaidInFull
+            ? (th ? 'Invoice 1 ของผู้เดินทางชุดแรกยังชำระไม่ครบ' : 'The original group’s Invoice 1 is not fully paid.')
+            : (th ? `ยังมี Invoice ค่าตั๋วผู้เดินทางเพิ่มรอชำระ ${pendingAddedTicketInvoices.length} รายการ` : `${pendingAddedTicketInvoices.length} added-traveller ticket invoice(s) are still unpaid.`)}</span></div></div>}
+        {canProceedToVisa && addedPassengerCount(form) > 0 && <div className="visa-readiness-alert ready"><BadgeCheck/><div><b>{th ? 'ค่าตั๋วครบทุกชุดแล้ว' : 'All ticket invoices are paid'}</b><span>{th ? `ส่งเอกสารของผู้เดินทางรวม ${form.passengerCount + addedPassengerCount(form)} ท่านให้ Land ได้` : `You may submit documents for all ${form.passengerCount + addedPassengerCount(form)} travellers to land.`}</span></div></div>}
+        <div className="tracking-form-grid">
+          <label className="field"><span>LAND / Supplier</span><input value={form.landSupplier} onChange={(e) => set('landSupplier', e.target.value)} placeholder={th ? 'เช่น Aari Holiday / Amen' : 'e.g. Aari Holiday / Amen'}/></label>
+          <MilestoneField label={th ? 'ส่ง Passport + รูป + ตั๋วทั้งหมดให้ Land' : 'All documents sent to land'} value={form.documentsSentToLandAt} onChange={(v) => set('documentsSentToLandAt', v)} onToday={() => markToday('documentsSentToLandAt')} th={th} disabled={!canProceedToVisa} disabledReason={th ? 'รับชำระค่าตั๋วทุก Invoice ให้ครบก่อน' : 'Collect every ticket invoice first'}/>
+          <MilestoneField label={th ? 'ได้รับวีซ่าจาก Land' : 'Visa received'} value={form.visaReceivedAt} onChange={(v) => set('visaReceivedAt', v)} onToday={() => markToday('visaReceivedAt')} th={th}/>
+          <MilestoneField label={(form.paymentPlan || 'installments') === 'full_payment' ? (th ? 'ส่งวีซ่าให้ลูกค้า' : 'Visa sent') : (th ? 'ส่งวีซ่า + Invoice 2 ให้ลูกค้า' : 'Visa + Invoice 2 sent')} value={form.visaSentAt} onChange={(v) => set('visaSentAt', v)} onToday={() => markToday('visaSentAt')} th={th}/>
+          {(form.paymentPlan || 'installments') !== 'full_payment' && <MilestoneField label={th ? 'รับชำระค่าแพ็กเกจครบ' : 'Full package payment received'} value={form.fullPaymentReceivedAt} onChange={(v) => set('fullPaymentReceivedAt', v)} onToday={() => markToday('fullPaymentReceivedAt')} th={th}/>}
+        </div>
+        <div className="traveler-addition-inline-action">
+          <div className="traveler-addition-inline-copy">
+            <span className="traveler-addition-inline-icon"><Users/></span>
+            <div>
+              <b>{th ? 'มีผู้เดินทางเพิ่มหลังออกตั๋วชุดแรก?' : 'Travellers added after the first ticket issue?'}</b>
+              <small>{travelerAdditionLocked
+                ? (th ? 'ปิดการเพิ่มผู้เดินทางแล้ว เพราะรายการเข้าสู่ขั้นส่งเอกสารยื่นวีซ่าหรือขั้นหลังจากนั้น' : 'Adding travellers is closed because the booking has reached visa submission or a later stage.')
+                : (th ? 'กดเพิ่มเพื่อออก Invoice ค่าตั๋วของผู้เดินทางชุดใหม่ก่อน จากนั้นระบบจะรวมมูลค่าแพ็กเกจของทุกคนไว้ใน Invoice 2' : 'Create a ticket invoice for the new group first; the system then consolidates every traveller’s package value into Invoice 2.')}</small>
+            </div>
+          </div>
+          <div className="traveler-addition-inline-stats">
+            {addedPassengerCount(form) > 0 && <span>{th ? `เพิ่มแล้ว ${addedPassengerCount(form)} ท่าน` : `${addedPassengerCount(form)} added`}</span>}
+            {pendingAddedTicketInvoices.length > 0 && <span className="traveler-payment-pending">{th ? `รอชำระ Invoice 1 เพิ่มผู้เดินทาง ${pendingAddedTicketInvoices.length} รายการ` : `${pendingAddedTicketInvoices.length} added Invoice 1 item(s) pending`}</span>}
+            <button type="button" className="secondary-button traveler-addition-open-button" disabled={travelerAdditionLocked} onClick={() => setTravelerPanelOpen(true)}><Plus/>{th ? 'เพิ่มผู้เดินทาง' : 'Add travellers'}</button>
+            <button type="button" className="secondary-button traveler-addition-open-button" onClick={() => setTicketChangePanelOpen(true)}><CalendarClock/>{th ? 'เลื่อนตั๋ว / เดินทางล่าช้า' : 'Ticket change / delayed travel'}</button>
+          </div>
+        </div>
+      </WorkflowSection>
+      </>}
+
+      {activeTab === 'invoices' && <>
+      <WorkflowSection icon={<Plane/>} title={th ? 'Invoice งวดที่ 1 / Full Payment' : 'Invoice 1 / Full Payment'} subtitle={th ? 'ออกและติดตาม Invoice ค่าตั๋วหรือ Full Payment' : 'Issue and track airfare or full-payment invoices.'}>
         {(form.paymentPlan || 'installments') === 'full_payment' ? <div className="installment-card full-payment journey-invoice-card">
           <div className="installment-head"><span>1×</span><div><b>{th ? 'Full Payment — เรียกเก็บทั้งหมดครั้งเดียว' : 'Full Payment — one-time collection'}</b><small>{th ? 'ยอดแพ็กเกจทั้งหมดอยู่ใน Invoice เดียว เหมาะสำหรับการจองกระชั้นหรือ Agent ที่ชำระครั้งเดียว' : 'The entire package is billed in one invoice for urgent bookings or one-time agent payment.'}</small></div></div>
           <strong>{formatTHB(grandTotal, language)}</strong>
@@ -2121,38 +2460,22 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         </>}
       </WorkflowSection>
 
-      <WorkflowSection number="04" icon={<ShieldCheck/>} title={(form.paymentPlan || 'installments') === 'full_payment' ? (th ? 'ส่งเอกสารให้ Land และดำเนินการวีซ่า' : 'Submit to land & process visa') : (th ? 'ส่งเอกสารให้ Land รับ Invoice USD และออก Invoice 2' : 'Submit to land, receive USD invoice & issue Invoice 2')} subtitle={(form.paymentPlan || 'installments') === 'full_payment' ? (th ? 'หลังรับ Full Payment แล้ว สามารถออกตั๋ว ส่งเอกสารให้ Land และดำเนินการวีซ่าได้ทันที' : 'After full payment, issue tickets and submit documents to land for visa processing.') : (th ? 'ต้องรับชำระค่าตั๋วของผู้เดินทางเดิมและผู้เดินทางเพิ่มทุกชุดให้ครบก่อน แล้วจึงส่งเอกสารทั้งหมดให้ Land ยื่นวีซ่า' : 'Collect every original and added-traveller ticket invoice before submitting all documents to land for visa processing.')}>
-        {!canProceedToVisa && <div className="visa-readiness-alert"><Hourglass/><div><b>{th ? 'ยังไป Step ยื่นวีซ่าไม่ได้' : 'Visa step is not ready'}</b><span>{(form.paymentPlan || 'installments') === 'full_payment'
-          ? (th ? 'รอรับชำระ Full Payment ให้ครบก่อนออกตั๋วและส่งเอกสารให้ Land' : 'Receive the full payment before ticketing and land submission.')
-          : !originalTicketPaidInFull
-            ? (th ? 'Invoice 1 ของผู้เดินทางชุดแรกยังชำระไม่ครบ' : 'The original group’s Invoice 1 is not fully paid.')
-            : (th ? `ยังมี Invoice ค่าตั๋วผู้เดินทางเพิ่มรอชำระ ${pendingAddedTicketInvoices.length} รายการ` : `${pendingAddedTicketInvoices.length} added-traveller ticket invoice(s) are still unpaid.`)}</span></div></div>}
-        {canProceedToVisa && addedPassengerCount(form) > 0 && <div className="visa-readiness-alert ready"><BadgeCheck/><div><b>{th ? 'ค่าตั๋วครบทุกชุดแล้ว' : 'All ticket invoices are paid'}</b><span>{th ? `ส่งเอกสารของผู้เดินทางรวม ${form.passengerCount + addedPassengerCount(form)} ท่านให้ Land ได้` : `You may submit documents for all ${form.passengerCount + addedPassengerCount(form)} travellers to land.`}</span></div></div>}
+      {(form.paymentPlan || 'installments') !== 'full_payment' && <WorkflowSection icon={<ShieldCheck/>} title={th ? 'Invoice 2 — ค่าแพ็กเกจคงเหลือ' : 'Invoice 2 — package balance'} subtitle={th ? 'รวมแพ็กเกจผู้เดินทางทุกชุด หลังหักค่าตั๋วที่ชำระแล้ว' : 'Combined package balance after paid ticket invoices.'}>
         <div className="tracking-form-grid">
-          <label className="field"><span>LAND / Supplier</span><input value={form.landSupplier} onChange={(e) => set('landSupplier', e.target.value)} placeholder={th ? 'เช่น Aari Holiday / Amen' : 'e.g. Aari Holiday / Amen'}/></label>
-          <MilestoneField label={th ? 'ส่ง Passport + รูป + ตั๋วทั้งหมดให้ Land' : 'All documents sent to land'} value={form.documentsSentToLandAt} onChange={(v) => set('documentsSentToLandAt', v)} onToday={() => markToday('documentsSentToLandAt')} th={th} disabled={!canProceedToVisa} disabledReason={th ? 'รับชำระค่าตั๋วทุก Invoice ให้ครบก่อน' : 'Collect every ticket invoice first'}/>
-          <MilestoneField label={th ? 'วันที่ได้รับ Land Invoice' : 'Land invoice received'} value={form.landInvoiceReceivedAt} onChange={(v) => set('landInvoiceReceivedAt', v)} onToday={() => markToday('landInvoiceReceivedAt')} th={th}/>
-          <label className="field"><span>{th ? 'เลขที่ Land Invoice' : 'Land invoice no.'}</span><input value={form.landInvoiceNo} onChange={(e) => set('landInvoiceNo', e.target.value)} placeholder="LAND-INV-001"/></label>
-          <label className="field money-input"><span>{th ? 'ยอดตาม Land Invoice' : 'Land invoice amount'}</span><div><input type="number" min="0" step="0.01" value={form.landInvoiceAmountUSD} onChange={(e) => updateLandFinancials({ landInvoiceAmountUSD: Number(e.target.value) })}/><em>USD</em></div></label>
           {(form.paymentPlan || 'installments') !== 'full_payment' && <MilestoneField label={th ? 'จัดทำ Invoice 2 แล้ว' : 'Invoice 2 prepared'} value={form.invoice2PreparedAt} onChange={(v) => set('invoice2PreparedAt', v)} onToday={() => markToday('invoice2PreparedAt')} th={th}/>}
-          <MilestoneField label={th ? 'ได้รับวีซ่าจาก Land' : 'Visa received'} value={form.visaReceivedAt} onChange={(v) => set('visaReceivedAt', v)} onToday={() => markToday('visaReceivedAt')} th={th}/>
-          <MilestoneField label={(form.paymentPlan || 'installments') === 'full_payment' ? (th ? 'ส่งวีซ่าให้ลูกค้า' : 'Visa sent') : (th ? 'ส่งวีซ่า + Invoice 2 ให้ลูกค้า' : 'Visa + Invoice 2 sent')} value={form.visaSentAt} onChange={(v) => set('visaSentAt', v)} onToday={() => markToday('visaSentAt')} th={th}/>
-          {(form.paymentPlan || 'installments') !== 'full_payment' && <MilestoneField label={th ? 'รับชำระค่าแพ็กเกจครบ' : 'Full package payment received'} value={form.fullPaymentReceivedAt} onChange={(v) => set('fullPaymentReceivedAt', v)} onToday={() => markToday('fullPaymentReceivedAt')} th={th}/>}
         </div>
-        <div className="land-invoice-summary">
-          <div><span>{th ? 'Land Invoice' : 'Land invoice'}</span><strong>{form.landInvoiceNo || '-'}</strong></div>
-          <div><span>{th ? 'ยอดเรียกเก็บจาก Land' : 'Supplier invoice amount'}</span><strong>{form.landInvoiceAmountUSD > 0 ? `USD ${formatNumber(form.landInvoiceAmountUSD, 2)}` : '-'}</strong></div>
-          <div><span>{th ? 'สถานะการแปลงเป็นบาท' : 'THB conversion status'}</span><strong>{form.landPayment > 0 ? formatTHB(form.landPayment, language) : (th ? 'รออัตราแลกเปลี่ยนวันโอน' : 'Awaiting transfer-day FX rate')}</strong></div>
-        </div>
-        {(form.paymentPlan || 'installments') !== 'full_payment' && <><div className="installment-card second journey-invoice-card"><div className="installment-head"><span>2</span><div><b>{th ? 'Invoice 2 — ค่าแพ็กเกจส่วนที่เหลือของผู้เดินทางทั้งหมด' : 'Invoice 2 — remaining package balance for all travellers'}</b><small>{th ? 'รวมแพ็กเกจผู้เดินทางชุดแรกและผู้เดินทางเพิ่ม แล้วหักค่าตั๋วทุก Invoice ที่ชำระแล้ว' : 'Original and added package values, less every paid ticket invoice.'}</small></div></div><strong>{formatTHB(Math.max(0, packageSalesTotal(form) - totalTicketPaymentsReceived(form, invoices, payments)), language)}</strong><div className="installment-fields"><label className="field"><span>{th ? 'กำหนดชำระ' : 'Due date'}</span><input type="date" value={form.balanceDueDate} onChange={(e) => set('balanceDueDate', e.target.value)}/></label><label className="field"><span>{th ? 'สถานะงวด 2' : 'Payment 2 status'}</span><select value={form.balanceStatus} onChange={(e) => set('balanceStatus', e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label></div><button className="secondary-button" type="button" disabled={!form.landInvoiceAmountUSD || !canProceedToVisa} onClick={() => onIssueInvoice(normalizeBeforeSave(), 'balance')}><FileText/>{th ? 'เปิด / ออก Invoice 2' : 'Open / issue Invoice 2'}</button>{!canProceedToVisa ? <small className="invoice-requirement-note">{th ? 'รับชำระค่าตั๋วทุกชุดให้ครบก่อนออก Invoice 2' : 'Collect every ticket invoice before issuing Invoice 2.'}</small> : !form.landInvoiceAmountUSD && <small className="invoice-requirement-note">{th ? 'กรอกยอด Land Invoice (USD) ก่อนออก Invoice 2' : 'Enter the land invoice amount in USD before issuing Invoice 2.'}</small>}</div></>}
+        <div className="installment-card second journey-invoice-card"><div className="installment-head"><span>2</span><div><b>{th ? 'Invoice 2 — ค่าแพ็กเกจส่วนที่เหลือของผู้เดินทางทั้งหมด' : 'Invoice 2 — remaining package balance for all travellers'}</b><small>{th ? 'รวมแพ็กเกจผู้เดินทางชุดแรกและผู้เดินทางเพิ่ม แล้วหักค่าตั๋วทุก Invoice ที่ชำระแล้ว' : 'Original and added package values, less every paid ticket invoice.'}</small></div></div><strong>{formatTHB(Math.max(0, packageSalesTotal(form) - totalTicketPaymentsReceived(form, invoices, payments)), language)}</strong><div className="installment-fields"><label className="field"><span>{th ? 'กำหนดชำระ' : 'Due date'}</span><input type="date" value={form.balanceDueDate} onChange={(e) => set('balanceDueDate', e.target.value)}/></label><label className="field"><span>{th ? 'สถานะงวด 2' : 'Payment 2 status'}</span><select value={form.balanceStatus} onChange={(e) => set('balanceStatus', e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label></div><button className="secondary-button" type="button" disabled={!form.landInvoiceAmountUSD || !canProceedToVisa} onClick={() => onIssueInvoice(normalizeBeforeSave(), 'balance')}><FileText/>{th ? 'เปิด / ออก Invoice 2' : 'Open / issue Invoice 2'}</button>{!canProceedToVisa ? <small className="invoice-requirement-note">{th ? 'รับชำระค่าตั๋วทุกชุดให้ครบก่อนออก Invoice 2' : 'Collect every ticket invoice before issuing Invoice 2.'}</small> : !form.landInvoiceAmountUSD && <small className="invoice-requirement-note">{th ? 'กรอกยอด Land Invoice (USD) ก่อนออก Invoice 2' : 'Enter the land invoice amount in USD before issuing Invoice 2.'}</small>}</div>
+      </WorkflowSection>}
 
-      </WorkflowSection>
+      <SupplementalInvoiceManager tracking={form} invoices={invoices} payments={payments} language={language} draft={supplementalDraft} setDraft={setSupplementalDraft} busy={supplementalBusy} onCreate={submitSupplementalInvoice} onOpen={(invoice) => onOpenInvoice(form, invoice)} onDelete={(invoice) => onDeleteSupplementalInvoice(form, invoice)}/>
 
-      <WorkflowSection number="05" icon={<WalletCards/>} title={th ? 'ประวัติรับชำระเงิน' : 'Payment transactions'} subtitle={th ? 'บันทึกการรับชำระและแนบสลิปแยกตามแต่ละรายการ เพื่อใช้ตรวจสอบย้อนหลัง' : 'Record each payment and attach its slip for future verification.'}>
-        <div className="payment-entry-form payment-entry-form-with-slip">
+      <WorkflowSection icon={<WalletCards/>} title={th ? 'รับชำระ' : 'Payments'} actions={asPage ? (
+        <button type="button" className="secondary-button" onClick={() => setPaymentFormOpen((v) => !v)}><Plus/>{th ? 'รับชำระ' : 'Add payment'}</button>
+      ) : undefined}>
+        {(asPage ? paymentFormOpen : true) && <div className="payment-entry-form payment-entry-form-with-slip">
           <label className="field"><span>{th ? 'ประเภทรายการ' : 'Payment type'}</span><select value={availablePaymentTypes.includes(paymentDraft.type) ? paymentDraft.type : availablePaymentTypes[0]} onChange={(e) => {
             const type = e.target.value as PaymentTransactionType;
-            const firstGeneral = generalSupplementalInvoices(currentForm, invoices).find((x) => x.status !== 'cancelled');
+            const firstGeneral = payableSupplementalInvoices(currentForm, invoices).find((x) => x.status !== 'cancelled');
             const balanceInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'balance' && invoice.status !== 'cancelled');
             const fullInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'full' && invoice.status !== 'cancelled');
             const nextAmount = type === 'supplemental'
@@ -2160,12 +2483,12 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
               : type === 'package_balance'
                 ? Math.max(0, (balanceInvoice?.amount ?? balance) - (balanceInvoice ? invoicePaidAmount(balanceInvoice.id, payments) : paidPackage))
                 : type === 'full_payment'
-                  ? Math.max(0, (fullInvoice?.amount || grandTotal) - (fullInvoice ? invoicePaidAmount(fullInvoice.id, payments) : 0))
+                  ? Math.max(0, (fullInvoice?.amount || receivableTotal) - (fullInvoice ? invoicePaidAmount(fullInvoice.id, payments) : 0))
                   : paymentDraft.amount;
             setPaymentDraft({ ...paymentDraft, type, invoiceId: type === 'supplemental' ? (firstGeneral?.id || '') : type === 'package_balance' ? (balanceInvoice?.id || '') : type === 'full_payment' ? (fullInvoice?.id || '') : '', amount: nextAmount });
           }}>{availablePaymentTypes.map((x) => <option key={x} value={x}>{paymentTypeLabel(x, th)}</option>)}</select></label>
           {paymentDraft.type === 'ticket_deposit' && addedInvoice1Documents.length > 0 && <label className="field payment-invoice-link"><span>{th ? 'เลือก Invoice 1 ที่รับชำระ' : 'Invoice 1 being paid'}</span><select value={paymentDraft.invoiceId} onChange={(e) => { const invoiceId = e.target.value; const target = addedInvoice1Documents.find((x) => x.id === invoiceId); setPaymentDraft({ ...paymentDraft, invoiceId, amount: target ? Math.max(0, target.amount - invoicePaidAmount(target.id, payments)) : Math.max(0, deposit - ticketPaidAmount(currentForm, payments)) }); }}><option value="">{th ? `Invoice 1 — ผู้เดินทางชุดแรก (${formatTHB(Math.max(0, deposit - ticketPaidAmount(currentForm, payments)), language)})` : `Invoice 1 — original group (${formatTHB(Math.max(0, deposit - ticketPaidAmount(currentForm, payments)), language)})`}</option>{addedInvoice1Documents.filter((x) => x.status !== 'cancelled').map((x, index) => { const addition = activeTravelerAdditions(currentForm).find((entry) => entry.invoiceId === x.id); return <option key={x.id} value={x.id}>{`${th ? 'Invoice 1 ผู้เดินทางเพิ่ม' : 'Invoice 1 added travellers'} ${index + 1} · PNR ${addition?.pnr || '-'} · ${formatTHB(Math.max(0, x.amount - invoicePaidAmount(x.id, payments)), language)}`}</option>; })}</select></label>}
-          {paymentDraft.type === 'supplemental' && <label className="field payment-invoice-link"><span>{th ? 'เลือก Invoice เพิ่มเติม' : 'Supplemental invoice'}</span><select value={paymentDraft.invoiceId} onChange={(e) => { const invoiceId = e.target.value; const target = generalSupplementalInvoices(currentForm, invoices).find((x) => x.id === invoiceId); setPaymentDraft({ ...paymentDraft, invoiceId, amount: target ? Math.max(0, target.amount - invoicePaidAmount(target.id, payments)) : 0 }); }}><option value="">{th ? '— เลือก Invoice —' : '— Select invoice —'}</option>{generalSupplementalInvoices(currentForm, invoices).filter((x) => x.status !== 'cancelled').map((x) => <option key={x.id} value={x.id}>{`Invoice ${x.sequenceNumber} · ${x.invoiceNo} · ${formatTHB(Math.max(0, x.amount - invoicePaidAmount(x.id, payments)), language)}`}</option>)}</select></label>}
+          {paymentDraft.type === 'supplemental' && <label className="field payment-invoice-link"><span>{th ? 'เลือก Invoice เพิ่มเติม' : 'Supplemental invoice'}</span><select value={paymentDraft.invoiceId} onChange={(e) => { const invoiceId = e.target.value; const target = payableSupplementalInvoices(currentForm, invoices).find((x) => x.id === invoiceId); setPaymentDraft({ ...paymentDraft, invoiceId, amount: target ? Math.max(0, target.amount - invoicePaidAmount(target.id, payments)) : 0 }); }}><option value="">{th ? '— เลือก Invoice —' : '— Select invoice —'}</option>{payableSupplementalInvoices(currentForm, invoices).filter((x) => x.status !== 'cancelled').map((x) => <option key={x.id} value={x.id}>{`Invoice ${x.sequenceNumber} · ${x.invoiceNo} · ${formatTHB(Math.max(0, x.amount - invoicePaidAmount(x.id, payments)), language)}`}</option>)}</select></label>}
           <MoneyField label={th ? 'จำนวนเงิน' : 'Amount'} value={paymentDraft.amount} onChange={(amount) => setPaymentDraft({ ...paymentDraft, amount })}/>
           <label className="field"><span>{th ? 'วันที่รับชำระ' : 'Paid date'}</span><input type="date" value={paymentDraft.paidAt} onChange={(e) => setPaymentDraft({ ...paymentDraft, paidAt: e.target.value })}/></label>
           <label className="field"><span>{th ? 'เลขอ้างอิง / ผู้ชำระ' : 'Reference / payer'}</span><input value={paymentDraft.reference} onChange={(e) => setPaymentDraft({ ...paymentDraft, reference: e.target.value })}/></label>
@@ -2176,14 +2499,15 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
             <div><b>{paymentDraft.slipFile ? paymentDraft.slipFile.name : (th ? 'แนบสลิปการโอน' : 'Attach payment slip')}</b><small>{paymentDraft.slipFile ? `${(paymentDraft.slipFile.size / 1024 / 1024).toFixed(2)} MB` : (th ? 'PNG, JPG, WEBP หรือ PDF ไม่เกิน 10 MB' : 'PNG, JPG, WEBP or PDF, max 10 MB')}</small></div>
             <em>{paymentDraft.slipFile ? (th ? 'เปลี่ยนไฟล์' : 'Change') : (th ? 'เลือกไฟล์' : 'Choose')}</em>
           </label>
-          <button className="primary-button payment-add-button" type="button" disabled={paymentDraft.amount <= 0 || Boolean(paymentBusy)} onClick={addPayment}>{paymentBusy ? <LoaderCircle className="spin"/> : <Plus/>}{th ? 'บันทึกรับชำระ' : 'Record payment'}</button>
-        </div>
+          <button className="primary-button payment-add-button" type="button" disabled={paymentDraft.amount <= 0 || Boolean(paymentBusy)} onClick={() => { void addPayment(); if (asPage) setPaymentFormOpen(false); }}>{paymentBusy ? <LoaderCircle className="spin"/> : <Plus/>}{th ? 'บันทึกรับชำระ' : 'Record payment'}</button>
+        </div>}
 
         <div className="payment-ledger">
-          <div className="payment-ledger-head payment-ledger-head-with-slip"><span>{th ? 'วันที่' : 'Date'}</span><span>{th ? 'รายการ' : 'Type'}</span><span>{th ? 'อ้างอิง' : 'Reference'}</span><span>{th ? 'จำนวนเงิน' : 'Amount'}</span><span>{th ? 'สลิป' : 'Slip'}</span><span/></div>
+          <div className="payment-ledger-head payment-ledger-head-with-slip"><span>{th ? 'วันที่' : 'Date'}</span><span>{th ? 'ใบเสร็จ' : 'Receipt'}</span><span>{th ? 'รายการ' : 'Type'}</span><span>{th ? 'อ้างอิง' : 'Reference'}</span><span>{th ? 'จำนวนเงิน' : 'Amount'}</span><span>{th ? 'สลิป' : 'Slip'}</span><span/></div>
           {payments.length ? payments.map((payment) => <div className="payment-ledger-row payment-ledger-row-with-slip" key={payment.id}>
             <span>{payment.paidAt ? formatDate(payment.paidAt, language) : '-'}</span>
-            <span>{paymentTypeLabel(payment.type, th)}{payment.invoiceId ? <small className="payment-linked-invoice">{invoices.find((x) => x.id === payment.invoiceId)?.invoiceNo || ''}</small> : null}</span>
+            <span>{payment.receiptNo ? (onOpenPaymentDoc ? <button type="button" className="bo-breadcrumb-link mono" onClick={() => onOpenPaymentDoc(payment.id)}>{payment.receiptNo}</button> : payment.receiptNo) : '—'}</span>
+            <span>{paymentTypeLabel(payment.type, th)}{(() => { const linked = invoiceForPayment(payment, invoices); return linked ? <small className="payment-linked-invoice">{linked.invoiceNo}</small> : null; })()}</span>
             <span>{payment.reference || payment.note || '-'}</span>
             <strong className={payment.type === 'refund' ? 'negative' : ''}>{payment.type === 'refund' ? '-' : ''}{formatTHB(Math.abs(payment.amount), language)}</strong>
             <div className="payment-slip-actions">
@@ -2193,24 +2517,17 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
             </div>
             <button className="danger" disabled={Boolean(paymentBusy)} onClick={() => window.confirm(th ? 'ลบรายการรับชำระนี้และไฟล์สลิป?' : 'Delete this payment and its slip?') && onDeletePayment(payment.id)}><Trash2/></button>
           </div>) : <div className="payment-ledger-empty">{th ? 'ยังไม่มีประวัติรับชำระ' : 'No payment transactions yet'}</div>}
-          <div className="payment-ledger-total"><span>{th ? 'รับชำระรวม' : 'Total received'}</span><strong>{formatTHB(totalPaid, language)}</strong><span>{th ? 'ยอดคงเหลือ' : 'Balance'}</span><strong>{formatTHB(Math.max(0, grandTotal - totalPaid), language)}</strong></div>
+          <div className="payment-ledger-total"><span>{th ? 'รับชำระรวม' : 'Total received'}</span><strong>{formatTHB(totalPaid, language)}</strong><span>{th ? 'ยอดคงเหลือ' : 'Balance'}</span><strong>{formatTHB(Math.max(0, receivableTotal - totalPaid), language)}</strong></div>
         </div>
       </WorkflowSection>
+      </>}
 
-      <section className="editor-section supplemental-compact-entry">
-        <div className="supplemental-compact-copy">
-          <span><ReceiptText/></span>
-          <div><h3>{th ? 'รายการเรียกเก็บเพิ่มเติม' : 'Additional charges'}</h3><p>{th ? 'Invoice 3 เป็นต้นไป เช่น อัปเกรดโรงแรม ระบำหน้ากาก รถขนกระเป๋า หรือบริการที่ลูกค้าขอเพิ่มภายหลัง' : 'Invoice 3+ for hotel upgrades, mask dance, baggage vehicle or later customer requests.'}</p></div>
-        </div>
-        <div className="supplemental-compact-actions">
-          {generalSupplementalInvoices(form, invoices).filter((x) => x.status !== 'cancelled').length > 0 && <span>{th ? `${generalSupplementalInvoices(form, invoices).filter((x) => x.status !== 'cancelled').length} Invoice` : `${generalSupplementalInvoices(form, invoices).filter((x) => x.status !== 'cancelled').length} invoice(s)`}</span>}
-          <button type="button" className="primary-button" onClick={() => setSupplementalPanelOpen(true)}><Plus/>{th ? 'เพิ่มรายการเรียกเก็บ' : 'Add charge'}</button>
-        </div>
-      </section>
-
-      <WorkflowSection number="07" icon={<Landmark/>} title={th ? 'โอนชำระ LAND และคำนวณกำไรจริง' : 'Pay land supplier & calculate realized profit'} subtitle={th ? 'หลังรับชำระ Invoice 2 จากลูกค้า ให้ใส่อัตราแลกเปลี่ยน ณ วันโอน ระบบจะแปลง USD เป็นบาทและคำนวณกำไรจริง' : 'After receiving Payment 2, enter the transfer-day FX rate. The system converts USD to THB and calculates realized profit.'}>
+      {activeTab === 'land' && <>
+      <WorkflowSection icon={<Landmark/>} title={th ? 'โอนชำระ LAND และคำนวณกำไรจริง' : 'Pay land supplier & calculate realized profit'} subtitle={th ? 'หลังรับชำระ Invoice 2 จากลูกค้า ให้ใส่อัตราแลกเปลี่ยน ณ วันโอน ระบบจะแปลง USD เป็นบาทและคำนวณกำไรจริง' : 'After receiving Payment 2, enter the transfer-day FX rate. The system converts USD to THB and calculates realized profit.'}>
         {!form.fullPaymentReceivedAt && form.balanceStatus !== 'paid' && <div className="land-payment-warning"><Hourglass/><div><b>{th ? 'ยังไม่ควรโอน LAND' : 'Land transfer not ready'}</b><span>{th ? 'ตาม Workflow ให้รับชำระค่าแพ็กเกจจากลูกค้าครบก่อน แล้วจึงโอนตาม Land Invoice' : 'Receive the customer’s full package payment before paying the land supplier.'}</span></div></div>}
         <div className="tracking-form-grid">
+          <MilestoneField label={th ? 'วันที่ได้รับ Land Invoice' : 'Land invoice received'} value={form.landInvoiceReceivedAt} onChange={(v) => set('landInvoiceReceivedAt', v)} onToday={() => markToday('landInvoiceReceivedAt')} th={th}/>
+          <label className="field"><span>{th ? 'เลขที่ Land Invoice' : 'Land invoice no.'}</span><input value={form.landInvoiceNo} onChange={(e) => set('landInvoiceNo', e.target.value)} placeholder="LAND-INV-001"/></label>
           <label className="field money-input"><span>{th ? 'ยอด Land Invoice' : 'Land invoice amount'}</span><div><input type="number" min="0" step="0.01" value={form.landInvoiceAmountUSD} onChange={(e) => updateLandFinancials({ landInvoiceAmountUSD: Number(e.target.value) })}/><em>USD</em></div></label>
           <label className="field money-input"><span>{th ? 'อัตราแลกเปลี่ยน ณ วันโอน' : 'FX rate on transfer date'}</span><div><input type="number" min="0" step="0.0001" value={form.landExchangeRate} onChange={(e) => updateLandFinancials({ landExchangeRate: Number(e.target.value) })}/><em>THB/USD</em></div></label>
           <MoneyField label={th ? 'ค่าธรรมเนียมโอน (ถ้ามี)' : 'Transfer fee (optional)'} value={form.landTransferFeeTHB} onChange={(v) => updateLandFinancials({ landTransferFeeTHB: v })}/>
@@ -2229,46 +2546,21 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
           <div className={`land-profit-total ${calculatedProfit !== null && calculatedProfit < 0 ? 'negative' : ''}`}><span>{form.landPaidAt ? (th ? 'กำไรขั้นต้นจริง' : 'Realized gross profit') : (th ? 'กำไรคาดการณ์ตามอัตรานี้' : 'Projected profit at this rate')}</span><strong>{calculatedProfit === null ? (th ? 'กรอกยอด USD และอัตราแลกเปลี่ยน' : 'Enter USD and FX rate') : formatTHB(calculatedProfit, language)}</strong></div>
         </div>
       </WorkflowSection>
+      </>}
 
-      <WorkflowSection number="08" icon={<FileCheck2/>} title={th ? 'Itinerary และความพร้อมเดินทาง' : 'Itinerary & travel readiness'} subtitle={th ? 'หลังชำระครบ ส่งกำหนดการ ตรวจเอกสาร และทำสถานะพร้อมเดินทาง' : 'After full payment, send itinerary, verify documents and mark ready.'}>
+      {activeTab === 'travel' && <>
+      <WorkflowSection icon={<FileCheck2/>} title={th ? 'Itinerary และความพร้อมเดินทาง' : 'Itinerary & travel readiness'} subtitle={th ? 'หลังชำระครบ ส่งกำหนดการ ตรวจเอกสาร และทำสถานะพร้อมเดินทาง' : 'After full payment, send itinerary, verify documents and mark ready.'}>
         <div className="journey-check-grid"><MilestoneField label={th ? 'ส่ง Itinerary แล้ว' : 'Itinerary sent'} value={form.itinerarySentAt} onChange={(v) => set('itinerarySentAt', v)} onToday={() => markToday('itinerarySentAt')} th={th}/><MilestoneField label={th ? 'ตรวจครบและพร้อมเดินทาง' : 'Ready to travel'} value={form.readyToTravelAt} onChange={(v) => set('readyToTravelAt', v)} onToday={() => markToday('readyToTravelAt')} th={th}/></div>
       </WorkflowSection>
 
-      <WorkflowSection number="09" icon={<Flag/>} title={th ? 'หลังเดินทางและ Feedback' : 'Post-trip & feedback'} subtitle={th ? 'ติดตามหลังลูกค้ากลับ ขอความคิดเห็น และปิดจบงาน' : 'Follow up after the trip, request feedback and close the case.'}>
+      <WorkflowSection icon={<Flag/>} title={th ? 'หลังเดินทางและ Feedback' : 'Post-trip & feedback'} subtitle={th ? 'ติดตามหลังลูกค้ากลับ ขอความคิดเห็น และปิดจบงาน' : 'Follow up after the trip, request feedback and close the case.'}>
         <div className="journey-check-grid"><MilestoneField label={th ? 'ลูกค้าเดินทางกลับแล้ว' : 'Customer returned'} value={form.tripReturnedAt} onChange={(v) => set('tripReturnedAt', v)} onToday={() => markToday('tripReturnedAt')} th={th}/><MilestoneField label={th ? 'ส่งคำขอ Feedback' : 'Feedback requested'} value={form.feedbackRequestedAt} onChange={(v) => set('feedbackRequestedAt', v)} onToday={() => markToday('feedbackRequestedAt')} th={th}/><MilestoneField label={th ? 'ได้รับ Feedback' : 'Feedback received'} value={form.feedbackReceivedAt} onChange={(v) => set('feedbackReceivedAt', v)} onToday={() => markToday('feedbackReceivedAt')} th={th}/><MilestoneField label={th ? 'ปิดจบงาน' : 'Closed'} value={form.closedAt} onChange={(v) => set('closedAt', v)} onToday={() => markToday('closedAt')} th={th}/></div><label className="field"><span>{th ? 'Feedback / ความคิดเห็นลูกค้า' : 'Customer feedback'}</span><textarea rows={4} value={form.feedbackNote} onChange={(e) => set('feedbackNote', e.target.value)}/></label>
       </WorkflowSection>
+      </>}
 
-      <WorkflowSection number="10" icon={<CalendarClock/>} title={th ? 'งานถัดไปและหมายเหตุภายใน' : 'Next action & internal notes'} subtitle={th ? 'กำหนดสิ่งที่ต้องทำต่อและ Deadline เพื่อไม่ให้หลุดการติดตาม' : 'Set the next action and deadline so nothing is missed.'}>
-        <div className="tracking-form-grid"><label className="field span-2"><span>{th ? 'งานถัดไป' : 'Next action'}</span><input value={form.nextAction} onChange={(e) => set('nextAction', e.target.value)} placeholder={nextRecommendedAction(form, th)}/></label><label className="field"><span>{th ? 'Deadline งานถัดไป' : 'Next action deadline'}</span><input type="date" value={form.nextActionDueDate} onChange={(e) => set('nextActionDueDate', e.target.value)}/></label><label className="field"><span>{th ? 'สถานะ Workflow ปัจจุบัน' : 'Current workflow stage'}</span><input value={stageLabel(currentStage, th)} readOnly/></label><label className="field span-2"><span>{th ? 'หมายเหตุภายใน' : 'Internal note'}</span><textarea rows={4} value={form.note} onChange={(e) => set('note', e.target.value)}/></label></div>
-      </WorkflowSection>
-
-      <div className="modal-actions tracking-modal-actions">
+      {!asPage && <div className="modal-actions tracking-modal-actions">
         <div className="tracking-modal-draft-actions"><button className="ghost-button" onClick={saveDraftNow}><FileText/>{th ? 'บันทึก Draft' : 'Save draft'}</button><button className="ghost-button" onClick={requestClose}>{th ? 'ปิด' : 'Close'}</button></div>
         <button className="primary-button" disabled={!form.opportunityName.trim() || !form.customerName.trim()} onClick={saveAndStay}><BadgeCheck/>{th ? 'บันทึก Customer Journey' : 'Save customer journey'}</button>
-      </div>
-
-      {supplementalPanelOpen && <div className="journey-submodal-layer" role="dialog" aria-modal="true" aria-label={th ? 'เรียกเก็บเพิ่มเติม' : 'Additional charge'}>
-        <button type="button" className="journey-submodal-backdrop" onClick={() => setSupplementalPanelOpen(false)} aria-label={th ? 'ปิด' : 'Close'}/>
-        <section className="journey-submodal-card supplemental-submodal-card">
-          <header className="journey-submodal-header">
-            <div><span><ReceiptText/></span><div><h2>{th ? 'เรียกเก็บเพิ่มเติม / Invoice 3+' : 'Additional charge / Invoice 3+'}</h2><p>{th ? 'เพิ่มรายการเรียกเก็บภายหลังได้ไม่จำกัด ยอดขายและต้นทุนจะถูกรวมในยอดหลักและ Dashboard อัตโนมัติ' : 'Create unlimited later charges. Revenue and cost are included in the main totals and dashboard automatically.'}</p></div></div>
-            <button type="button" onClick={() => setSupplementalPanelOpen(false)} aria-label={th ? 'ปิด' : 'Close'}><X/></button>
-          </header>
-          <div className="journey-submodal-body">
-            <SupplementalInvoiceManager
-              tracking={form}
-              invoices={invoices}
-              payments={payments}
-              language={language}
-              draft={supplementalDraft}
-              setDraft={setSupplementalDraft}
-              busy={supplementalBusy}
-              onCreate={submitSupplementalInvoice}
-              onOpen={(invoice) => onOpenInvoice(form, invoice)}
-              onDelete={(invoice) => onDeleteSupplementalInvoice(form, invoice)}
-            />
-          </div>
-        </section>
       </div>}
 
       {travelerPanelOpen && <div className="journey-submodal-layer" role="dialog" aria-modal="true" aria-label={th ? 'เพิ่มผู้เดินทาง' : 'Add travellers'}>
@@ -2308,7 +2600,147 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         </section>
       </div>}
     </div>
-  </Modal>;
+  </>;
+
+  if (asPage) {
+    if (!open) return null;
+    const relatedDocRows: { label: string; value: string; onClick?: () => void }[] = [];
+    if (form.sourceQuotationNo) relatedDocRows.push({ label: 'QT', value: form.sourceQuotationNo });
+    if (form.bookingNo) relatedDocRows.push({ label: 'BK', value: form.bookingNo });
+    invoices.forEach((inv) => relatedDocRows.push({
+      label: `INV-${inv.sequenceNumber}`,
+      value: inv.invoiceNo,
+      onClick: onOpenInvoiceDoc ? () => onOpenInvoiceDoc(inv.id) : undefined,
+    }));
+    payments.filter((p) => p.receiptNo).forEach((p) => relatedDocRows.push({
+      label: 'RC',
+      value: p.receiptNo || '',
+      onClick: onOpenPaymentDoc ? () => onOpenPaymentDoc(p.id) : undefined,
+    }));
+    return (
+      <div className="journey-detail-page bo-detail-page has-form-actions">
+        <PageHeader
+          breadcrumb={[{ label: 'การจอง', onClick: requestClose }, { label: form.bookingNo || (th ? 'จองใหม่' : 'New booking') }]}
+          onBack={requestClose}
+          title={form.bookingNo || form.opportunityName || (th ? 'จองใหม่' : 'New booking')}
+          subtitle={form.customerName}
+          badge={<StatusBadge status={form.status} label={trackingStatusLabel(form.status, th)} />}
+        />
+        <SectionCard className="bo-stage-card" title="">
+          <ol className="bo-stage-stepper" aria-label={th ? 'ความคืบหน้าการจอง' : 'Booking progress'}>
+            {(['sales', 'booking', 'visa', 'travel', 'after'] as const).map((group, index) => {
+              const isActive = group === currentGroup;
+              return (
+                <li
+                  key={group}
+                  className={['bo-stage-step', isActive ? 'active' : '', isActive ? `bo-tag--${statusTone(group)}` : '', index < currentStepIdx ? 'passed' : ''].filter(Boolean).join(' ')}
+                  aria-current={isActive ? 'step' : undefined}
+                >
+                  {groupLabel(group, th)}
+                </li>
+              );
+            })}
+          </ol>
+          <div className="bo-next-step">
+            <div className="bo-next-step-head">
+              <span className="bo-next-step-eyebrow">{th ? 'ขั้นตอนปัจจุบัน' : 'Current stage'}</span>
+              <strong className="bo-next-step-title">{stageLabel(currentStage, th)}</strong>
+              <p className="bo-next-step-hint">{nextRecommendedAction(form, th)}</p>
+              {form.nextAction?.trim() && form.nextAction.trim() !== nextRecommendedAction(form, th) && (
+                <p className="bo-next-step-note">{th ? 'บันทึกเพิ่ม: ' : 'Note: '}{form.nextAction}{form.nextActionDueDate ? ` · ${formatDate(form.nextActionDueDate, language)}` : ''}</p>
+              )}
+            </div>
+            {nextStepMeta?.waitOnly ? (
+              <p className="bo-next-step-wait">{th ? 'รอวันเดินทางกลับ' : 'Waiting for return date'}</p>
+            ) : nextStepMeta ? (
+              <div className="bo-next-step-action">
+                {nextStepMeta.input === 'pnr' && (
+                  <label className="field bo-next-step-input">
+                    <span>PNR</span>
+                    <input value={form.flightPnr || ''} onChange={(e) => set('flightPnr', e.target.value.toUpperCase())} placeholder="ABC123" />
+                  </label>
+                )}
+                {nextStepMeta.input === 'landUsd' && (
+                  <label className="field money-input bo-next-step-input">
+                    <span>{th ? 'ยอด Land Invoice' : 'Land invoice'}</span>
+                    <div><input type="number" min="0" step="0.01" value={form.landInvoiceAmountUSD} onChange={(e) => updateLandFinancials({ landInvoiceAmountUSD: Number(e.target.value) })}/><em>USD</em></div>
+                  </label>
+                )}
+                {nextStepMeta.input === 'fxRate' && (
+                  <label className="field money-input bo-next-step-input">
+                    <span>{th ? 'อัตราแลกเปลี่ยน' : 'FX rate'}</span>
+                    <div><input type="number" min="0" step="0.0001" value={form.landExchangeRate} onChange={(e) => updateLandFinancials({ landExchangeRate: Number(e.target.value) })}/><em>THB/USD</em></div>
+                  </label>
+                )}
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={Boolean(nextStepBlocked)}
+                  onClick={() => { void runNextStepAction(); }}
+                >
+                  {th ? nextStepMeta.primaryLabel.th : nextStepMeta.primaryLabel.en}
+                </button>
+                {nextStepBlocked && <small className="bo-next-step-blocked">{nextStepBlocked}</small>}
+              </div>
+            ) : (
+              <p className="bo-next-step-done">{th ? 'ดำเนินการครบแล้ว' : 'Workflow complete'}</p>
+            )}
+          </div>
+          <p className="bo-next-step-progress">{th ? `ทำแล้ว ${leanManualProgress(form)} จาก ${LEAN_MANUAL_TOTAL}` : `${leanManualProgress(form)} of ${LEAN_MANUAL_TOTAL} done`}</p>
+        </SectionCard>
+        <div className="bo-detail-grid">
+          <div className="bo-detail-main">
+            <p className="bo-detail-tabs-eyebrow">{th ? 'ข้อมูลการจอง' : 'Booking details'}</p>
+            {tabBar}
+            {editorInner}
+          </div>
+          <aside className="bo-detail-rail">
+            <SummaryCard
+              title={th ? 'สรุปทริป' : 'Trip summary'}
+              rows={[
+                { label: th ? 'แพ็กเกจ' : 'Package', value: form.packageName || '-' },
+                { label: th ? 'วันเดินทาง' : 'Travel dates', value: form.travelStartDate ? `${formatDate(form.travelStartDate, language)} – ${form.travelEndDate ? formatDate(form.travelEndDate, language) : '?'}` : '-' },
+                { label: th ? 'ผู้เดินทาง' : 'Pax', value: `${form.passengerCount + addedPassengerCount(form)} ${th ? 'ท่าน' : 'pax'}` },
+              ]}
+            />
+            <SummaryCard
+              title={th ? 'การเงิน' : 'Finance'}
+              rows={[
+                { label: th ? 'ยอดแพ็กเกจ' : 'Package total', value: formatTHB(combinedPackageTotal, language) },
+                { label: th ? 'รับแล้ว' : 'Paid', value: formatTHB(totalPaid, language) },
+                { label: th ? 'คงเหลือ' : 'Balance', value: formatTHB(balance, language), strong: true },
+                { label: th ? 'กำไร' : 'Profit', value: profit !== null ? formatTHB(profit, language) : (calculatedProfit !== null ? formatTHB(calculatedProfit, language) : '—') },
+              ]}
+            />
+            {relatedDocRows.length > 0 && (
+              <SummaryCard
+                title={th ? 'เอกสารที่เกี่ยวข้อง' : 'Related documents'}
+                rows={relatedDocRows.map((row) => ({
+                  label: row.label,
+                  value: row.onClick
+                    ? <button type="button" className="bo-breadcrumb-link mono" onClick={row.onClick}>{row.value}</button>
+                    : row.value,
+                }))}
+              />
+            )}
+          </aside>
+        </div>
+        <FormActionBar>
+          {hasUnsavedChanges && <span className="bo-draft-hint">{th ? 'มีการแก้ไข' : 'Unsaved'}</span>}
+          <button type="button" className="ghost-button" onClick={saveDraftNow}>{th ? 'บันทึก Draft' : 'Save draft'}</button>
+          <button type="button" className="primary-button" disabled={!form.opportunityName.trim() || !form.customerName.trim()} onClick={saveAndStay}>
+            <BadgeCheck />{th ? 'บันทึก' : 'Save'}
+          </button>
+        </FormActionBar>
+      </div>
+    );
+  }
+
+  return (
+    <Modal open={open} title={th ? 'Customer Journey — รายละเอียดและขั้นตอนดำเนินงาน' : 'Customer Journey — workflow details'} onClose={requestClose} wide closeOnBackdrop={false} closeOnEscape={false}>
+      {editorInner}
+    </Modal>
+  );
 }
 
 function SupplementalLineEditor({ lines, onChange, language, compact = false }: { lines: SupplementalInvoiceLine[]; onChange: (lines: SupplementalInvoiceLine[]) => void; language: 'th' | 'en'; compact?: boolean }) {
@@ -2448,15 +2880,25 @@ function SupplementalInvoiceManager({ tracking, invoices, payments, language, dr
 }) {
   const th = language === 'th';
   const generalInvoices = generalSupplementalInvoices(tracking, invoices);
+  const vatServiceInvoices = agentVatServiceInvoices(tracking, invoices);
   const active = generalInvoices.filter((invoice) => invoice.status !== 'cancelled');
   const draftRevenue = draft.lineItems.reduce((sum, line) => sum + Math.max(1, Number(line.quantity || 1)) * Math.max(0, Number(line.unitPriceTHB || 0)), 0);
   const draftCost = draft.lineItems.reduce((sum, line) => sum + Math.max(1, Number(line.quantity || 1)) * Math.max(0, Number(line.costPerUnitTHB || 0)), 0);
-  return <WorkflowSection number="06B" icon={<ReceiptText/>} title={th ? 'Invoice เพิ่มเติม (งวด 3 เป็นต้นไป)' : 'Supplemental invoices (Invoice 3+)'} subtitle={th ? 'ใช้เรียกเก็บบริการที่ลูกค้าขอเพิ่มภายหลัง และยอดจะถูกรวมในยอดขายหลักกับกำไรทันที' : 'Charge later additions; the amount is included in the customer grand total and margin.'}>
+  return <WorkflowSection icon={<ReceiptText/>} title={th ? 'Invoice เพิ่มเติม (งวด 3 เป็นต้นไป)' : 'Supplemental invoices (Invoice 3+)'} subtitle={th ? 'ใช้เรียกเก็บบริการที่ลูกค้าขอเพิ่มภายหลัง และยอดจะถูกรวมในยอดขายหลักกับกำไรทันที' : 'Charge later additions; the amount is included in the customer grand total and margin.'}>
     <div className="supplemental-overview">
       <div><span>{th ? 'มูลค่าแพ็กเกจรวมผู้เดินทางทั้งหมด' : 'Package value for all travellers'}</span><strong>{formatTHB(packageSalesTotal(tracking), language)}</strong></div>
       <div><span>{th ? 'Invoice บริการเพิ่มเติมทั่วไป' : 'General supplemental invoices'}</span><strong>{formatTHB(generalSupplementalInvoices(tracking, invoices).reduce((sum, invoice) => sum + invoice.amount, 0), language)}</strong></div>
       <div className="featured"><span>{th ? 'ยอดขายรวมลูกค้า' : 'Customer grand total'}</span><strong>{formatTHB(tracking.grandTotalAmount || tracking.totalAmount, language)}</strong></div>
     </div>
+    {vatServiceInvoices.length > 0 && <div className="supplemental-invoice-list vat-service-invoice-list">{vatServiceInvoices.map((invoice) => {
+      const paid = invoicePaidAmount(invoice.id, payments);
+      const remaining = Math.max(0, invoice.amount - paid);
+      return <article key={invoice.id} className="vat-service-invoice-card">
+        <div><span>{th ? 'เอกสารค่าบริการ' : 'Service charge document'}</span><strong>{th ? 'เอกสารเรียกเก็บค่าบริการ' : 'Service Charge Invoice'}</strong><small>{invoice.invoiceNo} · {paymentStatusLabel(effectiveStageStatus(invoice.status, invoice.dueDate), th)}</small></div>
+        <div><span>{th ? 'ยอด / รับแล้ว / คงเหลือ' : 'Amount / paid / balance'}</span><strong>{formatTHB(invoice.amount, language)}</strong><small>{formatTHB(paid, language)} / {formatTHB(remaining, language)}</small></div>
+        <div className="supplemental-invoice-actions"><button type="button" className="secondary-button" onClick={() => onOpen(invoice)}><FileText/>{th ? 'เปิดเอกสารค่าบริการ' : 'Open service-charge document'}</button></div>
+      </article>;
+    })}</div>}
     {generalInvoices.length > 0 && <div className="supplemental-invoice-list">{generalInvoices.map((invoice) => {
       const paid = invoicePaidAmount(invoice.id, payments);
       const remaining = Math.max(0, invoice.amount - paid);
@@ -2481,8 +2923,12 @@ function SupplementalInvoiceManager({ tracking, invoices, payments, language, dr
 }
 
 
-function WorkflowSection({ number, icon, title, subtitle, children }: { number: string; icon: React.ReactNode; title: string; subtitle: string; children: React.ReactNode }) {
-  return <section className="editor-section journey-workflow-section"><div className="editor-section-title journey-section-title"><span>{number}</span><i>{icon}</i><div><h3>{title}</h3><p>{subtitle}</p></div></div>{children}</section>;
+function WorkflowSection({ title, actions, children }: { number?: string; icon?: React.ReactNode; title: string; subtitle?: string; actions?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <SectionCard title={title} actions={actions} className="journey-workflow-section">
+      {children}
+    </SectionCard>
+  );
 }
 function MilestoneField({ label, value, onChange, onToday, th, disabled = false, disabledReason = '' }: { label: string; value: string; onChange: (value: string) => void; onToday: () => void; th: boolean; disabled?: boolean; disabledReason?: string }) {
   return <div className={`milestone-field ${value ? 'done' : ''} ${disabled ? 'disabled' : ''}`}><div><span className="milestone-check">{value ? <Check/> : <Hourglass/>}</span><label><b>{label}</b><input type="date" value={value || ''} disabled={disabled} onChange={(e) => onChange(e.target.value)}/>{disabled && disabledReason && <small>{disabledReason}</small>}</label></div><button type="button" disabled={disabled} onClick={onToday}>{value ? (th ? 'อัปเดตวันนี้' : 'Update today') : (th ? 'ทำเครื่องหมายวันนี้' : 'Mark today')}</button></div>;
@@ -2495,20 +2941,23 @@ function AutoTotal({ label, formula, value, language, featured = false }: { labe
   return <div className={`auto-total-card ${featured ? 'featured' : ''}`}><span>{label}</span><strong>{formatTHB(value, language)}</strong><small>{formula}</small></div>;
 }
 
-function InvoicePreview({ value, settings, language, payments, invoices, onClose, onSaveInvoice, onSaveTracking }: {
+export function InvoicePreview({ value, settings, language, payments, invoices, onClose, onOpenInvoice, onSaveInvoice, onSaveTracking }: {
   value: { tracking: CustomerTracking; invoice: PaymentInvoice } | null; settings: GlobalSettings; language: 'th' | 'en'; payments: PaymentTransaction[]; invoices: PaymentInvoice[]; onClose: () => void;
+  onOpenInvoice: (invoice: PaymentInvoice) => void;
   onSaveInvoice: (item: PaymentInvoice) => Promise<void>; onSaveTracking: (item: CustomerTracking) => Promise<void>;
 }) {
   const th = language === 'th';
   const [status, setStatus] = useState<PaymentStageStatus>(value?.invoice.status || 'invoiced');
   const [paymentAccountType, setPaymentAccountType] = useState<PaymentAccountType>(value?.invoice.paymentAccountType || (value?.invoice.installment === 'balance' ? 'owner' : 'company'));
   const [vatEnabled, setVatEnabled] = useState(Boolean(value?.invoice.vatEnabled));
+  const [agentVatMode, setAgentVatMode] = useState<AgentVatMode>(agentVatModeFromInvoice(value?.invoice));
   React.useEffect(() => setStatus(value?.invoice.status || 'invoiced'), [value?.invoice.id, value?.invoice.status]);
   React.useEffect(() => {
     if (!value?.invoice) return;
     setPaymentAccountType(value.invoice.paymentAccountType || (value.invoice.installment === 'balance' ? 'owner' : 'company'));
     setVatEnabled(Boolean(value.invoice.vatEnabled));
-  }, [value?.invoice.id, value?.invoice.paymentAccountType, value?.invoice.vatEnabled]);
+    setAgentVatMode(agentVatModeFromInvoice(value.invoice));
+  }, [value?.invoice.id, value?.invoice.paymentAccountType, value?.invoice.vatEnabled, value?.invoice.documentData?.agentVatMode]);
   if (!value) return null;
   const { tracking, invoice } = value;
   const isDeposit = invoice.installment === 'deposit';
@@ -2517,7 +2966,8 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
   const isSupplemental = invoice.installment === 'supplemental';
   const travelerAddition = (tracking.travelerAdditions || []).find((entry) => entry.invoiceId === invoice.id);
   const isTravelerInvoice1 = Boolean(travelerAddition) || invoice.documentData?.kind === 'ticket_added';
-  const isGeneralSupplemental = isSupplemental && !isTravelerInvoice1;
+  const isAgentVatServiceDocument = isAgentVatServiceInvoice(invoice);
+  const isGeneralSupplemental = isSupplemental && !isTravelerInvoice1 && !isAgentVatServiceDocument;
   const isInvoice1 = isDeposit || isTravelerInvoice1;
   const needsPassengerCheck = isInvoice1 || isFull;
   const snapshot = invoice.documentData || null;
@@ -2529,25 +2979,47 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
   const deductions = snapshot?.deductions || (isBalance ? buildTicketDeductionSnapshot(tracking, invoices, payments) : []);
   const deductedTotal = deductions.reduce((sum, row) => sum + row.amountTHB, 0);
   const balanceDue = snapshot?.balanceDueTHB ?? Math.max(0, packageTotal - deductedTotal);
-  const baseSubtotal = isInvoice1
+  const calculatedBaseSubtotal = isInvoice1
     ? (ticketBatch?.totalDueTHB ?? invoice.subtotalAmount ?? invoice.amount)
     : isBalance
       ? balanceDue
       : isFull
         ? (invoice.subtotalAmount ?? customerGrandTotal(tracking, invoices))
         : (invoice.subtotalAmount ?? invoice.amount);
+  const baseSubtotal = (isBalance || isFull) && Number(snapshot?.agentVatOriginalSubtotalTHB) > 0
+    ? Number(snapshot?.agentVatOriginalSubtotalTHB)
+    : calculatedBaseSubtotal;
   const currentVatRate = Math.max(0, Number(invoice.vatRatePercent ?? settings.vatRatePercent ?? 7));
   const ticketComponentForFull = isFull ? Math.min(baseSubtotal, Math.max(0, ticketBatch?.totalDueTHB ?? tracking.depositAmount ?? 0)) : 0;
   const packagePortionForVat = isFull ? Math.max(0, baseSubtotal - ticketComponentForFull) : baseSubtotal;
   const currentAgentVatBreakdown = tracking.channel === 'agent' && (isBalance || isFull)
     ? agentVatPackageBreakdown(settings, tracking, packagePortionForVat, snapshot)
     : null;
-  const currentVatBase = currentAgentVatBreakdown ? currentAgentVatBreakdown.vatBaseTHB : packagePortionForVat;
-  const currentVatAmount = (isBalance || isFull) && vatEnabled
-    ? roundMoney(currentVatBase * currentVatRate / 100)
-    : 0;
-  const amountDue = roundMoney(baseSubtotal + currentVatAmount);
-  const selectedAccount = paymentAccountSnapshot(settings, (isBalance || isFull) && vatEnabled ? 'company' : paymentAccountType);
+  const activeVatServiceInvoice = agentVatServiceInvoices(tracking, invoices).find((item) => item.status !== 'cancelled');
+  const linkedVatServiceInvoice = (isBalance || isFull) && agentVatMode === 'service_split'
+    ? activeVatServiceInvoice
+    : undefined;
+  const linkedMainInvoice = isAgentVatServiceDocument && snapshot?.agentVatLinkedInvoiceId
+    ? invoices.find((item) => item.id === snapshot.agentVatLinkedInvoiceId)
+    : undefined;
+  const splitMainSubtotal = agentVatMode === 'service_split' && currentAgentVatBreakdown
+    ? Math.max(0, baseSubtotal - currentAgentVatBreakdown.serviceFeeTotal)
+    : baseSubtotal;
+  const currentVatBase = tracking.channel === 'agent' && (isBalance || isFull)
+    ? (agentVatMode === 'total_package' ? packagePortionForVat : agentVatMode === 'service_split' ? 0 : 0)
+    : packagePortionForVat;
+  const currentVatAmount = isAgentVatServiceDocument
+    ? Math.max(0, Number(invoice.vatAmount || 0))
+    : (isBalance || isFull) && (tracking.channel === 'agent' ? agentVatMode === 'total_package' : vatEnabled)
+      ? roundMoney(currentVatBase * currentVatRate / 100)
+      : 0;
+  const amountDue = isAgentVatServiceDocument
+    ? roundMoney((invoice.subtotalAmount ?? 0) + currentVatAmount)
+    : roundMoney(splitMainSubtotal + currentVatAmount);
+  const taxForcesCompany = isAgentVatServiceDocument
+    || ((isBalance || isFull) && tracking.channel === 'agent' && agentVatMode === 'total_package')
+    || ((isBalance || isFull) && tracking.channel !== 'agent' && vatEnabled);
+  const selectedAccount = paymentAccountSnapshot(settings, taxForcesCompany ? 'company' : paymentAccountType);
   const paymentDetails = invoice.paymentBankName && invoice.paymentAccountNumber && invoice.paymentAccountType === selectedAccount.paymentAccountType
     ? { ...selectedAccount, paymentBankName: invoice.paymentBankName, paymentAccountName: invoice.paymentAccountName, paymentAccountNumber: invoice.paymentAccountNumber, paymentQrUrl: invoice.paymentQrUrl || selectedAccount.paymentQrUrl }
     : selectedAccount;
@@ -2556,23 +3028,40 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
   const invoicePassengerNames = ticketBatch?.passengerNames || [];
 
   async function updateStatus(next: PaymentStageStatus) {
-    const previousStatus = status;
     setStatus(next);
     const now = new Date().toISOString();
-    await onSaveInvoice({ ...invoice, status: next, paidAt: next === 'paid' ? isoToday() : '', updatedAt: now });
+    const updatedInvoice = { ...invoice, status: next, paidAt: next === 'paid' ? isoToday() : '', updatedAt: now } as PaymentInvoice;
+    await onSaveInvoice(updatedInvoice);
+    const projectedInvoices = invoices.map((item) => item.id === invoice.id ? updatedInvoice : item);
+
+    if (isAgentVatServiceDocument) {
+      const linkedMain = projectedInvoices.find((item) => item.id === invoice.documentData?.agentVatLinkedInvoiceId)
+        || projectedInvoices.find((item) => item.trackingId === tracking.id && (item.installment === 'balance' || item.installment === 'full') && item.status !== 'cancelled');
+      const collectionComplete = next === 'paid' && invoiceSettled(linkedMain, payments);
+      const supplementalInvoiceTotal = customerSupplementalSalesTotal(tracking, projectedInvoices);
+      const supplementalCostTotal = customerSupplementalCostTotal(tracking, projectedInvoices);
+      const updatedTracking = {
+        ...tracking,
+        supplementalInvoiceTotal,
+        supplementalCostTotal,
+        grandTotalAmount: customerGrandTotal(tracking, projectedInvoices),
+        balanceStatus: collectionComplete ? 'paid' as const : (tracking.balanceStatus === 'paid' ? 'invoiced' as const : tracking.balanceStatus),
+        fullPaymentReceivedAt: collectionComplete ? (tracking.fullPaymentReceivedAt || isoToday()) : (tracking.balanceStatus === 'paid' ? '' : tracking.fullPaymentReceivedAt),
+        updatedAt: now,
+      } as CustomerTracking;
+      await onSaveTracking({
+        ...updatedTracking,
+        profitAmount: tracking.landPaidAt && tracking.landPayment > 0 ? realizedGrossProfit(updatedTracking, projectedInvoices, tracking.landPayment) : tracking.profitAmount,
+      });
+      return;
+    }
+
     if (isSupplemental) {
-      const wasActive = previousStatus !== 'cancelled';
-      const willBeActive = next !== 'cancelled';
-      const revenueValue = travelerAddition ? travelerAdditionPackageValue(travelerAddition, tracking.sellingPricePerPerson) : invoice.amount;
-      const costValue = travelerAddition ? travelerAdditionInternalCostValue(travelerAddition) : invoice.costAmount;
-      const revenueDelta = (willBeActive ? revenueValue : 0) - (wasActive ? revenueValue : 0);
-      const costDelta = (willBeActive ? costValue : 0) - (wasActive ? costValue : 0);
-      const supplementalInvoiceTotal = Math.max(0, (tracking.supplementalInvoiceTotal || 0) + revenueDelta);
-      const supplementalCostTotal = Math.max(0, (tracking.supplementalCostTotal || 0) + costDelta);
       const travelerAdditions = (tracking.travelerAdditions || []).map((entry) => entry.invoiceId === invoice.id ? { ...entry, status: next === 'cancelled' ? 'cancelled' as const : 'active' as const } : entry);
       const updatedTracking = { ...tracking, travelerAdditions } as CustomerTracking;
-      const projectedInvoices = invoices.map((item) => item.id === invoice.id ? { ...item, status: next, paidAt: next === 'paid' ? isoToday() : item.paidAt } : item);
       const ticketFlowComplete = travelerAddition ? allTicketPaymentsReceived(updatedTracking, projectedInvoices, payments) : false;
+      const supplementalInvoiceTotal = customerSupplementalSalesTotal(updatedTracking, projectedInvoices);
+      const supplementalCostTotal = customerSupplementalCostTotal(updatedTracking, projectedInvoices);
       const updatedTrackingFinancials = { ...updatedTracking, supplementalInvoiceTotal, supplementalCostTotal, grandTotalAmount: customerGrandTotal(updatedTracking, projectedInvoices) } as CustomerTracking;
       await onSaveTracking({
         ...updatedTrackingFinancials,
@@ -2586,45 +3075,43 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
       });
       return;
     }
+
+    const splitRequiresServiceInvoice = tracking.channel === 'agent' && agentVatMode === 'service_split' && (isBalance || isFull);
+    const splitServiceSettled = !splitRequiresServiceInvoice || invoiceSettled(activeVatServiceInvoice, payments);
+    const completionStatus: PaymentStageStatus = next === 'paid' && !splitServiceSettled ? 'invoiced' : next;
     await onSaveTracking({
       ...tracking,
       paymentPlan: isFull ? 'full_payment' : (tracking.paymentPlan || 'installments'),
       depositStatus: isFull ? next : isDeposit ? next : tracking.depositStatus,
-      balanceStatus: isFull ? next : isBalance ? next : tracking.balanceStatus,
+      balanceStatus: isFull ? completionStatus : isBalance ? completionStatus : tracking.balanceStatus,
       firstPaymentReceivedAt: (isDeposit || isFull) && next === 'paid' ? (tracking.firstPaymentReceivedAt || isoToday()) : tracking.firstPaymentReceivedAt,
-      fullPaymentReceivedAt: (isBalance || isFull) && next === 'paid' ? (tracking.fullPaymentReceivedAt || isoToday()) : tracking.fullPaymentReceivedAt,
+      fullPaymentReceivedAt: (isBalance || isFull) && completionStatus === 'paid' ? (tracking.fullPaymentReceivedAt || isoToday()) : tracking.fullPaymentReceivedAt,
       updatedAt: now,
+    });
+  }
+
+  async function updatePaymentAccount(nextAccountType: PaymentAccountType) {
+    const forcedType: PaymentAccountType = taxForcesCompany ? 'company' : nextAccountType;
+    setPaymentAccountType(forcedType);
+    await onSaveInvoice({
+      ...invoice,
+      ...paymentAccountSnapshot(settings, forcedType),
+      updatedAt: new Date().toISOString(),
     });
   }
 
   async function updatePaymentOptions(nextAccountType: PaymentAccountType, nextVatEnabled: boolean) {
     const vatAllowed = isBalance || isFull;
+    if (tracking.channel === 'agent' && vatAllowed) {
+      await updateAgentVatMode(nextVatEnabled ? 'total_package' : 'none');
+      return;
+    }
     const forcedAccountType: PaymentAccountType = vatAllowed && nextVatEnabled ? 'company' : nextAccountType;
     setPaymentAccountType(forcedAccountType);
     setVatEnabled(vatAllowed ? nextVatEnabled : false);
     const account = paymentAccountSnapshot(settings, forcedAccountType);
     const vatRatePercent = Math.max(0, Number(invoice.vatRatePercent ?? settings.vatRatePercent ?? 7));
-    const agentBreakdown = tracking.channel === 'agent' && vatAllowed
-      ? agentVatPackageBreakdown(settings, tracking, packagePortionForVat, invoice.documentData || null)
-      : null;
-    if (nextVatEnabled && tracking.channel === 'agent' && agentBreakdown && agentBreakdown.serviceFeePerPerson <= 0) {
-      window.alert(th
-        ? 'ยังไม่ได้กำหนดค่าบริการสำหรับระยะเวลาของแพ็กเกจนี้ กรุณาตรวจสอบชื่อแพ็กเกจหรือกำหนดค่าบริการในหลังบ้านก่อนเปิด VAT'
-        : 'No service fee is configured for this package duration. Please check the package duration or configure the service fee in Back Office before enabling VAT.');
-      return;
-    }
-    const vatBase = agentBreakdown ? agentBreakdown.vatBaseTHB : packagePortionForVat;
-    const vatAmount = vatAllowed && nextVatEnabled ? roundMoney(vatBase * vatRatePercent / 100) : 0;
-    const documentData = agentBreakdown && nextVatEnabled
-      ? {
-          ...(invoice.documentData || snapshot || buildInvoiceSnapshot(tracking, isFull ? 'full_payment' : 'package_balance', { invoices, payments, ticketBatch })),
-          agentServiceFeePerPersonTHB: agentBreakdown.serviceFeePerPerson,
-          agentServiceFeePassengerCount: agentBreakdown.passengerCount,
-          agentServiceFeeTotalTHB: agentBreakdown.serviceFeeTotal,
-          agentPackageAmountAfterServiceFeeTHB: agentBreakdown.packageAmountAfterServiceFee,
-          vatBaseTHB: agentBreakdown.vatBaseTHB,
-        }
-      : invoice.documentData;
+    const vatAmount = vatAllowed && nextVatEnabled ? roundMoney(packagePortionForVat * vatRatePercent / 100) : 0;
     await onSaveInvoice({
       ...invoice,
       subtotalAmount: baseSubtotal,
@@ -2632,49 +3119,240 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
       vatRatePercent,
       vatAmount,
       amount: roundMoney(baseSubtotal + vatAmount),
-      documentData,
       ...account,
       updatedAt: new Date().toISOString(),
     });
   }
 
+  async function updateAgentVatMode(nextMode: AgentVatMode) {
+    if (tracking.channel !== 'agent' || !(isBalance || isFull)) return;
+    const vatRatePercent = Math.max(0, Number(invoice.vatRatePercent ?? settings.vatRatePercent ?? 7));
+    const breakdown = agentVatPackageBreakdown(settings, tracking, packagePortionForVat, invoice.documentData || null);
+    const allServiceInvoices = supplementalInvoicesFor(tracking.id, invoices).filter(isAgentVatServiceInvoice);
+    const existingServiceInvoice = allServiceInvoices.find((item) => item.status !== 'cancelled') || allServiceInvoices[0];
+    const existingServicePaid = existingServiceInvoice
+      ? invoiceSettled(existingServiceInvoice, payments) || invoicePaidAmount(existingServiceInvoice.id, payments) > 0
+      : false;
+
+    if (nextMode !== 'service_split' && existingServiceInvoice?.status !== 'cancelled' && existingServicePaid) {
+      window.alert(th
+        ? 'เอกสารค่าบริการมีการรับชำระแล้ว จึงไม่สามารถเปลี่ยนรูปแบบ VAT ได้ กรุณาตรวจสอบหรือย้อนรายการรับชำระก่อน'
+        : 'The service-fee VAT invoice already has payment activity. Reverse/check the payment before changing VAT mode.');
+      return;
+    }
+    if (nextMode === 'service_split' && (breakdown.serviceFeePerPerson <= 0 || breakdown.serviceFeeTotal <= 0)) {
+      window.alert(th
+        ? 'ยังไม่ได้กำหนดค่าบริการสำหรับระยะเวลาของแพ็กเกจนี้ กรุณาตรวจสอบ 4D3N / 5D4N / 6D5N ในหลังบ้านก่อน'
+        : 'No service fee is configured for this package duration. Check the 4D3N / 5D4N / 6D5N settings first.');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const baseDocument = invoice.documentData || snapshot || buildInvoiceSnapshot(tracking, isFull ? 'full_payment' : 'package_balance', { invoices, payments, ticketBatch });
+    let projectedInvoices = [...invoices];
+
+    if (nextMode === 'service_split') {
+      const serviceInvoiceId = existingServiceInvoice?.id || makeId('inv');
+      const sequenceNumber = existingServiceInvoice?.sequenceNumber || nextSupplementalSequence(tracking.id, invoices, 3);
+      const serviceVatAmount = roundMoney(breakdown.serviceFeeTotal * vatRatePercent / 100);
+      const serviceDocument: InvoiceDocumentSnapshot = {
+        version: 2,
+        kind: 'supplemental',
+        packageRows: [],
+        packageTotalTHB: 0,
+        totalPassengerCount: breakdown.passengerCount,
+        agentServiceFeePerPersonTHB: breakdown.serviceFeePerPerson,
+        agentServiceFeePassengerCount: breakdown.passengerCount,
+        agentServiceFeeTotalTHB: breakdown.serviceFeeTotal,
+        agentPackageAmountAfterServiceFeeTHB: breakdown.packageAmountAfterServiceFee,
+        agentVatOriginalSubtotalTHB: baseSubtotal,
+        agentVatMode: 'service_split_invoice',
+        agentVatLinkedInvoiceId: invoice.id,
+        vatBaseTHB: breakdown.serviceFeeTotal,
+        capturedAt: now,
+      };
+      const serviceInvoice: PaymentInvoice = {
+        id: serviceInvoiceId,
+        trackingId: tracking.id,
+        invoiceNo: existingServiceInvoice?.invoiceNo || await database.allocateDocNumber('INV'),
+        installment: 'supplemental',
+        sequenceNumber,
+        title: th ? 'เอกสารเรียกเก็บค่าบริการ' : 'Service Charge Invoice',
+        lineItems: [{
+          id: existingServiceInvoice?.lineItems?.[0]?.id || makeId('xline'),
+          description: th ? 'ค่าบริการแพ็กเกจ' : 'Package service fee',
+          quantity: breakdown.passengerCount,
+          unitPriceTHB: breakdown.serviceFeePerPerson,
+          totalTHB: breakdown.serviceFeeTotal,
+          costPerUnitTHB: 0,
+          totalCostTHB: 0,
+        }],
+        costAmount: 0,
+        issueDate: existingServiceInvoice?.issueDate || isoToday(),
+        dueDate: invoice.dueDate || existingServiceInvoice?.dueDate || '',
+        subtotalAmount: breakdown.serviceFeeTotal,
+        vatEnabled: true,
+        vatRatePercent,
+        vatAmount: serviceVatAmount,
+        amount: roundMoney(breakdown.serviceFeeTotal + serviceVatAmount),
+        ...paymentAccountSnapshot(settings, 'company'),
+        status: existingServiceInvoice?.status && existingServiceInvoice.status !== 'cancelled' ? existingServiceInvoice.status : 'invoiced',
+        paidAt: existingServiceInvoice?.paidAt || '',
+        note: th ? 'ค่าบริการรายการนี้แยกเรียกเก็บจากค่าแพ็กเกจ และคิดภาษีมูลค่าเพิ่มตามอัตราที่กำหนด' : 'This service charge is billed separately from the package and is subject to VAT at the applicable rate.',
+        documentData: serviceDocument,
+        createdAt: existingServiceInvoice?.createdAt || now,
+        updatedAt: now,
+      };
+      await onSaveInvoice(serviceInvoice);
+      projectedInvoices = [serviceInvoice, ...projectedInvoices.filter((item) => item.id !== serviceInvoice.id)];
+
+      const mainAccountType: PaymentAccountType = isBalance ? 'owner' : paymentAccountType;
+      const mainDocument: InvoiceDocumentSnapshot = {
+        ...baseDocument,
+        agentServiceFeePerPersonTHB: breakdown.serviceFeePerPerson,
+        agentServiceFeePassengerCount: breakdown.passengerCount,
+        agentServiceFeeTotalTHB: breakdown.serviceFeeTotal,
+        agentPackageAmountAfterServiceFeeTHB: breakdown.packageAmountAfterServiceFee,
+        agentVatOriginalSubtotalTHB: baseSubtotal,
+        agentVatMode: 'service_split',
+        agentVatLinkedInvoiceId: serviceInvoice.id,
+        vatBaseTHB: breakdown.serviceFeeTotal,
+        capturedAt: now,
+      };
+      const mainSubtotal = Math.max(0, baseSubtotal - breakdown.serviceFeeTotal);
+      const updatedMain: PaymentInvoice = {
+        ...invoice,
+        subtotalAmount: mainSubtotal,
+        vatEnabled: false,
+        vatRatePercent,
+        vatAmount: 0,
+        amount: roundMoney(mainSubtotal),
+        documentData: mainDocument,
+        ...paymentAccountSnapshot(settings, mainAccountType),
+        updatedAt: now,
+      };
+      await onSaveInvoice(updatedMain);
+      projectedInvoices = [updatedMain, ...projectedInvoices.filter((item) => item.id !== updatedMain.id)];
+      setAgentVatMode('service_split');
+      setVatEnabled(false);
+      setPaymentAccountType(mainAccountType);
+    } else {
+      if (existingServiceInvoice?.status !== 'cancelled') {
+        const cancelledService = { ...existingServiceInvoice, status: 'cancelled' as const, updatedAt: now };
+        await onSaveInvoice(cancelledService);
+        projectedInvoices = [cancelledService, ...projectedInvoices.filter((item) => item.id !== cancelledService.id)];
+      }
+      const vatAmount = nextMode === 'total_package' ? roundMoney(packagePortionForVat * vatRatePercent / 100) : 0;
+      const accountType: PaymentAccountType = nextMode === 'total_package' ? 'company' : (isBalance ? 'owner' : paymentAccountType);
+      const mainDocument: InvoiceDocumentSnapshot = {
+        ...baseDocument,
+        agentServiceFeePerPersonTHB: breakdown.serviceFeePerPerson,
+        agentServiceFeePassengerCount: breakdown.passengerCount,
+        agentServiceFeeTotalTHB: breakdown.serviceFeeTotal,
+        agentPackageAmountAfterServiceFeeTHB: breakdown.packageAmountAfterServiceFee,
+        agentVatOriginalSubtotalTHB: baseSubtotal,
+        agentVatMode: nextMode,
+        agentVatLinkedInvoiceId: existingServiceInvoice?.id,
+        vatBaseTHB: nextMode === 'total_package' ? packagePortionForVat : 0,
+        capturedAt: now,
+      };
+      const updatedMain: PaymentInvoice = {
+        ...invoice,
+        subtotalAmount: baseSubtotal,
+        vatEnabled: nextMode === 'total_package',
+        vatRatePercent,
+        vatAmount,
+        amount: roundMoney(baseSubtotal + vatAmount),
+        documentData: mainDocument,
+        ...paymentAccountSnapshot(settings, accountType),
+        updatedAt: now,
+      };
+      await onSaveInvoice(updatedMain);
+      projectedInvoices = [updatedMain, ...projectedInvoices.filter((item) => item.id !== updatedMain.id)];
+      setAgentVatMode(nextMode);
+      setVatEnabled(nextMode === 'total_package');
+      setPaymentAccountType(accountType);
+    }
+
+    const supplementalInvoiceTotal = customerSupplementalSalesTotal(tracking, projectedInvoices);
+    const supplementalCostTotal = customerSupplementalCostTotal(tracking, projectedInvoices);
+    const updatedTracking = {
+      ...tracking,
+      supplementalInvoiceTotal,
+      supplementalCostTotal,
+      grandTotalAmount: customerGrandTotal(tracking, projectedInvoices),
+      updatedAt: now,
+    } as CustomerTracking;
+    await onSaveTracking({
+      ...updatedTracking,
+      profitAmount: tracking.landPaidAt && tracking.landPayment > 0 ? realizedGrossProfit(updatedTracking, projectedInvoices, tracking.landPayment) : tracking.profitAmount,
+    });
+  }
+
   const documentTitle = isTravelerInvoice1
-    ? (th ? 'Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers')
-    : isFull
-      ? (th ? 'Invoice — ชำระเต็มจำนวน' : 'Invoice — Full Payment')
-      : isGeneralSupplemental
-        ? (th ? `Invoice เพิ่มเติม งวดที่ ${displaySequence}` : `Supplemental Invoice ${displaySequence}`)
-        : (th ? `Invoice งวดที่ ${displaySequence}` : `Invoice ${displaySequence}`);
+    ? (th ? 'เอกสารเรียกเก็บสำหรับผู้เดินทางเพิ่ม' : 'Additional Traveller Invoice')
+    : isAgentVatServiceDocument
+      ? (th ? 'เอกสารเรียกเก็บค่าบริการ' : 'Service Charge Invoice')
+      : isFull
+        ? (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')
+        : isGeneralSupplemental
+          ? (th ? 'เอกสารเรียกเก็บเพิ่มเติม' : 'Additional Charge Invoice')
+          : (th ? `Invoice งวดที่ ${displaySequence}` : `Invoice ${displaySequence}`);
 
   return <Modal open title={documentTitle} onClose={onClose} wide>
-    <div className="invoice-toolbar invoice-toolbar-payment no-print"><button className="ghost-button" onClick={onClose}><ArrowLeft/>{th ? 'กลับ' : 'Back'}</button><label><span>{th ? 'สถานะเอกสาร' : 'Status'}</span><select value={status} onChange={(e) => void updateStatus(e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label><label><span>{th ? 'บัญชีรับเงิน' : 'Payment account'}</span><select value={(isBalance || isFull) && vatEnabled ? 'company' : paymentAccountType} disabled={(isBalance || isFull) && vatEnabled} onChange={(e) => void updatePaymentOptions(e.target.value as PaymentAccountType, vatEnabled)}><option value="company">{th ? 'บัญชีบริษัท · กสิกรไทย' : 'Company · Kasikornbank'}</option><option value="owner">{th ? 'บัญชีเจ้านาย · ไทยพาณิชย์' : 'Owner · SCB'}</option></select></label>{(isBalance || isFull) && <label className="invoice-vat-toggle"><span>{th ? 'ใบกำกับภาษี' : 'Tax invoice'}</span><button type="button" className={vatEnabled ? 'active' : ''} onClick={() => void updatePaymentOptions(vatEnabled ? paymentAccountType : 'company', !vatEnabled)}><BadgeCheck/>{vatEnabled ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% เปิดอยู่` : `VAT ${formatNumber(currentVatRate, 2)}% on`) : (th ? 'ไม่บวก VAT' : 'No VAT')}</button></label>}<button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF'}</button></div>
+    <div className="invoice-toolbar invoice-toolbar-payment no-print">
+      <button className="ghost-button" onClick={onClose}><ArrowLeft/>{th ? 'กลับ' : 'Back'}</button>
+      <label><span>{th ? 'สถานะเอกสาร' : 'Status'}</span><select value={status} onChange={(e) => void updateStatus(e.target.value as PaymentStageStatus)}>{paymentStatuses.map((x) => <option key={x} value={x}>{paymentStatusLabel(x, th)}</option>)}</select></label>
+      <label><span>{th ? 'บัญชีรับเงิน' : 'Payment account'}</span><select value={taxForcesCompany ? 'company' : paymentAccountType} disabled={taxForcesCompany} onChange={(e) => void updatePaymentAccount(e.target.value as PaymentAccountType)}><option value="company">{th ? 'บัญชีบริษัท · กสิกรไทย' : 'Company · Kasikornbank'}</option><option value="owner">{th ? 'บัญชีเจ้านาย · ไทยพาณิชย์' : 'Owner · SCB'}</option></select>{taxForcesCompany && <small>{th ? 'เอกสารที่มี VAT ใช้บัญชีบริษัทเท่านั้น' : 'VAT documents must use the company account only'}</small>}</label>
+      {(isBalance || isFull) && tracking.channel === 'agent' && <label className="invoice-vat-toggle"><span>{th ? 'รูปแบบ VAT' : 'VAT mode'}</span><select value={agentVatMode} onChange={(e) => void updateAgentVatMode(e.target.value as AgentVatMode)}><option value="none">{th ? 'ไม่คิด VAT' : 'No VAT'}</option><option value="total_package">{th ? `VAT ${formatNumber(currentVatRate, 2)}% · ค่าแพ็กเกจทั้งหมด (Standard)` : `VAT ${formatNumber(currentVatRate, 2)}% · Total package (Standard)`}</option><option value="service_split">{th ? `VAT ${formatNumber(currentVatRate, 2)}% · ค่าบริการ (แยกเอกสารค่าบริการ)` : `VAT ${formatNumber(currentVatRate, 2)}% · Service fee (separate service-charge document)`}</option></select></label>}
+      {(isBalance || isFull) && tracking.channel !== 'agent' && <label className="invoice-vat-toggle"><span>{th ? 'ใบกำกับภาษี' : 'Tax invoice'}</span><button type="button" className={vatEnabled ? 'active' : ''} onClick={() => void updatePaymentOptions(vatEnabled ? paymentAccountType : 'company', !vatEnabled)}><BadgeCheck/>{vatEnabled ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% เปิดอยู่` : `VAT ${formatNumber(currentVatRate, 2)}% on`) : (th ? 'ไม่บวก VAT' : 'No VAT')}</button></label>}
+      {isAgentVatServiceDocument && <label className="invoice-vat-toggle"><span>{th ? 'ภาษีมูลค่าเพิ่ม' : 'VAT'}</span><button type="button" className="active" disabled><BadgeCheck/>{`VAT ${formatNumber(currentVatRate, 2)}%`}</button></label>}
+      {linkedVatServiceInvoice && <button className="ghost-button invoice-linked-file-button" type="button" onClick={() => onOpenInvoice(linkedVatServiceInvoice)}><ExternalLink/>{th ? 'เปิดเอกสารค่าบริการ' : 'Open service-charge document'}</button>}
+      <button className="primary-button" onClick={() => { void printElementAsA4('invoice-print-area', `${invoice.invoiceNo} - ${tracking.customerName}`); }}><Download/>{th ? 'พิมพ์ / บันทึก PDF A4' : 'Print / Save A4 PDF'}</button>
+    </div>
     <article className="invoice-sheet journey-invoice-sheet" id="invoice-print-area">
-      <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{isGeneralSupplemental ? (invoice.title || documentTitle) : (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
+      <header className="invoice-header"><Brand/><div><span>INVOICE</span><h1>{isAgentVatServiceDocument ? documentTitle : isGeneralSupplemental ? (th ? 'เอกสารเรียกเก็บเพิ่มเติม' : 'Additional Charge Invoice') : (th ? 'เอกสารเรียกเก็บเงิน' : 'Payment Invoice')}</h1><b>{invoice.invoiceNo}</b></div></header><div className="invoice-accent"/>
       <section className="invoice-meta"><div><span>{th ? 'เรียกเก็บจาก' : 'Bill to'}</span><strong>{tracking.customerName}</strong><small>{[tracking.phone, tracking.email].filter(Boolean).join(' · ') || '-'}</small>{tracking.invoiceAddress && <small className="invoice-billing-address">{tracking.invoiceAddress}</small>}</div><div><span>{th ? 'วันที่ออกเอกสาร' : 'Issue date'}</span><strong>{formatDate(invoice.issueDate, language)}</strong><small>{th ? 'ครบกำหนด' : 'Due'}: {invoice.dueDate ? formatDate(invoice.dueDate, language) : '-'}</small></div></section>
       <section className="invoice-trip-summary"><div><span>{th ? 'โปรแกรม' : 'Package'}</span><b>{tracking.packageName || '-'}</b></div><div><span>{th ? 'วันเดินทาง' : 'Travel date'}</span><b>{tracking.travelStartDate ? formatDate(tracking.travelStartDate, language) : '-'}</b></div><div><span>{th ? 'ผู้เดินทางรวม' : 'Total travellers'}</span><b>{totalTravellers} {th ? 'ท่าน' : 'pax'}</b></div></section>
 
-      {isGeneralSupplemental ? <>
-        <section className="journey-invoice-package supplemental-document-lines">
-          <h3>{th ? `รายการเรียกเก็บเพิ่มเติม — Invoice ${displaySequence}` : `Additional charges — Invoice ${displaySequence}`}</h3>
-          <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Passenger / Service'}</span><span>PTC</span><span>QTY</span><span>{th ? 'ราคาต่อหน่วย' : 'Selling / Unit'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
-          {invoice.lineItems.map((line) => <div className="journey-invoice-package-row journey-invoice-single-row" key={line.id}><span><b>{line.description}</b></span><span>SRV</span><span>{formatNumber(line.quantity, 0)}</span><span>{formatNumber(line.unitPriceTHB, 2)}</span><span>{formatNumber(line.totalTHB, 2)}</span></div>)}
-          <div className="journey-invoice-package-total"><span>{th ? `รวม Invoice ${displaySequence}` : `Invoice ${displaySequence} total`}</span><strong>{formatNumber(invoice.amount, 2)}</strong></div>
+      {isAgentVatServiceDocument && linkedMainInvoice && <section className="invoice-related-documents">
+        <div className="invoice-related-documents-title">{th ? 'เอกสารที่เกี่ยวข้อง' : 'Related document'}</div>
+        <div className="invoice-related-documents-copy">
+          <strong>{th ? 'เอกสารฉบับนี้เป็นส่วนหนึ่งของการชำระสำหรับแพ็กเกจเดียวกัน' : 'This document forms part of the payment for the same package.'}</strong>
+          <span>{th ? `อ้างอิงเอกสารเรียกเก็บค่าแพ็กเกจเลขที่ ${linkedMainInvoice.invoiceNo}` : `Reference package invoice: ${linkedMainInvoice.invoiceNo}`}</span>
+        </div>
+      </section>}
+
+      {(isGeneralSupplemental || isAgentVatServiceDocument) ? <>
+        <section className={`journey-invoice-package supplemental-document-lines ${isAgentVatServiceDocument ? 'service-charge-document-lines' : ''}`}>
+          <h3>{isAgentVatServiceDocument ? (th ? 'รายละเอียดค่าบริการ' : 'Service charge details') : (th ? 'รายละเอียดรายการเรียกเก็บ' : 'Charge details')}</h3>
+          {isAgentVatServiceDocument ? <>
+            <div className="service-charge-line-head"><span>{th ? 'รายการ' : 'Description'}</span><span>{th ? 'จำนวน' : 'Qty'}</span><span>{th ? 'ราคาต่อหน่วย' : 'Unit price'}</span><span>{th ? 'จำนวนเงิน (บาท)' : 'Amount (THB)'}</span></div>
+            {invoice.lineItems.map((line) => <div className="service-charge-line-row" key={line.id}><span><b>{line.description}</b></span><span>{formatNumber(line.quantity, 0)}</span><span>{formatNumber(line.unitPriceTHB, 2)}</span><span>{formatNumber(line.totalTHB, 2)}</span></div>)}
+          </> : <>
+            <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Description'}</span><span>{th ? 'ประเภท' : 'Type'}</span><span>{th ? 'จำนวน' : 'Qty'}</span><span>{th ? 'ราคาต่อหน่วย' : 'Unit price'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
+            {invoice.lineItems.map((line) => <div className="journey-invoice-package-row journey-invoice-single-row" key={line.id}><span><b>{line.description}</b></span><span>{th ? 'บริการ' : 'Service'}</span><span>{formatNumber(line.quantity, 0)}</span><span>{formatNumber(line.unitPriceTHB, 2)}</span><span>{formatNumber(line.totalTHB, 2)}</span></div>)}
+          </>}
+          {isAgentVatServiceDocument ? <>
+            <div className="invoice-balance-subtotal service-charge-summary-row"><span>{th ? 'รวมค่าบริการ' : 'Service charge subtotal'}</span><b>{formatNumber(invoice.subtotalAmount, 2)}</b></div>
+            <div className="invoice-vat-row service-charge-summary-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>
+            <div className="journey-invoice-package-total service-charge-grand-total"><span>{th ? 'ยอดชำระทั้งสิ้น' : 'Total amount due'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
+          </> : <div className="journey-invoice-package-total"><span>{th ? 'ยอดชำระรายการเพิ่มเติม' : 'Additional charge amount'}</span><strong>{formatNumber(invoice.amount, 2)}</strong></div>}
         </section>
-        <section className="supplemental-grand-summary"><div><span>{th ? 'แพ็กเกจหลัก' : 'Main package'}</span><b>{formatNumber(packageSalesTotal(tracking), 2)}</b></div><div><span>{th ? 'Invoice เพิ่มเติมสะสม' : 'Supplemental invoices'}</span><b>{formatNumber(tracking.supplementalInvoiceTotal || invoice.amount, 2)}</b></div><div className="featured"><span>{th ? 'ยอดขายรวมลูกค้า' : 'Customer grand total'}</span><strong>{formatNumber(tracking.grandTotalAmount || tracking.totalAmount + invoice.amount, 2)}</strong></div></section>
       </> : <>
         <section className="journey-invoice-package invoice-reference-layout">
           <h3>{th ? 'มูลค่าแพ็กเกจทั้งหมด' : 'Full package value'}</h3>
-          <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Passenger / Service'}</span><span>PTC</span><span>QTY</span><span>{th ? 'ราคาต่อท่าน' : 'Selling / Pax'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
-          {packageRows.map((row) => <div className="journey-invoice-package-row journey-invoice-single-row" key={row.id}><span><b>{th ? row.descriptionTh : row.descriptionEn}</b><small>{th ? row.detailTh : row.detailEn}</small></span><span>{row.ptc}</span><span>{formatNumber(row.quantity, 0)}</span><span>{formatNumber(row.unitPriceTHB, 2)}</span><span>{formatNumber(row.totalTHB, 2)}</span></div>)}
+          <div className="journey-invoice-package-head"><span>{th ? 'รายการ' : 'Description'}</span><span>{th ? 'ประเภท' : 'Type'}</span><span>{th ? 'จำนวน' : 'Qty'}</span><span>{th ? 'ราคาต่อท่าน' : 'Price / pax'}</span><span>{th ? 'รวม (บาท)' : 'Total (THB)'}</span></div>
+          {packageRows.map((row) => <div className="journey-invoice-package-row journey-invoice-single-row" key={row.id}><span><b>{th ? row.descriptionTh : row.descriptionEn}</b><small>{th ? row.detailTh : row.detailEn}</small></span><span>{row.ptc === 'CHD' ? (th ? 'เด็ก' : 'Child') : (th ? 'ผู้ใหญ่' : 'Adult')}</span><span>{formatNumber(row.quantity, 0)}</span><span>{formatNumber(row.unitPriceTHB, 2)}</span><span>{formatNumber(row.totalTHB, 2)}</span></div>)}
           <div className="journey-invoice-package-total"><span>{th ? 'รวมมูลค่าแพ็กเกจ' : 'Total package value'}</span><strong>{formatNumber(packageTotal, 2)}</strong></div>
         </section>
 
         {isInvoice1 && ticketBatch && <section className="journey-payment-breakdown invoice-ticket-reference">
           <h3>{th ? 'การชำระงวดที่ 1 — ค่าตั๋วเครื่องบิน' : 'Payment 1 — airfare'}</h3>
           {ticketBatch.fareLines?.length ? <div className="ticket-fare-lines">
-            <div className="ticket-fare-head"><span>{th ? 'ชั้นโดยสาร' : 'Cabin'}</span><span>QTY</span><span>{th ? 'ค่าโดยสาร' : 'Fare'}</span><span>{th ? 'ภาษี' : 'Tax'}</span><span>{th ? 'รวม/ท่าน' : 'Total/pax'}</span><span>{th ? 'รวม' : 'Total'}</span></div>
+            <div className="ticket-fare-head"><span>{th ? 'ชั้นโดยสาร' : 'Cabin'}</span><span>{th ? 'จำนวน' : 'Qty'}</span><span>{th ? 'ค่าโดยสาร' : 'Fare'}</span><span>{th ? 'ภาษีสนามบิน' : 'Airport tax'}</span><span>{th ? 'รวม/ท่าน' : 'Total/pax'}</span><span>{th ? 'รวม' : 'Total'}</span></div>
             {ticketBatch.fareLines.map((line) => <div className="ticket-fare-row" key={`${line.ptc || 'ADT'}-${line.cabinClass}`}>
-              <span><b>{line.ptc || 'ADT'} · {line.cabinClass}</b><small>{line.ptc === 'CHD' ? (th ? 'เด็ก' : 'Child') : line.cabinClass === 'Business' && th ? 'ผู้โดยสารที่อัปเกรดภายในกรุ๊ป' : ''}</small></span>
+              <span><b>{line.ptc === 'CHD' ? (th ? 'เด็ก' : 'Child') : (th ? 'ผู้ใหญ่' : 'Adult')} · {line.cabinClass}</b><small>{line.cabinClass === 'Business' && th ? 'ชั้นธุรกิจ' : ''}</small></span>
               <span>{line.passengerCount}</span>
               <span>{formatNumber(line.farePerPersonTHB, 2)}</span>
               <span>{formatNumber(line.airportTaxPerPersonTHB, 2)}</span>
@@ -2687,41 +3365,53 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
             <div><span>{th ? 'ภาษีสนามบิน / ท่าน' : 'Airport tax / pax'}</span><b>{formatNumber(ticketBatch.airportTaxPerPersonTHB, 2)}</b></div>
             <div><span>{th ? 'รวมค่าตั๋วและภาษี / ท่าน' : 'Airfare and tax / pax'}</span><b>{formatNumber(ticketBatch.farePerPersonTHB + ticketBatch.airportTaxPerPersonTHB, 2)}</b></div>
           </>}
-          <div className="journey-payment-due"><span>Total Ticket Due (THB)</span><strong>{formatNumber(ticketBatch.totalDueTHB, 2)}</strong></div>
+          <div className="journey-payment-due"><span>{th ? 'ยอดชำระค่าตั๋วเครื่องบิน' : 'Airfare amount due'}</span><strong>{formatNumber(ticketBatch.totalDueTHB, 2)}</strong></div>
         </section>}
 
         {isFull && <section className="journey-payment-breakdown invoice-full-payment-reference">
-          <h3>{th ? 'Full Payment — ชำระทั้งหมดครั้งเดียว' : 'Full Payment — one-time collection'}</h3>
-          <div><span>{th ? 'ยอดรวมก่อน VAT' : 'Total before VAT'}</span><b>{formatNumber(baseSubtotal, 2)}</b></div>
-          {vatEnabled && currentAgentVatBreakdown && <>
-            <div><span>{th ? 'ค่าตั๋วเครื่องบินและภาษีสนามบิน' : 'Airfare and airport tax'}</span><b>{formatNumber(ticketComponentForFull, 2)}</b></div>
-            <div><span>{th ? 'ค่าแพ็กเกจ' : 'Package amount'}</span><b>{formatNumber(currentAgentVatBreakdown.packageAmountAfterServiceFee, 2)}</b></div>
-            <div className="invoice-service-fee-row"><span>{th ? `ค่าบริการ ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} บาท × ${currentAgentVatBreakdown.passengerCount} ท่าน` : `Service fee ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} × ${currentAgentVatBreakdown.passengerCount} pax`}</span><b>{formatNumber(currentAgentVatBreakdown.serviceFeeTotal, 2)}</b></div>
-          </>}
-          {vatEnabled && <div className="invoice-vat-row"><span>{currentAgentVatBreakdown ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าบริการ` : `VAT ${formatNumber(currentVatRate, 2)}% — service fee`) : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
-          <div className="journey-payment-due"><span>{th ? 'Total Due (THB)' : 'Total Due (THB)'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
+          <h3>{th ? 'รายละเอียดการชำระ' : 'Payment details'}</h3>
+          {tracking.channel === 'agent' && agentVatMode === 'service_split' && currentAgentVatBreakdown
+            ? <div className="invoice-balance-subtotal invoice-balance-simple-row"><span>{th ? 'ค่าแพ็กเกจ' : 'Package amount'}</span><b>{formatNumber(splitMainSubtotal, 2)}</b></div>
+            : <div><span>{(tracking.channel === 'agent' && agentVatMode === 'total_package') || (tracking.channel !== 'agent' && vatEnabled) ? (th ? 'ยอดก่อนภาษีมูลค่าเพิ่ม' : 'Amount before VAT') : (th ? 'ยอดค่าแพ็กเกจ' : 'Package amount')}</span><b>{formatNumber(baseSubtotal, 2)}</b></div>}
+          {tracking.channel === 'agent' && agentVatMode === 'total_package' && <div className="invoice-vat-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>}
+          {tracking.channel !== 'agent' && vatEnabled && <div className="invoice-vat-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>}
+          <div className="journey-payment-due"><span>{th ? 'ยอดชำระทั้งสิ้น' : 'Total amount due'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
         </section>}
 
         {isBalance && <section className="journey-payment-breakdown invoice-balance-reference">
-          <h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจส่วนที่เหลือ' : 'Payment 2 — remaining package balance'}</h3>
-          <div><span>{th ? 'ค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(packageTotal, 2)}</b></div>
-          {deductions.map((deduction) => <div key={deduction.id} className="deduction"><span>{th ? deduction.labelTh : deduction.labelEn}{deduction.reference ? ` (${deduction.reference})` : ''}</span><b>-{formatNumber(deduction.amountTHB, 2)}</b></div>)}
-          {!deductions.length && <div className="deduction"><span>{th ? 'หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว' : 'Less paid airfare'}</span><b>-{formatNumber(0, 2)}</b></div>}
-          <div className="invoice-balance-subtotal"><span>{th ? 'ยอดแพ็กเกจส่วนที่เหลือก่อน VAT' : 'Remaining package balance before VAT'}</span><b>{formatNumber(balanceDue, 2)}</b></div>
-          {vatEnabled && currentAgentVatBreakdown && <>
-            <div><span>{th ? 'ค่าแพ็กเกจ' : 'Package amount'}</span><b>{formatNumber(currentAgentVatBreakdown.packageAmountAfterServiceFee, 2)}</b></div>
-            <div className="invoice-service-fee-row"><span>{th ? `ค่าบริการ ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} บาท × ${currentAgentVatBreakdown.passengerCount} ท่าน` : `Service fee ${formatNumber(currentAgentVatBreakdown.serviceFeePerPerson, 0)} × ${currentAgentVatBreakdown.passengerCount} pax`}</span><b>{formatNumber(currentAgentVatBreakdown.serviceFeeTotal, 2)}</b></div>
+          {tracking.channel === 'agent' && agentVatMode === 'service_split' && currentAgentVatBreakdown ? <>
+            <h3>{th ? 'สรุปการชำระค่าแพ็กเกจ' : 'Package payment summary'}</h3>
+            <div><span>{th ? 'มูลค่าแพ็กเกจทั้งหมด' : 'Full package value'}</span><b>{formatNumber(packageTotal, 2)}</b></div>
+            <div className="deduction"><span>{th ? 'ชำระแล้ว — งวดที่ 1 (ค่าตั๋วเครื่องบิน)' : 'Paid — Payment 1 (airfare)'}</span><b>-{formatNumber(deductedTotal, 2)}</b></div>
+            <div className="invoice-balance-subtotal"><span>{th ? 'ยอดคงเหลือหลังชำระงวดที่ 1' : 'Balance after Payment 1'}</span><b>{formatNumber(balanceDue, 2)}</b></div>
+            <div className="deduction invoice-linked-charge-row"><span>{th ? `แยกเรียกเก็บค่าบริการตามเอกสารเลขที่ ${linkedVatServiceInvoice?.invoiceNo || '-'}` : `Service charge billed separately under ${linkedVatServiceInvoice?.invoiceNo || '-'}`}</span><b>-{formatNumber(currentAgentVatBreakdown.serviceFeeTotal, 2)}</b></div>
+            <div className="journey-payment-due"><span>{th ? 'ยอดชำระค่าแพ็กเกจงวดที่ 2' : 'Package Payment 2 amount due'}</span><strong>{formatNumber(splitMainSubtotal, 2)}</strong></div>
+          </> : <>
+            <h3>{th ? 'การชำระงวดที่ 2 — ค่าแพ็กเกจ' : 'Payment 2 — Package'}</h3>
+            <div><span>{th ? 'ค่าแพ็กเกจทั้งหมด' : 'Full package amount'}</span><b>{formatNumber(packageTotal, 2)}</b></div>
+            {deductions.map((deduction) => <div key={deduction.id} className="deduction"><span>{th ? deduction.labelTh : deduction.labelEn}{deduction.reference ? ` (${deduction.reference})` : ''}</span><b>-{formatNumber(deduction.amountTHB, 2)}</b></div>)}
+            {!deductions.length && <div className="deduction"><span>{th ? 'หัก ค่าตั๋วเครื่องบินที่ชำระแล้ว' : 'Less paid airfare'}</span><b>-{formatNumber(0, 2)}</b></div>}
+            <div className="invoice-balance-subtotal"><span>{th ? 'ค่าแพ็กเกจงวดที่ 2' : 'Payment 2 package amount'}</span><b>{formatNumber(balanceDue, 2)}</b></div>
+            {tracking.channel === 'agent' && agentVatMode === 'total_package' && <div className="invoice-vat-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>}
+            {tracking.channel !== 'agent' && vatEnabled && <div className="invoice-vat-row"><span>{th ? `ภาษีมูลค่าเพิ่ม (VAT) ${formatNumber(currentVatRate, 2)}%` : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>{formatNumber(currentVatAmount, 2)}</b></div>}
+            <div className="journey-payment-due"><span>{th ? 'ยอดชำระงวดที่ 2' : 'Payment 2 amount due'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
           </>}
-          {vatEnabled && <div className="invoice-vat-row"><span>{currentAgentVatBreakdown ? (th ? `VAT ${formatNumber(currentVatRate, 2)}% — ค่าบริการ` : `VAT ${formatNumber(currentVatRate, 2)}% — service fee`) : `VAT ${formatNumber(currentVatRate, 2)}%`}</span><b>+{formatNumber(currentVatAmount, 2)}</b></div>}
-          <div className="journey-payment-due"><span>{th ? 'Total Package Due (THB)' : 'Total Package Due (THB)'}</span><strong>{formatNumber(amountDue, 2)}</strong></div>
+        </section>}
+
+        {isBalance && tracking.channel === 'agent' && agentVatMode === 'service_split' && linkedVatServiceInvoice && <section className="invoice-related-documents invoice-related-documents-main">
+          <div className="invoice-related-documents-title">{th ? 'เอกสารที่เกี่ยวข้อง' : 'Related document'}</div>
+          <div className="invoice-related-documents-copy">
+            <strong>{th ? 'ค่าบริการสำหรับแพ็กเกจนี้เรียกเก็บแยกต่างหาก' : 'The service charge for this package is billed separately.'}</strong>
+            <span>{th ? `โปรดพิจารณาร่วมกับเอกสารเรียกเก็บค่าบริการเลขที่ ${linkedVatServiceInvoice.invoiceNo} ซึ่งเป็นส่วนหนึ่งของการชำระสำหรับแพ็กเกจเดียวกัน` : `Please review together with service-charge document ${linkedVatServiceInvoice.invoiceNo}, which forms part of the payment for the same package.`}</span>
+          </div>
         </section>}
 
         {needsPassengerCheck && ticketBatch && <section className="invoice-passenger-check"><div className="invoice-passenger-check-title"><div><Plane/><span>{th ? 'ข้อมูลการจองตั๋วสำหรับตรวจสอบชื่อ' : 'Flight booking details for name verification'}</span></div><b>{th ? ticketBatch.batchLabelTh : ticketBatch.batchLabelEn}</b></div><div className="invoice-passenger-booking-meta"><div><span>PNR</span><strong>{ticketBatch.pnr || '-'}</strong></div><div><span>{th ? 'สายการบิน' : 'Airline'}</span><strong>{ticketBatch.airline || '-'}</strong></div><div><span>{th ? 'จำนวนรายชื่อ' : 'Names listed'}</span><strong>{invoicePassengerNames.length} / {ticketBatch.passengerCount}</strong></div></div><div className="invoice-passenger-alert"><ShieldCheck/><span>{th ? 'กรุณาตรวจสอบชื่อ–นามสกุล คำนำหน้า และการสะกดทุกตัวอักษรให้ตรงกับหนังสือเดินทาง ก่อนยืนยันให้ออกตั๋วเครื่องบิน' : 'Please verify every passenger’s full name, title and spelling against the passport before ticket issuance.'}</span></div><ol className={`invoice-passenger-list ${invoicePassengerNames.length > 6 ? 'two-columns' : ''}`}>{invoicePassengerNames.length ? invoicePassengerNames.map((name, index) => <li key={`${name}-${index}`}>{name}</li>) : <li>{th ? 'ยังไม่มีรายชื่อผู้เดินทาง' : 'No passenger names recorded'}</li>}</ol></section>}
       </>}
 
-      <section className="invoice-total invoice-total-readable"><div><span>{isFull ? (th ? 'ยอดชำระทั้งหมด' : 'Full payment due') : isTravelerInvoice1 ? (th ? 'ยอดชำระ Invoice 1 — ผู้เดินทางเพิ่ม' : 'Invoice 1 — added travellers amount due') : isGeneralSupplemental ? (th ? `ยอดชำระ Invoice ${displaySequence}` : `Invoice ${displaySequence} amount due`) : (th ? `ยอดชำระงวดที่ ${displaySequence}` : `Payment ${displaySequence} due`)}</span><strong>THB {formatNumber(amountDue, 2)}</strong></div><aside><span>{th ? 'กำหนดชำระ' : 'PAYMENT DEADLINE'}</span><b>{invoice.dueDate ? formatDate(invoice.dueDate, language) : (th ? 'กรุณากำหนดวันชำระ' : 'Please set a due date')}</b></aside></section>
-      <section className="invoice-bank-payment"><div className="invoice-bank-copy"><span>{th ? 'บัญชีสำหรับชำระเงิน' : 'PAYMENT ACCOUNT'}</span><h3>{th ? `กรุณาโอนเงินเข้าบัญชี${paymentDetails.paymentBankName}` : `Please transfer to ${paymentDetails.paymentBankName}`}</h3><dl><div><dt>{th ? 'ชื่อบัญชี' : 'Account name'}</dt><dd>{paymentDetails.paymentAccountName}</dd></div><div><dt>{th ? 'เลขที่บัญชี' : 'Account number'}</dt><dd>{paymentDetails.paymentAccountNumber}</dd></div></dl></div></section>
-      <footer className="invoice-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div><div><span>{th ? 'ผู้จัดทำ' : 'Prepared by'}</span><b>{tracking.salesOwnerName || '-'}</b></div></footer>
+      <section className="invoice-total invoice-total-readable"><div><span>{isFull ? (th ? 'ยอดชำระทั้งหมด' : 'Full payment due') : (isTravelerInvoice1 || isAgentVatServiceDocument || isGeneralSupplemental) ? (th ? 'ยอดชำระทั้งสิ้น' : 'Total amount due') : (th ? `ยอดชำระงวดที่ ${displaySequence}` : `Payment ${displaySequence} due`)}</span><strong>THB {formatNumber(amountDue, 2)}</strong></div><aside><span>{th ? 'กำหนดชำระ' : 'PAYMENT DEADLINE'}</span><b>{invoice.dueDate ? formatDate(invoice.dueDate, language) : (th ? 'กรุณากำหนดวันชำระ' : 'Please set a due date')}</b></aside></section>
+      <section className="invoice-bank-payment"><div className="invoice-bank-copy"><span>{th ? 'บัญชีสำหรับชำระเงิน' : 'PAYMENT ACCOUNT'}</span><h3>{th ? 'กรุณาชำระเงินตามรายละเอียดบัญชีด้านล่าง' : 'Please make payment using the account details below'}</h3><dl><div><dt>{th ? 'ธนาคาร' : 'Bank'}</dt><dd>{paymentDetails.paymentBankName}</dd></div><div><dt>{th ? 'ชื่อบัญชี' : 'Account name'}</dt><dd>{paymentDetails.paymentAccountName}</dd></div><div><dt>{th ? 'เลขที่บัญชี' : 'Account number'}</dt><dd>{paymentDetails.paymentAccountNumber}</dd></div></dl></div></section>
+      <footer className="invoice-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div></footer>
     </article>
   </Modal>;
 }

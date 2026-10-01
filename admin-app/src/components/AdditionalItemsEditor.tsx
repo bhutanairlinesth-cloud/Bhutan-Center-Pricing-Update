@@ -10,6 +10,8 @@ interface Props {
   language: 'th' | 'en';
   onChange: (items: AdditionalCharge[]) => void;
   compact?: boolean;
+  /** Hide title block when wrapped in CalculatorExtraSection */
+  headless?: boolean;
 }
 
 type DraftItem = {
@@ -24,7 +26,7 @@ export function makeAdditionalCharge(description = '', passengerCount = 1, basis
   return { id: makeId('extra'), description, basis, quantity, unitPriceTHB: 0, totalTHB: 0 };
 }
 
-export function AdditionalItemsEditor({ items, passengerCount, language, onChange, compact = false }: Props) {
+export function AdditionalItemsEditor({ items, passengerCount, language, onChange, compact = false, headless = false }: Props) {
   const th = language === 'th';
   const normalized = normalizeAdditionalCharges(items, passengerCount);
   const listRef = React.useRef<HTMLDivElement | null>(null);
@@ -100,11 +102,12 @@ export function AdditionalItemsEditor({ items, passengerCount, language, onChang
         ['Baggage vehicle', 'per_group'],
       ] as const;
 
-  return <section className={`additional-items-editor ${compact ? 'compact' : ''}`}>
+  return <section className={`additional-items-editor ${compact ? 'compact' : ''} ${headless ? 'headless' : ''}`.trim()}>
     <div className="additional-items-head">
-      <div><span><Sparkles/></span><div><h3>{th ? 'รายการเพิ่มเติม' : 'Additional services'}</h3><p>{th ? 'เพิ่มรายละเอียด ราคา และวิธีคิดได้เอง ระบบจะรวมยอดให้อัตโนมัติ' : 'Add custom descriptions, prices and calculation methods. Totals update automatically.'}</p></div></div>
+      {!headless && <div><span><Sparkles/></span><div><h3>{th ? 'รายการเพิ่มเติม' : 'Additional services'}</h3><p>{th ? 'เพิ่มรายละเอียด ราคา และวิธีคิดได้เอง ระบบจะรวมยอดให้อัตโนมัติ' : 'Add custom descriptions, prices and calculation methods. Totals update automatically.'}</p></div></div>}
       <button type="button" className="secondary-button" onClick={() => openAdd()}><Plus/>{th ? 'เพิ่มรายการ' : 'Add item'}</button>
     </div>
+    {headless && <p className="additional-items-headless-note">{th ? 'เพิ่มรายละเอียด ราคา และวิธีคิดได้เอง ระบบจะรวมยอดให้อัตโนมัติ' : 'Add custom descriptions, prices and calculation methods. Totals update automatically.'}</p>}
     <div className="additional-quick-add">
       <small>{th ? 'เพิ่มด่วน:' : 'Quick add:'}</small>
       {quick.map(([label, basis]) => <button key={label} type="button" onClick={() => openAdd(label, basis)}>{label}</button>)}

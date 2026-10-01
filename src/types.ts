@@ -23,6 +23,19 @@ export interface User {
   createdAt: string;
 }
 
+export interface Agent {
+  id: string;
+  code: string;
+  name: string;
+  contactName: string;
+  phone: string;
+  email: string;
+  active: boolean;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreateSystemUserInput {
   name: string;
   email: string;
@@ -201,6 +214,9 @@ export type QuotationStatus = 'sent' | 'confirmed' | 'converted' | 'lost';
 export interface QuotationRecord {
   id: string;
   quotationNo: string;
+  /** Optional link to agent master when channel is agent. */
+  agentId?: string;
+  agentName?: string;
   status: QuotationStatus;
   customerName: string;
   phone: string;
@@ -292,6 +308,10 @@ export interface TravelerAddition {
 
 export interface CustomerTracking {
   id: string;
+  /** Running booking number (BK-YYYY-NNNN). Legacy records may omit. */
+  bookingNo?: string;
+  /** Optional link to agent master when channel is agent. */
+  agentId?: string;
   /** Source quotation when this journey was converted from the quotation archive. */
   sourceQuotationId: string;
   sourceQuotationNo: string;
@@ -401,6 +421,8 @@ export interface CustomerTracking {
 export interface PaymentTransaction {
   id: string;
   trackingId: string;
+  /** Receipt number (RC-YYYY-NNNN). Legacy records may omit. */
+  receiptNo?: string;
   /** Optional link to Invoice 3+ for separate payment tracking. */
   invoiceId: string;
   type: PaymentTransactionType;
@@ -473,11 +495,17 @@ export interface InvoiceDocumentSnapshot {
   ticketBatch?: InvoiceTicketBatchSnapshot;
   deductions?: InvoiceDeductionSnapshot[];
   balanceDueTHB?: number;
-  /** Agent-only VAT split snapshot for package invoices. */
+  /** Agent-only VAT snapshot for package invoices. */
   agentServiceFeePerPersonTHB?: number;
   agentServiceFeePassengerCount?: number;
   agentServiceFeeTotalTHB?: number;
   agentPackageAmountAfterServiceFeeTHB?: number;
+  /** Original amount of the package/full-payment invoice before a service-fee split. */
+  agentVatOriginalSubtotalTHB?: number;
+  /** VAT mode selected for Agent billing. service_split creates a separate Invoice 3. */
+  agentVatMode?: 'none' | 'total_package' | 'service_split' | 'service_split_invoice';
+  /** Links the package invoice and its VAT service Invoice 3 without adding DB columns. */
+  agentVatLinkedInvoiceId?: string;
   vatBaseTHB?: number;
   capturedAt: string;
 }

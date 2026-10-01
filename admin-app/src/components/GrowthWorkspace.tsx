@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, CheckCircle2, CircleDot, Copy, Eye, Globe2, MonitorSmartphone, MousePointerClick,
-  Megaphone, Radio, RefreshCw, Save, Send, Server, Settings2, Tags, Target, UserCheck, UsersRound, Wifi,
+  Activity, CheckCircle2, Copy, Globe2, MousePointerClick,
+  Megaphone, Radio, RefreshCw, Save, Send, Server, Settings2, Target, UserCheck, UsersRound, Wifi,
 } from 'lucide-react';
 import { CustomerTracking, QuotationRecord, TourPackage, User } from '../types';
-import { supabaseAuth } from '../lib/supabase';
+import { isSupabaseConfigured, supabaseAuth } from '../lib/supabase';
+import { PageHeader, SectionCard, Toggle } from '../shared/ui';
 
 interface LiveVisitor {
   sessionId:string|null;
@@ -81,6 +82,33 @@ interface MetaAudienceRecipe {
   note?:string;
 }
 
+const LOCAL_NOTICE = 'โหมด Local · แสดงข้อมูลตัวอย่าง (ยังไม่ได้เชื่อม Supabase)';
+const LOCAL_SAVE_NOTICE = 'โหมด Local · ไม่ได้บันทึก/ส่งจริง';
+
+const TAG_RULES = [
+  { tag: 'Website Visitor', condition: 'เข้าเว็บอย่างน้อย 1 ครั้ง' },
+  { tag: 'Package Interest', condition: 'ดูหน้าแพ็กเกจ' },
+  { tag: 'LINE Intent', condition: 'กด CTA ไป LINE' },
+  { tag: 'LINE Friend', condition: 'เพิ่มเพื่อน OA' },
+  { tag: 'LINE Engaged', condition: 'เคยส่งข้อความ' },
+  { tag: 'Website ↔ LINE Matched', condition: 'จับคู่ Visitor กับ LINE ได้แล้ว' },
+];
+
+const META_PLAYBOOK_STEPS = [
+  { title: 'เปิด Meta Ads Manager', desc: 'ไปที่ All tools → Audiences' },
+  { title: 'Create Audience', desc: 'เลือก Custom Audience → Website' },
+  { title: 'เลือก Bhutan Center Dataset', desc: 'เลือก Pixel/Dataset แล้วเลือก Rule ตามสูตร' },
+  { title: 'ตั้ง Retention + ชื่อ', desc: 'Copy ชื่อ Audience จากหลังบ้านได้เลย' },
+  { title: 'Create Audience', desc: 'รอ Meta Populate แล้วนำไป Include / Exclude ที่ Ad Set' },
+];
+
+const META_CAMPAIGN_RECIPES = [
+  { id: '01', name: 'Warm Retarget', rule: 'Include: Website Visitors 30D', note: 'Exclude: LINE Intent 14D เพื่อแยกคน Intent สูงไปอีกชุด', hot: false },
+  { id: '02', name: 'Package Retarget', rule: 'Include: Package Viewers 30D', note: 'ใช้ Creative แพ็กเกจ / รีวิว / High Season / ราคาเริ่มต้น', hot: false },
+  { id: '03', name: 'High Intent', rule: 'Include: LINE Intent 14D', note: 'CTA ตรงไป LINE OA · ปรึกษาทริป · เช็กวันเดินทาง', hot: true },
+  { id: '04', name: 'Acquisition Exclusion', rule: 'Exclude: Leads / Confirmed-Paid', note: 'ลดการยิงโฆษณาหาลูกค้าใหม่ใส่คนที่เข้ากระบวนการแล้ว', hot: false },
+];
+
 const META_AUDIENCE_RECIPES:MetaAudienceRecipe[]=[
   {id:'all_visitors_30',name:'BC | Website Visitors | 30D',priority:'เริ่มก่อน',source:'Website',retention:'30 วัน',rule:'Include: All website visitors',use:'Retarget คนที่เคยเข้าเว็บด้วย Content, Package, High Season',exclude:'แยก High Intent ออกไปยิงชุดเฉพาะได้'},
   {id:'package_viewers_30',name:'BC | Package Viewers | 30D',priority:'เริ่มก่อน',source:'Website Event',retention:'30 วัน',rule:'Include Event: ViewContent',use:'ยิงแพ็กเกจ, รีวิว, จุดเด่นทริป, ราคาเริ่มต้น',exclude:'แนะนำ Exclude: BC | LINE Intent | 14D'},
@@ -92,7 +120,21 @@ const META_AUDIENCE_RECIPES:MetaAudienceRecipe[]=[
 
 interface IntegrationSettings { storageReady:boolean; storageError?:{code:string;message:string}|null; meta:{enabled:boolean;pixelId:string;pixelIdMasked:string|null;testEventCode:string;testEventConfigured:boolean;capiConfigured:boolean;accessTokenMasked:string|null;secretStorageReady:boolean;tokenSource:string;source:string;updatedAt:string|null;lastTestAt:string|null;lastTestOk:boolean|null;lastTestMessage:string|null;lastTestEventsReceived:number}; line:{enabled:boolean;url:string;source:string;updatedAt:string|null}; }
 
-type MarketingTab = 'overview' | 'realtime' | 'audience' | 'funnel' | 'meta' | 'google' | 'website' | 'line' | 'seo';
+type MarketingTab = 'overview' | 'realtime' | 'audience' | 'funnel' | 'meta' | 'google' | 'website' | 'line' | 'seo' | 'integrations';
+
+const subtitleByTab: Record<MarketingTab, string> = {
+  overview: 'เห็นตั้งแต่คนเข้าเว็บจนถึงการปิดการขาย · Website, LINE และ Customer Tracking ใน Funnel เดียวกัน',
+  realtime: 'ผู้เข้าชมที่กำลังอยู่บนเว็บตอนนี้ · heartbeat ทุก 6 วินาที · อัปเดตทุก 2 วินาที',
+  audience: 'แบ่งกลุ่มคนจาก Website + LINE · First-party Audience ก่อนเชื่อม Ads',
+  funnel: 'รู้ว่าใครหลุดตรงไหนแล้วตามกลับมา · LINE + Customer Tracking เป็นจุดเปลี่ยน',
+  meta: 'Facebook Pixel & Conversions API · Browser + Server events',
+  google: 'Google Tag, GA4 และ Ads · Remarketing-ready',
+  website: 'ราคาแสดงบนเว็บไซต์ · แยกจากสูตรขายจริง',
+  line: 'ช่องทางหลักสำหรับปิดการขาย · Broadcast จากหลังบ้าน',
+  seo: 'Legacy URL, Sitemap, Robots · ย้ายจาก Wix แบบลดความเสี่ยง Ranking',
+  integrations: 'ตั้งค่า Meta Pixel, LINE OA และ Google Tag',
+};
+
 const MARKETING_TAB_PATHS: Record<MarketingTab, string> = {
   overview: '/admin/marketing',
   realtime: '/admin/marketing/realtime',
@@ -103,14 +145,23 @@ const MARKETING_TAB_PATHS: Record<MarketingTab, string> = {
   website: '/admin/marketing/website',
   line: '/admin/marketing/line',
   seo: '/admin/marketing/seo',
+  integrations: '/admin/marketing/integrations',
 };
+type IntegrationPanel = 'settings' | 'meta' | 'google';
+function integrationPanelFromPath(pathname:string): IntegrationPanel {
+  const path=pathname.replace(/\/+$/,'');
+  if(path.startsWith('/admin/marketing/meta')) return 'meta';
+  if(path.startsWith('/admin/marketing/google')) return 'google';
+  return 'settings';
+}
 function marketingTabFromPath(pathname:string): MarketingTab {
   const path=pathname.replace(/\/+$/,'');
   if(path.startsWith('/admin/marketing/realtime')) return 'realtime';
   if(path.startsWith('/admin/marketing/audience')) return 'audience';
   if(path.startsWith('/admin/marketing/funnel')) return 'funnel';
-  if(path.startsWith('/admin/marketing/meta')) return 'meta';
-  if(path.startsWith('/admin/marketing/google')) return 'google';
+  if(path.startsWith('/admin/marketing/integrations')) return 'integrations';
+  if(path.startsWith('/admin/marketing/meta')) return 'integrations';
+  if(path.startsWith('/admin/marketing/google')) return 'integrations';
   if(path.startsWith('/admin/marketing/website')) return 'website';
   if(path.startsWith('/admin/marketing/line')) return 'line';
   if(path.startsWith('/admin/marketing/seo')) return 'seo';
@@ -122,12 +173,46 @@ async function authHeaders(){
   return { 'Content-Type':'application/json', Authorization:`Bearer ${session?.access_token || ''}` };
 }
 
+function demoPricesFromPackages(packages: TourPackage[]): PriceRow[] {
+  return packages.map((p) => ({ id: p.id, name: p.name, nights: p.nights, override: null }));
+}
+
+function applyDemoMarketingState(
+  packages: TourPackage[],
+  setters: {
+    setSummary: (v: Summary) => void;
+    setRealtime: (v: RealtimeSnapshot) => void;
+    setAudience: (v: AudienceData) => void;
+    setIntegrations: (v: IntegrationSettings) => void;
+    setPrices: (v: PriceRow[]) => void;
+    setMetaPixelId: (v: string) => void;
+    setMetaTestEventCode: (v: string) => void;
+    setMetaEnabled: (v: boolean) => void;
+    setLineOaUrl: (v: string) => void;
+    setNotice: (v: string) => void;
+  },
+) {
+  // ponytail: demo data only when Supabase env is missing; real data comes from /api/marketing/* on Next/Vercel
+  setters.setSummary(DEMO_SUMMARY);
+  setters.setRealtime(DEMO_REALTIME);
+  setters.setAudience(DEMO_AUDIENCE);
+  setters.setIntegrations(DEMO_INTEGRATIONS);
+  setters.setPrices(demoPricesFromPackages(packages));
+  setters.setMetaPixelId(DEMO_INTEGRATIONS.meta.pixelId);
+  setters.setMetaTestEventCode(DEMO_INTEGRATIONS.meta.testEventCode);
+  setters.setMetaEnabled(DEMO_INTEGRATIONS.meta.enabled);
+  setters.setLineOaUrl(DEMO_INTEGRATIONS.line.url);
+  setters.setNotice(LOCAL_NOTICE);
+}
+
 const titleByTab:Record<MarketingTab,string> = {
-  overview:'ภาพรวมการตลาด', realtime:'ผู้เข้าชมเรียลไทม์', audience:'Audience & Tags', funnel:'Funnel & Retargeting', meta:'Facebook Pixel', google:'Google Analytics & Ads', website:'เว็บไซต์', line:'LINE OA', seo:'SEO',
+  overview:'ภาพรวมการตลาด', realtime:'ผู้เข้าชมเรียลไทม์', audience:'Audience & Tags', funnel:'Funnel & Retargeting', meta:'Facebook Pixel', google:'Google Analytics & Ads', website:'เว็บไซต์', line:'LINE OA', seo:'SEO', integrations:'การเชื่อมต่อ',
 };
 
 export function GrowthWorkspace({ currentUser, packages, trackings, quotations, onBack, onLogout }:{ currentUser:User; packages:TourPackage[]; trackings:CustomerTracking[]; quotations:QuotationRecord[]; onBack:()=>void; onLogout:()=>void; }){
-  const [tab,setTab]=useState<MarketingTab>(()=>marketingTabFromPath(typeof window!=='undefined'?window.location.pathname:'/admin/marketing'));
+  const initialPath=typeof window!=='undefined'?window.location.pathname:'/admin/marketing';
+  const [tab,setTab]=useState<MarketingTab>(()=>marketingTabFromPath(initialPath));
+  const [integrationPanel,setIntegrationPanel]=useState<IntegrationPanel>(()=>integrationPanelFromPath(initialPath));
   const [summary,setSummary]=useState<Summary|null>(null);
   const [realtime,setRealtime]=useState<RealtimeSnapshot|null>(null);
   const [audience,setAudience]=useState<AudienceData|null>(null);
@@ -169,12 +254,25 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
     function handlePopState(){
       if(!window.location.pathname.startsWith('/admin/marketing'))return;
       setTab(marketingTabFromPath(window.location.pathname));
+      setIntegrationPanel(integrationPanelFromPath(window.location.pathname));
     }
     window.addEventListener('popstate',handlePopState);
     return()=>window.removeEventListener('popstate',handlePopState);
   },[]);
 
+  function localOnlyGuard(): boolean {
+    if (!isSupabaseConfigured) {
+      setNotice(LOCAL_SAVE_NOTICE);
+      return true;
+    }
+    return false;
+  }
+
   async function refreshRealtime(){
+    if (!isSupabaseConfigured) {
+      setRealtime(DEMO_REALTIME);
+      return;
+    }
     try {
       const headers=await authHeaders();
       const res=await fetch('/api/marketing/realtime',{headers,cache:'no-store'});
@@ -187,6 +285,13 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   async function refresh(){
     setLoading(true); setNotice('');
     try {
+      if (!isSupabaseConfigured) {
+        applyDemoMarketingState(packages, {
+          setSummary, setRealtime, setAudience, setIntegrations, setPrices,
+          setMetaPixelId, setMetaTestEventCode, setMetaEnabled, setLineOaUrl, setNotice,
+        });
+        return;
+      }
       const headers=await authHeaders();
       const [a,b,c,d]=await Promise.all([
         fetch(`/api/marketing/summary?days=${periodDays}`,{headers}),
@@ -258,6 +363,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   }, [lineOaUrl]);
 
   async function savePrice(row:PriceRow, price:string, visible:boolean){
+    if (localOnlyGuard()) return;
     const headers=await authHeaders();
     const res=await fetch('/api/website/prices',{method:'POST',headers,body:JSON.stringify({package_id:row.id,price_override_thb:price===''?null:Number(price),visible})});
     const json=await res.json().catch(()=>({}));
@@ -266,6 +372,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   }
 
   async function saveMetaSettings(){
+    if (localOnlyGuard()) return false;
     const headers=await authHeaders();
     const res=await fetch('/api/marketing/integrations',{method:'POST',headers,body:JSON.stringify({section:'meta',pixelId:metaPixelId,testEventCode:metaTestEventCode,enabled:metaEnabled,accessToken:metaAccessToken})});
     const json=await res.json().catch(()=>({}));
@@ -277,6 +384,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   }
 
   async function sendMetaTestEvent(){
+    if (localOnlyGuard()) return;
     setMetaTesting(true); setMetaTestResult(null);
     try{
       const saved=await saveMetaSettings();
@@ -292,6 +400,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   }
 
   async function saveLineSettings(){
+    if (localOnlyGuard()) return;
     const headers=await authHeaders();
     const res=await fetch('/api/marketing/integrations',{method:'POST',headers,body:JSON.stringify({section:'line',lineUrl:lineOaUrl})});
     const json=await res.json().catch(()=>({}));
@@ -301,6 +410,7 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   }
 
   async function broadcast(){
+    if (localOnlyGuard()) return;
     const payload:Record<string, any> = { mode: lineMode, name: broadcastName.trim() || 'LINE Broadcast' };
     if(lineMode==='text'){
       if(!message.trim()) return;
@@ -333,338 +443,390 @@ export function GrowthWorkspace({ currentUser, packages, trackings, quotations, 
   }
 
   return <div className="growth-shell unified-module-view">
-    <div className="workspace-pagebar growth-pagebar">
-      <div className="workspace-pagebar-title"><span>MARKETING / CRM</span><strong>{titleByTab[tab]}</strong></div>
-      <div className="growth-pagebar-actions">
-        {(tab==='overview'||tab==='funnel'||tab==='audience') && <div className="marketing-period-switch" aria-label="ช่วงเวลารายงาน">
-          {([7,30,90] as const).map((days)=><button key={days} className={periodDays===days?'active':''} onClick={()=>setPeriodDays(days)}>{days}D</button>)}
-        </div>}
-        <button className="workspace-refresh-button" onClick={refresh}><RefreshCw className={loading?'spin':''}/><span>รีเฟรช</span></button>
-      </div>
-    </div>
-
-    <div className="growth-layout growth-layout--single-nav">
-      <main className="growth-main growth-main--single-nav">
-        {notice && <div className="growth-notice">{notice}</div>}
+    <div className="module-list-page bo-list-page">
+      <PageHeader
+        title={titleByTab[tab]}
+        subtitle={subtitleByTab[tab]}
+        actions={(
+          <>
+            {(tab==='overview'||tab==='funnel'||tab==='audience') && <div className="marketing-period-switch" aria-label="ช่วงเวลารายงาน">
+              {([7,30,90] as const).map((days)=><button key={days} type="button" className={periodDays===days?'active':''} onClick={()=>setPeriodDays(days)}>{days}D</button>)}
+            </div>}
+            <button type="button" className="workspace-refresh-button" onClick={refresh}><RefreshCw className={loading?'spin':''}/><span>รีเฟรช</span></button>
+          </>
+        )}
+      />
+      {notice && <div className="growth-notice">{notice}</div>}
 
         {tab==='overview' && <>
-          <section className="growth-title"><span>MARKETING OVERVIEW</span><h1>เห็นตั้งแต่คนเข้าเว็บ<br/>จนถึงการปิดการขาย</h1><p>Website, LINE, Customer Tracking และเอกสารขายอยู่ใน Funnel เดียวกัน โดยทั้ง Meta/Facebook และ Google Analytics/Ads เตรียมจุดเชื่อมไว้แล้วและยังไม่ส่งข้อมูลออกจนกว่าจะใส่ค่าเชื่อมต่อ</p></section>
-          <div className="growth-kpi-grid">
-            <article><small>ONLINE NOW</small><strong>{realtime?.liveSessions ?? summary?.liveSessions ?? 0}</strong><span>กำลังอยู่บนเว็บไซต์ตอนนี้</span></article>
-            <article><small>VISITORS · {periodDays}D</small><strong>{summary?.uniqueVisitors ?? 0}</strong><span>ผู้เข้าชมไม่ซ้ำ</span></article>
-            <article><small>PACKAGE INTEREST</small><strong>{summary?.packageViewVisitors ?? 0}</strong><span>คนที่เปิดดูแพ็กเกจ</span></article>
-            <article><small>LINE INTENT</small><strong>{summary?.lineClickVisitors ?? 0}</strong><span>คนที่กดไป LINE OA</span></article>
-          </div>
-          <section className="growth-funnel-card"><div className="growth-funnel-head"><div><span>FUNNEL</span><h2>Website → LINE → Sale</h2></div><small>{periodDays} DAYS + SALES DATABASE</small></div><div className="growth-funnel growth-funnel--tour">
-            <FunnelStage value={summary?.uniqueVisitors??0} label="Visitors" />
-            <i>→</i><FunnelStage value={summary?.packageViewVisitors??0} label="Package" />
-            <i>→</i><FunnelStage value={summary?.lineClickVisitors??0} label="LINE Click" />
-            <i>→</i><FunnelStage value={summary?.lineFriends??0} label="LINE Friend" />
-            <i>→</i><FunnelStage value={sales.leads} label="Tracking" />
-            <i>→</i><FunnelStage value={sales.quoteSent} label="Quotation" />
-            <i>→</i><FunnelStage value={sales.confirmed} label="Confirmed" />
-          </div></section>
-          <div className="marketing-shortcuts">
-            <article><Target/><div><small>NEXT STEP</small><strong>Funnel & Retargeting</strong><span>ดูจุดตกหล่นและกลุ่มเป้าหมายที่ตามต่อได้</span></div></article>
-            <article><Target/><div><small>META READY</small><strong>Facebook Pixel</strong><span>{summary?.metaPixelConfigured?'เชื่อม Browser Pixel แล้ว':'เตรียมระบบไว้แล้ว · รอ Pixel ID'}</span></div></article>
-            <article><Activity/><div><small>GOOGLE READY</small><strong>Analytics & Ads</strong><span>{summary?.googleTagConfigured?'Google Tag พร้อมทำงาน':'เตรียมระบบไว้แล้ว · รอ Google Tag / GA4 / Ads ID'}</span></div></article>
-            <article><UserCheck/><div><small>KNOWN CUSTOMER</small><strong>{summary?.lineFriends??0} LINE Friends</strong><span>พร้อมต่อยอด Tag / Broadcast / CRM</span></div></article>
-          </div>
+          <SectionCard title="สถิติหลัก">
+            <ul className="bo-stat-list">
+              <li className="bo-stat-row"><div><small>ONLINE NOW</small></div><strong>{realtime?.liveSessions ?? summary?.liveSessions ?? 0}</strong><span>กำลังอยู่บนเว็บไซต์ตอนนี้</span></li>
+              <li className="bo-stat-row"><div><small>VISITORS · {periodDays}D</small></div><strong>{summary?.uniqueVisitors ?? 0}</strong><span>ผู้เข้าชมไม่ซ้ำ</span></li>
+              <li className="bo-stat-row"><div><small>PACKAGE INTEREST</small></div><strong>{summary?.packageViewVisitors ?? 0}</strong><span>คนที่เปิดดูแพ็กเกจ</span></li>
+              <li className="bo-stat-row"><div><small>LINE INTENT</small></div><strong>{summary?.lineClickVisitors ?? 0}</strong><span>คนที่กดไป LINE OA</span></li>
+            </ul>
+          </SectionCard>
+          <SectionCard title={`Funnel · Website → LINE → Sale (${periodDays}D)`}>
+            <FunnelStageTable stages={[
+              { label: 'Visitors', value: summary?.uniqueVisitors ?? 0, base: summary?.uniqueVisitors ?? 0 },
+              { label: 'Package', value: summary?.packageViewVisitors ?? 0, base: summary?.uniqueVisitors ?? 0 },
+              { label: 'LINE Click', value: summary?.lineClickVisitors ?? 0, base: summary?.packageViewVisitors ?? 0 },
+              { label: 'LINE Friend', value: summary?.lineFriends ?? 0, base: summary?.lineClickVisitors ?? 0 },
+              { label: 'Tracking', value: sales.leads, base: Math.max(summary?.lineFriends ?? 0, sales.leads) },
+              { label: 'Quotation', value: sales.quoteSent, base: sales.leads },
+              { label: 'Confirmed', value: sales.confirmed, base: sales.quoteSent },
+            ]} />
+          </SectionCard>
+          <SectionCard title="สถานะการเชื่อมต่อ">
+            <div className="bo-status-list">
+              <div className="bo-status-row ready"><span className="bo-status-icon"><Target /></span><div><strong>Funnel & Retargeting</strong><span>ดูจุดตกหล่นและกลุ่มเป้าหมายที่ตามต่อได้</span></div><span className="bo-status-pill">พร้อม</span></div>
+              <div className={`bo-status-row ${summary?.metaPixelConfigured ? 'ready' : ''}`}><span className="bo-status-icon"><Target /></span><div><strong>Facebook Pixel</strong><span>{summary?.metaPixelConfigured ? 'เชื่อม Browser Pixel แล้ว' : 'รอ Pixel ID'}</span></div><span className="bo-status-pill">{summary?.metaPixelConfigured ? 'พร้อม' : 'รอเชื่อม'}</span></div>
+              <div className={`bo-status-row ${summary?.googleTagConfigured ? 'ready' : ''}`}><span className="bo-status-icon"><Activity /></span><div><strong>Analytics & Ads</strong><span>{summary?.googleTagConfigured ? 'Google Tag พร้อมทำงาน' : 'รอ Google Tag / GA4 / Ads ID'}</span></div><span className="bo-status-pill">{summary?.googleTagConfigured ? 'พร้อม' : 'รอเชื่อม'}</span></div>
+              <div className="bo-status-row ready"><span className="bo-status-icon"><UserCheck /></span><div><strong>{summary?.lineFriends ?? 0} LINE Friends</strong><span>พร้อมต่อยอด Tag / Broadcast / CRM</span></div><span className="bo-status-pill">พร้อม</span></div>
+            </div>
+          </SectionCard>
         </>}
 
         {tab==='realtime' && <>
-          <section className="growth-title realtime-title"><span>LIVE WEBSITE</span><h1>ตอนนี้มีคนอยู่บนเว็บ<br/>และกำลังดูอะไรอยู่</h1><p>เข้าเว็บแล้วส่งสถานะทันที · ปิดหน้าเว็บแล้วส่ง Offline ทันที · heartbeat ทุก {realtime?.heartbeatSeconds??6} วินาที และหลังบ้านอัปเดตทุก {realtime?.pollSeconds??2} วินาที โดยมี fallback ตัด session ที่เงียบเกินประมาณ {realtime?.liveWindowSeconds??18} วินาที</p></section>
-          {summary && (!summary.trackingConfigured || !summary.trackingStorageReady) && <div className="tracking-health tracking-health--error">
-            <Wifi/><div><strong>Realtime Tracking ยังไม่พร้อม</strong><span>{!summary.trackingConfigured ? 'ยังไม่พบค่า Supabase สำหรับ Server API ใน Vercel' : summary.trackingError?.code==='42P01' ? 'ยังไม่มีตาราง website_events — ให้รัน SQL V13.5.1 Realtime Repair' : summary.trackingError?.code==='42501' ? 'RLS ยังไม่อนุญาตให้ระบบอ่าน Realtime — ให้รัน SQL V13.5.1 Realtime Repair' : `Database: ${summary.trackingError?.code||'not ready'} ${summary.trackingError?.message||''}`}</span></div>
-          </div>}
-          {summary?.trackingStorageReady && <div className="tracking-health tracking-health--ok"><CheckCircle2/><span>Tracking พร้อม · {summary.trackingMode==='service_role'?'Service Role':'RLS fallback'} · หน้า /admin ไม่นับเป็นผู้เข้าชมเว็บไซต์</span></div>}
-          <div className="realtime-hero-grid">
-            <article className="realtime-online-card"><div className="live-pulse"><i/><Radio/></div><small>ONLINE NOW</small><strong>{realtime?.liveSessions??summary?.liveSessions??0}</strong><span>คนกำลังอยู่บนเว็บไซต์</span><p>FAST LIVE · เข้า/ออกอัปเดตประมาณ 0–2 วินาที</p></article>
-            <article><Wifi/><div><small>TRACKING</small><strong>Heartbeat {realtime?.heartbeatSeconds??6}s</strong><span>มี Online / Offline signal แยกจาก Analytics โดยตรง</span></div></article>
-            <article><MonitorSmartphone/><div><small>DEVICE</small><strong>Desktop / Mobile</strong><span>ดูได้ว่าผู้ชมกำลังเข้าจากอุปกรณ์แบบไหน</span></div></article>
-            <article><Eye/><div><small>LIVE PAGE</small><strong>Page + Package</strong><span>เห็นหน้าที่กำลังดูและแพ็กเกจที่สนใจ</span></div></article>
-          </div>
-          <section className="realtime-table-card">
-            <div className="realtime-table-head"><div><span>ACTIVE SESSIONS</span><h2>ผู้เข้าชมที่กำลังอยู่บนเว็บ</h2></div><small><i/> LIVE · AUTO REFRESH {realtime?.pollSeconds??2}s</small></div>
-            {((realtime?.liveVisitors||summary?.liveVisitors||[]).length)>0 ? <div className="realtime-table">
-              <div className="realtime-row realtime-row--head"><span>ผู้เข้าชม</span><span>หน้าที่กำลังดู</span><span>ที่มา</span><span>อุปกรณ์</span><span>ล่าสุด</span></div>
-              {(realtime?.liveVisitors||summary?.liveVisitors||[]).map((visitor,index)=><LiveVisitorRow key={`${visitor.sessionId}-${index}`} visitor={visitor}/>) }
-            </div> : <div className="realtime-empty"><Radio/><strong>ตอนนี้ยังไม่มี Active Session</strong><span>เมื่อมีคนเปิดหน้าเว็บไซต์ ระบบจะแสดงที่นี่ภายในไม่กี่วินาที</span></div>}
-          </section>
+          <SectionCard title="สรุป Realtime">
+            {summary && (!summary.trackingConfigured || !summary.trackingStorageReady) ? (
+              <MetaStatusRow icon={Wifi} label="Realtime Tracking" ready={false} detail={!summary.trackingConfigured ? 'ยังไม่พบค่า Supabase สำหรับ Server API' : summary.trackingError?.code === '42P01' ? 'ยังไม่มีตาราง website_events — รัน SQL V13.5.1' : summary.trackingError?.code === '42501' ? 'RLS ยังไม่อนุญาตให้อ่าน Realtime' : `Database: ${summary.trackingError?.code || 'not ready'}`} />
+            ) : summary?.trackingStorageReady ? (
+              <MetaStatusRow icon={CheckCircle2} label="Tracking" ready detail={`${summary.trackingMode === 'service_role' ? 'Service Role' : 'RLS fallback'} · หน้า /admin ไม่นับเป็นผู้เข้าชม`} />
+            ) : null}
+            <ul className="bo-stat-list">
+              <li className="bo-stat-row"><div><small>ONLINE NOW</small></div><strong>{realtime?.liveSessions ?? summary?.liveSessions ?? 0}</strong><span>คนกำลังอยู่บนเว็บไซต์ · อัปเดต 0–2 วินาที</span></li>
+              <li className="bo-stat-row"><div><small>HEARTBEAT</small></div><strong>{realtime?.heartbeatSeconds ?? 6}s</strong><span>Online / Offline signal แยกจาก Analytics</span></li>
+              <li className="bo-stat-row"><div><small>POLL</small></div><strong>{realtime?.pollSeconds ?? 2}s</strong><span>Auto refresh active sessions</span></li>
+            </ul>
+          </SectionCard>
+          <SectionCard title={`ผู้เข้าชมที่กำลังอยู่บนเว็บ · LIVE ${realtime?.pollSeconds ?? 2}s`}>
+            {((realtime?.liveVisitors || summary?.liveVisitors || []).length) > 0 ? (
+              <div className="module-table-wrap bo-table-wrap"><table className="module-table bo-table"><thead><tr><th>ผู้เข้าชม</th><th>หน้าที่กำลังดู</th><th>ที่มา</th><th>อุปกรณ์</th><th>ล่าสุด</th></tr></thead><tbody>
+                {(realtime?.liveVisitors || summary?.liveVisitors || []).map((visitor, index) => <LiveVisitorTableRow key={`${visitor.sessionId}-${index}`} visitor={visitor} />)}
+              </tbody></table></div>
+            ) : <div className="realtime-empty"><Radio /><strong>ตอนนี้ยังไม่มี Active Session</strong><span>เมื่อมีคนเปิดหน้าเว็บไซต์ ระบบจะแสดงที่นี่ภายในไม่กี่วินาที</span></div>}
+          </SectionCard>
         </>}
 
         {tab==='audience' && <>
-          <section className="growth-title"><span>AUDIENCE & TAGS</span><h1>แบ่งกลุ่มคนจาก Website + LINE<br/>ไว้เล่นการตลาดต่อภายหลัง</h1><p>Audience ในหน้านี้เป็น First-party Audience ของ Bhutan Center ก่อน ยังไม่ส่งข้อมูลออกไป Meta หรือ Google Ads จนกว่าจะเชื่อมจริง คุณสามารถใช้ข้อมูลเว็บและ LINE มาช่วยบอกระดับความสนใจของลูกค้าได้</p></section>
-          <div className="audience-source-grid">
-            <article className="ready"><Globe2/><div><small>DATA SOURCE</small><strong>Website</strong><span>PageView · Package · Returning · LINE Click</span></div><b>พร้อม</b></article>
-            <article className={audience?.sources.line?'ready':''}><Megaphone/><div><small>DATA SOURCE</small><strong>LINE OA</strong><span>Friend · Message · Tags · Website Match</span></div><b>{audience?.sources.line?'พร้อม':'รอข้อมูล'}</b></article>
-            <article className="ready"><UsersRound/><div><small>DATA SOURCE</small><strong>Customer Tracking</strong><span>Quotation · Confirmed · Paid · Exclusion</span></div><b>พร้อม</b></article>
-            <article className={integrations?.meta?.enabled?'ready':''}><Target/><div><small>DESTINATION</small><strong>Meta / Facebook</strong><span>{integrations?.meta?.enabled?'Pixel/CAPI เชื่อมแล้ว · พร้อมสร้าง Custom Audience':'เตรียมไว้ · ยังไม่ Sync Audience ออก'}</span></div><b>{integrations?.meta?.enabled?'พร้อม':'รอเชื่อม'}</b></article>
-          </div>
-
-          <section className="meta-audience-playbook">
-            <div className="meta-audience-playbook-head">
-              <div><span>META CUSTOM AUDIENCE PLAYBOOK</span><h2>Audience ที่แนะนำให้สร้างใน Meta</h2><p>ใช้ Event ที่ Bhutan Center ยิงอยู่แล้วจาก Pixel/CAPI แล้วสร้าง Audience ใน Meta Ads Manager เองตามสูตรด้านล่าง ช่วงวันเป็นค่าเริ่มต้นที่แนะนำและปรับได้ตามแคมเปญจริง</p></div>
-              <div className={`meta-audience-connection ${integrations?.meta?.enabled&&integrations?.meta?.capiConfigured?'ready':''}`}><i/><div><small>META STATUS</small><strong>{integrations?.meta?.enabled&&integrations?.meta?.capiConfigured?'Pixel + CAPI พร้อม':'ยังเชื่อมไม่ครบ'}</strong><span>{metaPixelId?`Dataset ${metaPixelId}`:'รอ Pixel / Dataset ID'}</span></div></div>
+          <SectionCard title="แหล่งข้อมูล Audience">
+            <div className="bo-status-list">
+              <div className="bo-status-row ready"><span className="bo-status-icon"><Globe2 /></span><div><strong>Website</strong><span>PageView · Package · Returning · LINE Click</span></div><span className="bo-status-pill">พร้อม</span></div>
+              <div className={`bo-status-row ${audience?.sources.line ? 'ready' : ''}`}><span className="bo-status-icon"><Megaphone /></span><div><strong>LINE OA</strong><span>Friend · Message · Tags · Website Match</span></div><span className="bo-status-pill">{audience?.sources.line ? 'พร้อม' : 'รอข้อมูล'}</span></div>
+              <div className="bo-status-row ready"><span className="bo-status-icon"><UsersRound /></span><div><strong>Customer Tracking</strong><span>Quotation · Confirmed · Paid · Exclusion</span></div><span className="bo-status-pill">พร้อม</span></div>
+              <div className={`bo-status-row ${integrations?.meta?.enabled ? 'ready' : ''}`}><span className="bo-status-icon"><Target /></span><div><strong>Meta / Facebook</strong><span>{integrations?.meta?.enabled ? 'Pixel/CAPI เชื่อมแล้ว' : 'ยังไม่ Sync Audience ออก'}</span></div><span className="bo-status-pill">{integrations?.meta?.enabled ? 'พร้อม' : 'รอเชื่อม'}</span></div>
             </div>
+          </SectionCard>
 
-            <div className="meta-audience-steps">
-              <div><b>1</b><span><strong>เปิด Meta Ads Manager</strong><small>ไปที่ All tools → Audiences</small></span></div>
-              <div><b>2</b><span><strong>Create Audience</strong><small>เลือก Custom Audience → Website</small></span></div>
-              <div><b>3</b><span><strong>เลือก Bhutan Center Dataset</strong><small>{metaPixelId||'1574103264254056'} แล้วเลือก Rule ตามสูตรด้านล่าง</small></span></div>
-              <div><b>4</b><span><strong>ตั้ง Retention + ชื่อ</strong><small>Copy ชื่อ Audience จากหลังบ้านได้เลย</small></span></div>
-              <div><b>5</b><span><strong>Create Audience</strong><small>รอ Meta Populate แล้วนำไป Include / Exclude ที่ Ad Set</small></span></div>
-            </div>
+          <SectionCard title={`Audience Library · ${periodDays} DAYS`}>
+            <div className="module-table-wrap bo-table-wrap"><table className="module-table bo-table"><thead><tr><th>กลุ่ม</th><th>ที่มา</th><th>Intent</th><th>จำนวน</th><th>คำอธิบาย</th></tr></thead><tbody>
+              {(audience?.audiences || []).map((item) => <AudiencePresetTableRow key={item.id} item={item} />)}
+              <AudiencePresetTableRow item={{ id: 'tracking_no_quote', name: 'Tracking · ยังไม่ Quote', count: sales.trackingNoQuote, source: 'CRM', intent: 'Hot', futureMeta: 'Sales Follow-up', description: 'มีข้อมูลลูกค้าแล้ว แต่ยังไม่ส่งใบเสนอราคา' }} />
+              <AudiencePresetTableRow item={{ id: 'quote_no_confirm', name: 'Quote · ยังไม่ Confirm', count: sales.quoteNoConfirm, source: 'CRM', intent: 'Hot', futureMeta: 'Retarget / Reminder', description: 'ส่งใบเสนอราคาแล้ว แต่ยังไม่ยืนยัน' }} />
+              <AudiencePresetTableRow item={{ id: 'paid_exclusion', name: 'Confirmed / Paid', count: sales.paid, source: 'CRM', intent: 'Exclude', futureMeta: 'Exclude from acquisition', description: 'ใช้เป็นกลุ่มตัดออกจากโฆษณาหาลูกค้าใหม่' }} />
+            </tbody></table></div>
+            <p className="bo-muted" style={{ marginTop: 12 }}>{audience?.note || 'LINE userId ใช้แบ่งกลุ่มใน CRM ได้ · Meta/Google Retargeting ใช้ Website tag และข้อมูลติดต่อที่ได้รับอนุญาต'}</p>
+          </SectionCard>
 
-            <div className="meta-audience-recipe-grid">
-              {META_AUDIENCE_RECIPES.map(recipe=><article key={recipe.id} className={`meta-audience-recipe ${recipe.priority==='High Intent'?'hot':''} ${recipe.priority==='Phase 2'?'phase2':''}`}>
-                <div className="meta-audience-recipe-top"><span>{recipe.priority}</span><b>{recipe.retention}</b></div>
-                <h3>{recipe.name}</h3>
-                <div className="meta-audience-recipe-source"><small>SOURCE</small><strong>{recipe.source}</strong></div>
-                <div className="meta-audience-rule"><small>RULE ใน META</small><code>{recipe.rule}</code></div>
-                <p><strong>ใช้สำหรับ:</strong> {recipe.use}</p>
-                {recipe.exclude&&<p className="meta-audience-exclude"><strong>Exclude:</strong> {recipe.exclude}</p>}
-                {recipe.note&&<p className="meta-audience-note-small">{recipe.note}</p>}
-                <div className="meta-audience-recipe-actions"><button onClick={()=>void copyAudienceText(recipe.name,'ชื่อ Audience')}><Copy/>คัดลอกชื่อ</button><button onClick={()=>void copyAudienceText(`${recipe.name}\nSource: ${recipe.source}\nRetention: ${recipe.retention}\nRule: ${recipe.rule}\nUse: ${recipe.use}${recipe.exclude?`\nExclude: ${recipe.exclude}`:''}`,'สูตร Audience')}><Copy/>คัดลอกสูตร</button></div>
-              </article>)}
-            </div>
+          <SectionCard title="Retargeting Tags" actions={<span className={`bo-status-pill ${audience?.tagStorageReady ? 'ready' : ''}`}>{audience?.tagStorageReady ? 'TAG STORAGE READY' : 'รัน SQL V13.5'}</span>}>
+            <div className="module-table-wrap bo-table-wrap"><table className="module-table bo-table"><thead><tr><th>Tag</th><th>ที่มา</th><th>จำนวน</th></tr></thead><tbody>
+              {(audience?.tags || []).length ? (audience?.tags || []).map((item) => (
+                <tr key={item.tag}><td><strong>{item.tag}</strong></td><td>{item.source}</td><td><strong>{item.count}</strong></td></tr>
+              )) : <tr><td colSpan={3} className="bo-muted">Tag จะเริ่มเพิ่มเมื่อมีคนเข้าเว็บ ดูแพ็กเกจ กด LINE หรือมี LINE Interaction</td></tr>}
+            </tbody></table></div>
+            <div className="module-table-wrap bo-table-wrap" style={{ marginTop: 12 }}><table className="module-table bo-table"><thead><tr><th>Tag</th><th>เงื่อนไข</th></tr></thead><tbody>
+              {TAG_RULES.map((rule) => <tr key={rule.tag}><td><strong>{rule.tag}</strong></td><td>{rule.condition}</td></tr>)}
+            </tbody></table></div>
+          </SectionCard>
 
-            <div className="meta-audience-campaign-recipes">
-              <div className="retargeting-section-title"><div><span>CAMPAIGN RECIPES</span><h2>เอา Audience ไปใช้ยังไง</h2></div><small>STARTER SET</small></div>
-              <div className="meta-audience-campaign-grid">
-                <article><b>01</b><div><strong>Warm Retarget</strong><span>Include: Website Visitors 30D</span><small>Exclude: LINE Intent 14D เพื่อแยกคน Intent สูงไปอีกชุด</small></div></article>
-                <article><b>02</b><div><strong>Package Retarget</strong><span>Include: Package Viewers 30D</span><small>ใช้ Creative แพ็กเกจ / รีวิว / High Season / ราคาเริ่มต้น</small></div></article>
-                <article className="hot"><b>03</b><div><strong>High Intent</strong><span>Include: LINE Intent 14D</span><small>CTA ตรงไป LINE OA · ปรึกษาทริป · เช็กวันเดินทาง</small></div></article>
-                <article><b>04</b><div><strong>Acquisition Exclusion</strong><span>Exclude: Leads / Confirmed-Paid</span><small>ลดการยิงโฆษณาหาลูกค้าใหม่ใส่คนที่เข้ากระบวนการแล้ว</small></div></article>
-              </div>
-            </div>
-
-            <div className="meta-audience-warning"><Target/><div><strong>LINE Audience ใช้ยังไงกับ Meta</strong><span>LINE Friend / LINE Engaged ใช้ทำ Segmentation และ Broadcast ภายใน CRM ของเราได้ แต่ไม่ส่ง LINE userId เข้า Meta โดยตรง สำหรับ Meta ให้ใช้ Website Event เช่น LineAddFriendClick หรือ Phase 2 ใช้ Customer List จาก email/phone ที่มีสิทธิ์ใช้งานอย่างเหมาะสม</span></div></div>
-          </section>
-
-          <section className="audience-library">
-            <div className="retargeting-section-title"><div><span>AUDIENCE LIBRARY</span><h2>กลุ่มที่ระบบสร้างให้จากพฤติกรรม</h2></div><small>{periodDays} DAYS</small></div>
-            <div className="audience-preset-grid">
-              {(audience?.audiences||[]).map((item)=><AudiencePresetCard key={item.id} item={item}/>) }
-              <AudiencePresetCard item={{id:'tracking_no_quote',name:'Tracking · ยังไม่ Quote',count:sales.trackingNoQuote,source:'CRM',intent:'Hot',futureMeta:'Sales Follow-up',description:'มีข้อมูลลูกค้าแล้ว แต่ยังไม่ส่งใบเสนอราคา'}}/>
-              <AudiencePresetCard item={{id:'quote_no_confirm',name:'Quote · ยังไม่ Confirm',count:sales.quoteNoConfirm,source:'CRM',intent:'Hot',futureMeta:'Retarget / Reminder',description:'ส่งใบเสนอราคาแล้ว แต่ยังไม่ยืนยัน'}}/>
-              <AudiencePresetCard item={{id:'paid_exclusion',name:'Confirmed / Paid',count:sales.paid,source:'CRM',intent:'Exclude',futureMeta:'Exclude from acquisition',description:'ใช้เป็นกลุ่มตัดออกจากโฆษณาหาลูกค้าใหม่'}}/>
-            </div>
-          </section>
-          <section className="tag-center-card">
-            <div className="tag-center-head"><div><span>RETARGETING TAGS</span><h2>Tag ที่ระบบรู้จักแล้ว</h2></div><small>{audience?.tagStorageReady?'TAG STORAGE READY':'รัน SQL V13.5 เพื่อเก็บ Tag ถาวร'}</small></div>
-            <div className="tag-cloud">{(audience?.tags||[]).length ? (audience?.tags||[]).map((item)=><span key={item.tag} className={`tag-chip tag-chip--${item.source}`}><Tags/><b>{item.tag}</b><em>{item.count}</em><small>{item.source}</small></span>) : <span className="tag-empty">Tag จะเริ่มเพิ่มเมื่อมีคนเข้าเว็บ ดูแพ็กเกจ กด LINE หรือมี LINE Interaction</span>}</div>
-            <div className="tag-rule-grid"><article><strong>Website Visitor</strong><span>เข้าเว็บอย่างน้อย 1 ครั้ง</span></article><article><strong>Package Interest</strong><span>ดูหน้าแพ็กเกจ</span></article><article><strong>LINE Intent</strong><span>กด CTA ไป LINE</span></article><article><strong>LINE Friend</strong><span>เพิ่มเพื่อน OA</span></article><article><strong>LINE Engaged</strong><span>เคยส่งข้อความ</span></article><article><strong>Website ↔ LINE Matched</strong><span>จับคู่ Visitor กับ LINE ได้แล้ว</span></article></div>
-          </section>
-          <section className="audience-note"><Target/><div><strong>เรื่องสำคัญตอนเชื่อม Ads ภายหลัง</strong><span>{audience?.note||'LINE userId ใช้แบ่งกลุ่มใน CRM ของเราได้ ส่วน Meta/Google Retargeting จะใช้ Website tag และข้อมูลติดต่อที่ได้รับอนุญาตในการ Match Audience ไม่ส่ง LINE userId ไปเป็น advertising identifier โดยตรง'}</span></div></section>
+          <details className="bo-details-collapse">
+            <summary>วิธีสร้าง Audience ใน Meta</summary>
+            <SectionCard title="Audience ที่แนะนำให้สร้างใน Meta" actions={<span className={`bo-status-pill ${integrations?.meta?.enabled && integrations?.meta?.capiConfigured ? 'ready' : ''}`}>{integrations?.meta?.enabled && integrations?.meta?.capiConfigured ? 'Pixel + CAPI พร้อม' : 'ยังเชื่อมไม่ครบ'}</span>}>
+              <ol style={{ margin: '0 0 16px', paddingLeft: 20, color: 'var(--muted)', fontSize: 14, lineHeight: 1.6 }}>
+                {META_PLAYBOOK_STEPS.map((step, i) => <li key={step.title} style={{ marginBottom: 6 }}><strong style={{ color: 'var(--ink)' }}>{i + 1}. {step.title}</strong> — {step.desc}</li>)}
+              </ol>
+              <div className="module-table-wrap bo-table-wrap"><table className="module-table bo-table"><thead><tr><th>ชื่อ Audience</th><th>Priority</th><th>Source</th><th>Retention</th><th>Rule</th><th /></tr></thead><tbody>
+                {META_AUDIENCE_RECIPES.map((recipe) => (
+                  <MetaAudienceRecipeTableRow key={recipe.id} recipe={recipe} onCopy={copyAudienceText} />
+                ))}
+              </tbody></table></div>
+              <p className="bo-muted" style={{ margin: '16px 0 8px', fontWeight: 500 }}>Campaign Recipes</p>
+              <div className="module-table-wrap bo-table-wrap"><table className="module-table bo-table"><thead><tr><th>#</th><th>ชื่อ</th><th>Rule</th><th>หมายเหตุ</th></tr></thead><tbody>
+                {META_CAMPAIGN_RECIPES.map((c) => (
+                  <tr key={c.id}><td><strong>{c.id}</strong></td><td><strong>{c.name}</strong>{c.hot && <small style={{ display: 'block', color: 'var(--muted)' }}>High Intent</small>}</td><td>{c.rule}</td><td><span style={{ color: 'var(--muted)', fontSize: 12 }}>{c.note}</span></td></tr>
+                ))}
+              </tbody></table></div>
+              <p className="bo-muted" style={{ marginTop: 12 }}>LINE Friend / LINE Engaged ใช้ Segmentation ใน CRM ได้ แต่ไม่ส่ง LINE userId เข้า Meta — ใช้ Website Event เช่น LineAddFriendClick แทน</p>
+            </SectionCard>
+          </details>
         </>}
 
         {tab==='funnel' && <>
-          <section className="growth-title"><span>FUNNEL & RETARGETING</span><h1>รู้ว่าใครหลุดตรงไหน<br/>แล้วตามกลับมาได้</h1><p>โครงนี้ออกแบบสำหรับการขายทัวร์ของ Bhutan Center โดยไม่บังคับซื้อบนเว็บ และใช้ LINE + Customer Tracking เป็นจุดเปลี่ยนจากผู้ชมเป็นลูกค้าที่รู้จักตัวตน</p></section>
+          <SectionCard title="Bhutan Tour Funnel">
+            <FunnelStageTable stages={[
+              { label: 'Visitors', value: summary?.uniqueVisitors ?? 0, base: summary?.uniqueVisitors ?? 0, sub: 'เข้าเว็บไซต์' },
+              { label: 'Package View', value: summary?.packageViewVisitors ?? 0, base: summary?.uniqueVisitors ?? 0, sub: 'เริ่มสนใจทริป' },
+              { label: 'LINE Click', value: summary?.lineClickVisitors ?? 0, base: summary?.packageViewVisitors ?? 0, sub: 'Intent สูง' },
+              { label: 'LINE Friend', value: summary?.lineFriends ?? 0, base: summary?.lineClickVisitors ?? 0, sub: 'รู้จัก LINE user' },
+              { label: 'Customer Tracking', value: sales.leads, base: Math.max(summary?.lineFriends ?? 0, sales.leads), sub: 'ทีมเริ่มติดตาม' },
+              { label: 'Quotation', value: sales.quoteSent, base: sales.leads, sub: 'ส่งข้อเสนอแล้ว' },
+              { label: 'Confirmed', value: sales.confirmed, base: sales.quoteSent, sub: 'ลูกค้ายืนยัน' },
+              { label: 'Paid', value: sales.paid, base: sales.confirmed, sub: 'มีการรับชำระ' },
+            ]} />
+          </SectionCard>
 
-          <section className="retargeting-funnel-panel">
-            <div className="retargeting-panel-head"><div><span>CONVERSION JOURNEY</span><h2>Bhutan Tour Funnel</h2></div><div className="retargeting-legend"><i className="ready"/>First-party พร้อมเก็บ <i/>Meta / Google Ads รอเชื่อม</div></div>
-            <div className="funnel-stage-grid">
-              <FunnelDetail index="01" label="Visitors" value={summary?.uniqueVisitors??0} sub="เข้าเว็บไซต์" base={summary?.uniqueVisitors??0}/>
-              <FunnelDetail index="02" label="Package View" value={summary?.packageViewVisitors??0} sub="เริ่มสนใจทริป" base={summary?.uniqueVisitors??0}/>
-              <FunnelDetail index="03" label="LINE Click" value={summary?.lineClickVisitors??0} sub="Intent สูง" base={summary?.packageViewVisitors??0}/>
-              <FunnelDetail index="04" label="LINE Friend" value={summary?.lineFriends??0} sub="รู้จัก LINE user" base={summary?.lineClickVisitors??0}/>
-              <FunnelDetail index="05" label="Customer Tracking" value={sales.leads} sub="ทีมเริ่มติดตาม" base={Math.max(summary?.lineFriends??0,sales.leads)}/>
-              <FunnelDetail index="06" label="Quotation" value={sales.quoteSent} sub="ส่งข้อเสนอแล้ว" base={sales.leads}/>
-              <FunnelDetail index="07" label="Confirmed" value={sales.confirmed} sub="ลูกค้ายืนยัน" base={sales.quoteSent}/>
-              <FunnelDetail index="08" label="Paid" value={sales.paid} sub="มีการรับชำระ" base={sales.confirmed}/>
-            </div>
-          </section>
-
-          <section className="retargeting-section">
-            <div className="retargeting-section-title"><div><span>RETARGETING CENTER</span><h2>กลุ่มที่ควรตามกลับมา</h2></div><small>เตรียม Audience Logic ไว้แล้ว · ยังไม่ Sync ไป Meta / Google Ads</small></div>
-            <div className="retargeting-audience-grid">
-              <AudienceCard tone="cold" icon={Globe2} label="Website Visitors" value={summary?.visitorsNoLineClick??0} desc="เข้าเว็บแล้ว แต่ยังไม่กด LINE" action="ยิง Content / Package Reminder" />
-              <AudienceCard tone="warm" icon={MousePointerClick} label="Package Interest" value={summary?.packageVisitorsNoLineClick??0} desc="เปิดดูแพ็กเกจ แต่ยังไม่เข้า LINE" action="ยิงแพ็กเกจ / High Season" />
-              <AudienceCard tone="hot" icon={Target} label="LINE Intent" value={summary?.lineClickVisitorsNoFriend??0} desc="กด LINE แล้ว แต่ยังจับคู่ Friend ไม่ได้" action="Retarget ด้วย Meta / Google Ads" />
-              <AudienceCard tone="known" icon={UserCheck} label="LINE Friend · No CRM" value={summary?.lineFriendsWithoutTracking??0} desc="เป็นเพื่อนแล้ว แต่ยังไม่มี Customer Tracking" action="LINE Broadcast / Follow-up" />
-              <AudienceCard tone="known" icon={UsersRound} label="Tracking · No Quote" value={sales.trackingNoQuote} desc="ทีมมีข้อมูลแล้ว แต่ยังไม่ส่งใบเสนอราคา" action="Sales Follow-up" />
-              <AudienceCard tone="hot" icon={CircleDot} label="Quote · No Confirm" value={sales.quoteNoConfirm} desc="ส่งใบเสนอราคาแล้ว แต่ยังไม่ยืนยัน" action="Reminder / Offer / Deadline" />
-            </div>
-          </section>
-
-          <section className="retargeting-ready-card">
-            <div className="retargeting-ready-icon"><Target/></div>
-            <div><span>FUTURE AD SYNC</span><h2>Audience พร้อมสำหรับผูก Retargeting ภายหลัง</h2><p>เมื่อเชื่อม Meta Pixel/CAPI หรือ Google Ads ในอนาคต เราจะใช้กลุ่ม First-party เหล่านี้เป็นฐานสร้าง Audience, Remarketing และ Exclusion เช่น ตัดลูกค้าที่ Confirmed/Paid ออกจากโฆษณาหาลูกค้าใหม่ได้</p></div>
-            <b>READY</b>
-          </section>
+          <SectionCard title="กลุ่มที่ควรตามกลับมา">
+            <div className="module-table-wrap bo-table-wrap"><table className="module-table bo-table"><thead><tr><th>กลุ่ม</th><th>จำนวน</th><th>คำอธิบาย</th><th>แนะนำ</th></tr></thead><tbody>
+              <RetargetingTableRow label="Website Visitors" value={summary?.visitorsNoLineClick ?? 0} desc="เข้าเว็บแล้ว แต่ยังไม่กด LINE" action="ยิง Content / Package Reminder" />
+              <RetargetingTableRow label="Package Interest" value={summary?.packageVisitorsNoLineClick ?? 0} desc="เปิดดูแพ็กเกจ แต่ยังไม่เข้า LINE" action="ยิงแพ็กเกจ / High Season" />
+              <RetargetingTableRow label="LINE Intent" value={summary?.lineClickVisitorsNoFriend ?? 0} desc="กด LINE แล้ว แต่ยังจับคู่ Friend ไม่ได้" action="Retarget Meta / Google Ads" />
+              <RetargetingTableRow label="LINE Friend · No CRM" value={summary?.lineFriendsWithoutTracking ?? 0} desc="เป็นเพื่อนแล้ว แต่ยังไม่มี Customer Tracking" action="LINE Broadcast / Follow-up" />
+              <RetargetingTableRow label="Tracking · No Quote" value={sales.trackingNoQuote} desc="ทีมมีข้อมูลแล้ว แต่ยังไม่ส่งใบเสนอราคา" action="Sales Follow-up" />
+              <RetargetingTableRow label="Quote · No Confirm" value={sales.quoteNoConfirm} desc="ส่งใบเสนอราคาแล้ว แต่ยังไม่ยืนยัน" action="Reminder / Offer / Deadline" />
+            </tbody></table></div>
+          </SectionCard>
         </>}
 
-        {tab==='meta' && <>
-          <section className="growth-title"><span>FACEBOOK / META</span><h1>ตั้งค่า Meta Pixel<br/>จากหลังบ้านได้เลย</h1><p>กรอก Pixel ID และ Test Event Code ได้จากหลังบ้านโดยตรง ไม่ต้องกลับไปแก้ Vercel ทุกครั้ง ค่าใหม่จะถูกใช้กับหน้า Public โดยอัตโนมัติหลังบันทึก</p></section>
-
-          <div className="meta-status-grid">
-            <MetaStatusCard icon={MousePointerClick} label="Browser Pixel" ready={Boolean(summary?.metaPixelConfigured)} detail={summary?.metaPixelConfigured?`เชื่อมแล้ว · ${summary?.metaPixelIdMasked||'Pixel ID'}`:'กรอก Pixel ID ด้านล่างเพื่อเปิดใช้งาน'} />
-            <MetaStatusCard icon={Server} label="Conversions API" ready={Boolean(integrations?.meta?.capiConfigured || summary?.metaCapiConfigured)} detail={(integrations?.meta?.capiConfigured || summary?.metaCapiConfigured)?`Token พร้อม · ${integrations?.meta?.accessTokenMasked||'Server secret'}`:'วาง CAPI Access Token ด้านล่างแล้วบันทึก'} />
-            <MetaStatusCard icon={Activity} label="Test Events" ready={Boolean(integrations?.meta?.lastTestOk)} detail={integrations?.meta?.lastTestOk?`ผ่านแล้ว · ${integrations?.meta?.lastTestEventsReceived||1} event`:(integrations?.meta?.testEventConfigured?'Code พร้อม · กดส่ง Test Event':'วาง Code จาก Meta Events Manager')} />
-            <MetaStatusCard icon={Target} label="Retargeting Logic" ready detail="First-party Funnel พร้อมใช้งานในหลังบ้าน" />
+        {tab==='integrations' && currentUser.role==='admin' && <>
+          <div className="sales-report-tabs">
+            <button type="button" className={integrationPanel==='settings'?'active':''} onClick={()=>{ setIntegrationPanel('settings'); window.history.pushState({},'',MARKETING_TAB_PATHS.integrations); }}>ตั้งค่า</button>
+            <button type="button" className={integrationPanel==='meta'?'active':''} onClick={()=>{ setIntegrationPanel('meta'); window.history.pushState({},'','/admin/marketing/meta'); }}>Facebook Pixel</button>
+            <button type="button" className={integrationPanel==='google'?'active':''} onClick={()=>{ setIntegrationPanel('google'); window.history.pushState({},'','/admin/marketing/google'); }}>Google Analytics</button>
           </div>
 
-          <section className="meta-event-panel">
-            <div className="meta-event-head"><div><span>EVENT MAPPING</span><h2>เหตุการณ์ที่ระบบเตรียมไว้</h2></div><small>Browser + CRM / Server-ready</small></div>
-            <div className="meta-event-table">
-              <MetaEvent source="page_view" meta="PageView" trigger="เปิดหน้าเว็บไซต์" state="ready" />
-              <MetaEvent source="package_view" meta="ViewContent" trigger="ดูหน้าแพ็กเกจ" state="ready" />
-              <MetaEvent source="line_click" meta="LineAddFriendClick" trigger="กด CTA ไป LINE OA" state="ready" />
-              <MetaEvent source="lead_submit" meta="Lead" trigger="ส่งแบบฟอร์มให้ติดต่อกลับ" state="ready" />
-              <MetaEvent source="quotation_sent" meta="QuoteSent" trigger="Customer Tracking ส่ง Quotation" state="reserved" />
-              <MetaEvent source="payment_received" meta="Purchase" trigger="รับชำระเงินจริง" state="reserved" />
+          {integrationPanel==='settings' && <>
+          <SectionCard title="Facebook Pixel & CAPI" actions={<span className={`bo-status-pill ${integrations?.storageReady && integrations?.meta?.secretStorageReady ? 'ready' : ''}`}>{integrations?.storageReady && integrations?.meta?.secretStorageReady ? 'DATABASE READY' : 'RUN SQL V13.9'}</span>}>
+            <div className="bo-settings-list">
+              <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>Facebook Pixel ID</strong></div><div className="bo-settings-row-control"><input value={metaPixelId} onChange={(e) => setMetaPixelId(e.target.value.replace(/\D/g, ''))} inputMode="numeric" placeholder="เช่น 1574103264254056" /></div></div>
+              <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>Conversions API Access Token</strong></div><div className="bo-settings-row-control"><input type="password" value={metaAccessToken} onChange={(e) => setMetaAccessToken(e.target.value)} autoComplete="new-password" placeholder={integrations?.meta?.capiConfigured ? `บันทึกแล้ว ${integrations?.meta?.accessTokenMasked || ''}` : 'วาง Token ที่ขึ้นต้นด้วย EAA…'} /></div></div>
+              <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>Test Event Code</strong></div><div className="bo-settings-row-control"><input value={metaTestEventCode} onChange={(e) => setMetaTestEventCode(e.target.value)} placeholder="เช่น TEST12345" /></div></div>
+              <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>เปิดใช้งาน Browser Pixel + CAPI</strong></div><div className="bo-settings-row-control"><Toggle checked={metaEnabled} onChange={setMetaEnabled} label="Enabled" ariaLabel="เปิดใช้งาน Browser Pixel + CAPI" /></div></div>
             </div>
-          </section>
+            <div className="marketing-config-actions marketing-config-actions--meta"><div className="marketing-config-buttons"><button type="button" className="secondary" onClick={sendMetaTestEvent} disabled={metaTesting || !metaPixelId || !metaTestEventCode}><Send />{metaTesting ? 'กำลังส่ง…' : 'ส่ง Test Event'}</button><button type="button" onClick={() => void saveMetaSettings()}><Save />บันทึก Meta / CAPI</button></div></div>
+          </SectionCard>
 
-          <section className="marketing-config-card">
-            <div className="marketing-config-head"><div><span>META CONNECTION</span><h2>Facebook Pixel Settings</h2><p>บันทึกจากหลังบ้านได้ทันที ค่าในหน้านี้จะมีลำดับความสำคัญเหนือ Environment Variable เดิม</p></div><b className={(integrations?.storageReady&&integrations?.meta?.secretStorageReady)?'ready':'waiting'}>{(integrations?.storageReady&&integrations?.meta?.secretStorageReady)?'DATABASE READY':'RUN SQL V13.9'}</b></div>
-            <div className="marketing-config-grid">
-              <label><span>Facebook Pixel ID</span><input value={metaPixelId} onChange={e=>setMetaPixelId(e.target.value.replace(/\D/g,''))} inputMode="numeric" placeholder="เช่น 1574103264254056"/><small>Pixel / Dataset ID ที่ใช้กับเว็บไซต์ Bhutan Center</small></label>
-              <label><span>Conversions API Access Token</span><input type="password" value={metaAccessToken} onChange={e=>setMetaAccessToken(e.target.value)} autoComplete="new-password" placeholder={integrations?.meta?.capiConfigured?`บันทึกแล้ว ${integrations?.meta?.accessTokenMasked||''} · เว้นว่างเพื่อใช้ Token เดิม`:'วาง Token ที่ขึ้นต้นด้วย EAA…'}/><small>เก็บแบบเข้ารหัสฝั่ง Server เท่านั้น · หลัง Save จะไม่ส่ง Token กลับมาที่ Browser</small></label>
-              <label><span>Test Event Code</span><input value={metaTestEventCode} onChange={e=>setMetaTestEventCode(e.target.value)} placeholder="เช่น TEST12345"/><small>Meta Events Manager → Test Events → คัดลอก Test Event Code</small></label>
-              <label className="marketing-toggle-row"><input type="checkbox" checked={metaEnabled} onChange={e=>setMetaEnabled(e.target.checked)}/><span><strong>เปิดใช้งาน Browser Pixel + CAPI</strong><small>เมื่อเปิด ระบบจะยิง Browser Pixel และ Server Event คู่กัน พร้อม Event ID สำหรับ Deduplication</small></span></label>
+          <SectionCard title="ลิงก์เพิ่มเพื่อน LINE OA">
+            <div className="bo-settings-list"><div className="bo-settings-row"><div className="bo-settings-row-label"><strong>LINE OA Add Friend URL</strong><span>ปลายทางหลักของปุ่ม LINE บนเว็บไซต์</span></div><div className="bo-settings-row-control"><input value={lineOaUrl} onChange={(e) => setLineOaUrl(e.target.value)} placeholder="https://lin.ee/qQQMmYIt" /></div></div></div>
+            <div className="marketing-config-actions"><button type="button" onClick={saveLineSettings}><Save />บันทึกลิงก์ LINE</button></div>
+          </SectionCard>
+
+          <SectionCard title="Google Tag / GA4 / Ads">
+            <div className="bo-status-list">
+              <MetaStatusRow icon={Activity} label="Google Tag" ready={Boolean(summary?.googleTagConfigured)} detail={summary?.googleTagConfigured ? `พร้อม · ${summary?.googleTagIdMasked || 'configured'}` : 'รอ NEXT_PUBLIC_GOOGLE_TAG_ID'} />
+              <MetaStatusRow icon={Globe2} label="GA4" ready={Boolean(summary?.ga4Configured)} detail={summary?.ga4Configured ? `พร้อม · ${summary?.ga4IdMasked || 'G-...'}` : 'รอ NEXT_PUBLIC_GA4_MEASUREMENT_ID'} />
+              <MetaStatusRow icon={Target} label="Google Ads" ready={Boolean(summary?.googleAdsConfigured)} detail={summary?.googleAdsConfigured ? `พร้อม · ${summary?.googleAdsIdMasked || 'AW-...'}` : 'รอ NEXT_PUBLIC_GOOGLE_ADS_ID'} />
             </div>
-            <div className="marketing-config-actions marketing-config-actions--meta"><div><small>Pixel Source: {integrations?.meta?.source==='back_office'?'Back Office':integrations?.meta?.source==='environment'?'Vercel Environment':'ยังไม่ได้ตั้งค่า'} · Token: {integrations?.meta?.tokenSource==='back_office'?'Encrypted Back Office':integrations?.meta?.tokenSource==='environment'?'Vercel Environment':'ยังไม่มี'}</small><span>Pixel ID {metaPixelId||'—'} · CAPI {integrations?.meta?.capiConfigured?'พร้อม':'ยังไม่พร้อม'} · Test Code {metaTestEventCode?'พร้อม':'ยังไม่มี'}</span></div><div className="marketing-config-buttons"><button className="secondary" onClick={sendMetaTestEvent} disabled={currentUser.role!=='admin'||metaTesting||!metaPixelId||!metaTestEventCode}><Send/>{metaTesting?'กำลังส่ง…':'ส่ง Test Event'}</button><button onClick={()=>void saveMetaSettings()} disabled={currentUser.role!=='admin'}><Save/>บันทึก Meta / CAPI</button></div></div>
-            {(metaTestResult || integrations?.meta?.lastTestAt) && <div className={`meta-test-result ${(metaTestResult?.ok ?? integrations?.meta?.lastTestOk)?'success':'error'}`}><div><Activity/><strong>{(metaTestResult?.ok ?? integrations?.meta?.lastTestOk)?'Meta รับ Test Event แล้ว':'Test Event ล่าสุดยังไม่ผ่าน'}</strong></div><span>{metaTestResult?.message || integrations?.meta?.lastTestMessage || '—'}</span><small>{(metaTestResult?.fbtraceId)?`fbtrace_id: ${metaTestResult.fbtraceId}`:(integrations?.meta?.lastTestAt?`ล่าสุด ${new Date(integrations.meta.lastTestAt).toLocaleString('th-TH')}`:'')}</small>{metaTestResult?.diagnostics && <small>Graph {metaTestResult.diagnostics.graphVersion||'—'} · Dataset {metaTestResult.diagnostics.datasetId||'—'} · Test {metaTestResult.diagnostics.testEventCodeUsed||'—'} · IP {metaTestResult.diagnostics.clientIpDetected?`OK ${metaTestResult.diagnostics.clientIpMasked||''}`:'MISSING'} · UA {metaTestResult.diagnostics.userAgentDetected?'OK':'MISSING'}</small>}</div>}
-            {currentUser.role!=='admin' && <div className="marketing-config-note">เฉพาะ Administrator เท่านั้นที่เปลี่ยน Tracking Settings ได้</div>}
-          </section>
+            <div className="meta-env-list"><code>NEXT_PUBLIC_GOOGLE_TAG_ID</code><code>NEXT_PUBLIC_GA4_MEASUREMENT_ID</code><code>NEXT_PUBLIC_GOOGLE_ADS_ID</code></div>
+          </SectionCard>
+          </>}
 
-          <section className="meta-connect-card">
-            <div><span>LIVE SERVER EVENTS</span><h2>Browser Pixel + Conversions API ทำงานคู่กัน</h2><p>เมื่อ Pixel, Token และสวิตช์เปิดพร้อม ระบบจะส่ง PageView, ViewContent, LineAddFriendClick และ Lead จากฝั่ง Server ด้วย พร้อมใช้ Event ID เดียวกับ Browser Pixel เพื่อให้ Meta Deduplicate แทนการนับซ้ำ ส่วน Test Event Code ใช้เฉพาะปุ่มทดสอบและไม่ถูกส่งกับ Production Event</p></div>
-            <div className="meta-env-list"><code>Pixel: {integrations?.meta?.pixelIdMasked||metaPixelId||'—'}</code><code>CAPI: {integrations?.meta?.capiConfigured?'CONNECTED':'WAITING'}</code><code>Last Test: {integrations?.meta?.lastTestOk?'PASSED':integrations?.meta?.lastTestAt?'FAILED':'NOT TESTED'}</code></div>
-          </section>
-        </>}
-
-        {tab==='google' && <>
-          <section className="growth-title"><span>GOOGLE MEASUREMENT</span><h1>Google Tag + GA4 + Google Ads<br/>พร้อมรอเชื่อมบัญชีเดิม</h1><p>รองรับการวัดพฤติกรรมเว็บไซต์, Conversion จาก LINE/แบบฟอร์ม และ Remarketing สำหรับ Google Ads โดยตอนนี้ยังไม่โหลด Google tag ถ้ายังไม่ได้ใส่ ID ใน Vercel</p></section>
-
-          <div className="meta-status-grid">
-            <MetaStatusCard icon={Activity} label="Google Tag" ready={Boolean(summary?.googleTagConfigured)} detail={summary?.googleTagConfigured?`พร้อมแล้ว · ${summary?.googleTagIdMasked||summary?.ga4IdMasked||summary?.googleAdsIdMasked||'Tag configured'}`:'รอ NEXT_PUBLIC_GOOGLE_TAG_ID หรือ Destination ID'} />
-            <MetaStatusCard icon={Globe2} label="Google Analytics 4" ready={Boolean(summary?.ga4Configured)} detail={summary?.ga4Configured?`GA4 พร้อม · ${summary?.ga4IdMasked||summary?.googleTagIdMasked||'G-...'}`:'Optional · รอ NEXT_PUBLIC_GA4_MEASUREMENT_ID'} />
-            <MetaStatusCard icon={Target} label="Google Ads" ready={Boolean(summary?.googleAdsConfigured)} detail={summary?.googleAdsConfigured?`Ads tag พร้อม · ${summary?.googleAdsIdMasked||summary?.googleTagIdMasked||'AW-...'}`:'รอ NEXT_PUBLIC_GOOGLE_ADS_ID'} />
-            <MetaStatusCard icon={MousePointerClick} label="Ads Traffic" ready detail={`${summary?.googleAdsVisitors??0} visitor(s) มี Google Ads click ID / paid Google attribution ในช่วงนี้`} />
-          </div>
-
-          <section className="meta-event-panel">
-            <div className="meta-event-head"><div><span>EVENT MAPPING</span><h2>Google Analytics + Ads Conversion</h2></div><small>Browser-ready · Remarketing-ready</small></div>
-            <div className="meta-event-table">
-              <MetaEvent source="page_view" meta="page_view" trigger="เปิดหน้าเว็บไซต์ · ใช้สร้าง Website Remarketing" state="ready" />
-              <MetaEvent source="package_view" meta="view_item" trigger="ดูแพ็กเกจ · เก็บความสนใจแพ็กเกจ" state="ready" />
-              <MetaEvent source="line_click" meta="line_click / Ads conversion" trigger="กด CTA ไป LINE OA" state={summary?.googleAdsLineConversionConfigured?'ready':'reserved'} />
-              <MetaEvent source="lead_submit" meta="generate_lead / Ads conversion" trigger="ส่งแบบฟอร์มให้ติดต่อกลับ" state={summary?.googleAdsLeadConversionConfigured?'ready':'reserved'} />
-              <MetaEvent source="quotation_sent" meta="Offline Conversion" trigger="Customer Tracking ส่ง Quotation · เตรียมไว้ Phase ต่อไป" state="reserved" />
-              <MetaEvent source="payment_received" meta="Purchase / Offline Conversion" trigger="รับชำระเงินจริง · เตรียมไว้ Phase ต่อไป" state="reserved" />
+          {integrationPanel==='meta' && <>
+          <SectionCard title="สถานะ Meta">
+            <div className="bo-status-list">
+              <MetaStatusRow icon={MousePointerClick} label="Browser Pixel" ready={Boolean(summary?.metaPixelConfigured)} detail={summary?.metaPixelConfigured ? `เชื่อมแล้ว · ${summary?.metaPixelIdMasked || 'Pixel ID'}` : 'กรอก Pixel ID เพื่อเปิดใช้งาน'} />
+              <MetaStatusRow icon={Server} label="Conversions API" ready={Boolean(integrations?.meta?.capiConfigured || summary?.metaCapiConfigured)} detail={(integrations?.meta?.capiConfigured || summary?.metaCapiConfigured) ? `Token พร้อม · ${integrations?.meta?.accessTokenMasked || 'Server secret'}` : 'วาง CAPI Access Token แล้วบันทึก'} />
+              <MetaStatusRow icon={Activity} label="Test Events" ready={Boolean(metaTestResult?.ok ?? integrations?.meta?.lastTestOk)} detail={metaTestResult?.message || integrations?.meta?.lastTestMessage || (integrations?.meta?.lastTestOk ? `ผ่านแล้ว · ${integrations?.meta?.lastTestEventsReceived || 1} event` : (integrations?.meta?.testEventConfigured ? 'Code พร้อม · กดส่ง Test Event' : 'วาง Code จาก Meta Events Manager'))} />
+              <MetaStatusRow icon={Target} label="Retargeting Logic" ready detail="First-party Funnel พร้อมใช้งานในหลังบ้าน" />
             </div>
-          </section>
+          </SectionCard>
 
-          <section className="retargeting-section">
-            <div className="retargeting-section-title"><div><span>GOOGLE ADS REMARKETING</span><h2>รองรับคนเข้าเว็บแล้วกลับไปเจอโฆษณาเรา</h2></div><small>รอเชื่อม AW-... / Google tag</small></div>
-            <div className="retargeting-audience-grid">
-              <AudienceCard tone="cold" icon={Globe2} label="All Website Visitors" value={summary?.uniqueVisitors??0} desc="คนที่เคยเข้า Bhutan Center" action="Google Ads Website Audience" />
-              <AudienceCard tone="warm" icon={MousePointerClick} label="Package Viewers" value={summary?.packageViewVisitors??0} desc="คนที่เคยเปิดดูแพ็กเกจ" action="Remarketing Package / High Season" />
-              <AudienceCard tone="hot" icon={Target} label="LINE Intent" value={summary?.lineClickVisitors??0} desc="คนที่กด LINE จากเว็บไซต์" action="High-intent Remarketing" />
+          <SectionCard title="Event Mapping · Browser + Server">
+            <div className="module-table-wrap bo-table-wrap"><table className="module-table bo-table"><thead><tr><th>Website</th><th>Meta Event</th><th>Trigger</th><th>สถานะ</th></tr></thead><tbody>
+              <MetaEventTableRow source="page_view" meta="PageView" trigger="เปิดหน้าเว็บไซต์" state="ready" />
+              <MetaEventTableRow source="package_view" meta="ViewContent" trigger="ดูหน้าแพ็กเกจ" state="ready" />
+              <MetaEventTableRow source="line_click" meta="LineAddFriendClick" trigger="กด CTA ไป LINE OA" state="ready" />
+              <MetaEventTableRow source="lead_submit" meta="Lead" trigger="ส่งแบบฟอร์มให้ติดต่อกลับ" state="ready" />
+              <MetaEventTableRow source="quotation_sent" meta="QuoteSent" trigger="Customer Tracking ส่ง Quotation" state="reserved" />
+              <MetaEventTableRow source="payment_received" meta="Purchase" trigger="รับชำระเงินจริง" state="reserved" />
+            </tbody></table></div>
+          </SectionCard>
+          </>}
+
+          {integrationPanel==='google' && <>
+          <SectionCard title="สถานะ Google">
+            <div className="bo-status-list">
+              <MetaStatusRow icon={Activity} label="Google Tag" ready={Boolean(summary?.googleTagConfigured)} detail={summary?.googleTagConfigured ? `พร้อมแล้ว · ${summary?.googleTagIdMasked || summary?.ga4IdMasked || summary?.googleAdsIdMasked || 'Tag configured'}` : 'รอ NEXT_PUBLIC_GOOGLE_TAG_ID'} />
+              <MetaStatusRow icon={Globe2} label="Google Analytics 4" ready={Boolean(summary?.ga4Configured)} detail={summary?.ga4Configured ? `GA4 พร้อม · ${summary?.ga4IdMasked || 'G-...'}` : 'รอ NEXT_PUBLIC_GA4_MEASUREMENT_ID'} />
+              <MetaStatusRow icon={Target} label="Google Ads" ready={Boolean(summary?.googleAdsConfigured)} detail={summary?.googleAdsConfigured ? `Ads tag พร้อม · ${summary?.googleAdsIdMasked || 'AW-...'}` : 'รอ NEXT_PUBLIC_GOOGLE_ADS_ID'} />
+              <MetaStatusRow icon={MousePointerClick} label="Ads Traffic" ready detail={`${summary?.googleAdsVisitors ?? 0} visitor(s) มี Google Ads attribution ในช่วงนี้`} />
             </div>
-          </section>
+          </SectionCard>
 
-          <section className="meta-connect-card">
-            <div><span>CONNECT LATER</span><h2>นำ Google Ads / Analytics เดิมมาเชื่อมภายหลังได้</h2><p>แนะนำให้ใช้ Google tag เป็นฐานเดียวแล้วเชื่อม GA4 และ Google Ads เป็น destinations เพื่อลด tag ซ้ำ ระบบรองรับ Google click IDs เช่น GCLID, GBRAID และ WBRAID ใน Website Events ไว้แล้ว เพื่อใช้ Attribution และต่อยอด Offline Conversion ในอนาคต</p></div>
-            <div className="meta-env-list"><code>NEXT_PUBLIC_GOOGLE_TAG_ID</code><code>NEXT_PUBLIC_GA4_MEASUREMENT_ID</code><code>NEXT_PUBLIC_GOOGLE_ADS_ID</code><code>NEXT_PUBLIC_GOOGLE_ADS_LINE_CONVERSION_LABEL</code><code>NEXT_PUBLIC_GOOGLE_ADS_LEAD_CONVERSION_LABEL</code></div>
-          </section>
+          <SectionCard title="Event Mapping · GA4 + Ads">
+            <div className="module-table-wrap bo-table-wrap"><table className="module-table bo-table"><thead><tr><th>Website</th><th>Google Event</th><th>Trigger</th><th>สถานะ</th></tr></thead><tbody>
+              <MetaEventTableRow source="page_view" meta="page_view" trigger="เปิดหน้าเว็บไซต์ · Website Remarketing" state="ready" />
+              <MetaEventTableRow source="package_view" meta="view_item" trigger="ดูแพ็กเกจ · เก็บความสนใจ" state="ready" />
+              <MetaEventTableRow source="line_click" meta="line_click / Ads conversion" trigger="กด CTA ไป LINE OA" state={summary?.googleAdsLineConversionConfigured ? 'ready' : 'reserved'} />
+              <MetaEventTableRow source="lead_submit" meta="generate_lead / Ads conversion" trigger="ส่งแบบฟอร์มให้ติดต่อกลับ" state={summary?.googleAdsLeadConversionConfigured ? 'ready' : 'reserved'} />
+              <MetaEventTableRow source="quotation_sent" meta="Offline Conversion" trigger="Customer Tracking ส่ง Quotation" state="reserved" />
+              <MetaEventTableRow source="payment_received" meta="Purchase / Offline Conversion" trigger="รับชำระเงินจริง" state="reserved" />
+            </tbody></table></div>
+          </SectionCard>
+
+          <SectionCard title="Google Ads Remarketing">
+            <div className="module-table-wrap bo-table-wrap"><table className="module-table bo-table"><thead><tr><th>กลุ่ม</th><th>จำนวน</th><th>คำอธิบาย</th><th>แนะนำ</th></tr></thead><tbody>
+              <RetargetingTableRow label="All Website Visitors" value={summary?.uniqueVisitors ?? 0} desc="คนที่เคยเข้า Bhutan Center" action="Google Ads Website Audience" />
+              <RetargetingTableRow label="Package Viewers" value={summary?.packageViewVisitors ?? 0} desc="คนที่เคยเปิดดูแพ็กเกจ" action="Remarketing Package / High Season" />
+              <RetargetingTableRow label="LINE Intent" value={summary?.lineClickVisitors ?? 0} desc="คนที่กด LINE จากเว็บไซต์" action="High-intent Remarketing" />
+            </tbody></table></div>
+          </SectionCard>
+          </>}
         </>}
 
         {tab==='website' && <>
-          <section className="growth-title"><span>PUBLIC WEBSITE</span><h1>ราคาแสดงบนเว็บไซต์<br/>แยกจากสูตรขายอย่างชัดเจน</h1><p>ค่า Auto จะคำนวณจาก Pricing จริงสำหรับ Retail · 2 ท่าน · 3 ดาว ส่วน Override เป็นเพียง “ราคาแสดงเพื่อการตลาด” และจะไม่เปลี่ยนสูตรคำนวณ, Quotation หรือ Invoice</p></section>
-          <div className="website-price-list">{prices.map((row)=><WebsitePriceRow key={row.id} row={row} onSave={savePrice}/>)}</div>
-          <a className="growth-open-site" href="/" target="_blank" rel="noreferrer"><Globe2/>เปิดเว็บไซต์ Public <span>↗</span></a>
+          <SectionCard title="ราคาแสดงบนเว็บไซต์" actions={<a className="growth-open-site" href="/" target="_blank" rel="noreferrer"><Globe2 />เปิดเว็บไซต์ Public</a>}>
+            <div className="module-table-wrap bo-table-wrap"><table className="module-table bo-table"><thead><tr><th>โปรแกรม</th><th>ระยะเวลา</th><th>ราคา Override</th><th>แสดง</th><th /></tr></thead><tbody>
+              {prices.map((row) => <WebsitePriceTableRow key={row.id} row={row} onSave={savePrice} />)}
+            </tbody></table></div>
+          </SectionCard>
         </>}
 
         {tab==='line' && <>
-          <section className="growth-title"><span>LINE OA</span><h1>ช่องทางหลัก<br/>สำหรับปิดการขาย</h1><p>Website จะพาลูกค้าเข้า LINE พร้อมเก็บ Line Click ใน Funnel และ Webhook จะเก็บ LINE userId เมื่อมี Follow / Message</p></section>
-          <div className="line-status-grid"><article className={summary?.lineConfigured?'ready':''}><i>{summary?.lineConfigured?<CheckCircle2/>:<Settings2/>}</i><div><strong>Messaging API</strong><span>{summary?.lineConfigured?'พร้อมใช้งาน':'รอตั้งค่า Channel Token / Secret'}</span></div></article><article className={summary?.lineBasicIdConfigured?'ready':''}><i>{summary?.lineBasicIdConfigured?<CheckCircle2/>:<Globe2/>}</i><div><strong>LINE OA Link</strong><span>{summary?.lineBasicIdConfigured?'ปุ่มหน้าเว็บพร้อมส่งเข้า LINE':'รอตั้งค่า LINE OA URL'}</span></div></article></div>
-          <section className="marketing-config-card marketing-config-card--compact">
-            <div className="marketing-config-head"><div><span>PUBLIC LINE CTA</span><h2>ลิงก์เพิ่มเพื่อน LINE OA</h2><p>ใช้เป็นปลายทางหลักของปุ่ม LINE บนเว็บไซต์ และแก้ไขได้จากหลังบ้าน</p></div><b className="ready">BHUTAN CENTER</b></div>
-            <div className="marketing-config-grid marketing-config-grid--line"><label><span>LINE OA Add Friend URL</span><input value={lineOaUrl} onChange={e=>setLineOaUrl(e.target.value)} placeholder="https://lin.ee/qQQMmYIt"/><small>ค่าปัจจุบันที่ตั้งไว้: https://lin.ee/qQQMmYIt</small></label></div>
-            <div className="marketing-config-actions"><div><small>{integrations?.line?.source==='back_office'?'บันทึกจาก Back Office':integrations?.line?.source==='environment'?'อ่านจาก Vercel':'ใช้ Default ของ Bhutan Center'}</small></div><button onClick={saveLineSettings} disabled={currentUser.role!=='admin'}><Save/>บันทึกลิงก์ LINE</button></div>
-          </section>
-
-          <section className="line-broadcast-studio">
-            <div className="line-broadcast-studio__head">
-              <div><span>BROADCAST STUDIO</span><h2>ส่งข้อความ · รูปภาพ · การ์ด Flex + CTA</h2><p>รองรับ 3 รูปแบบหลักสำหรับบรอดแคสต์จากหลังบ้าน โดยรูปภาพต้องเป็นลิงก์สาธารณะ (https://...) เพื่อให้ LINE ดึงไปแสดงได้</p></div>
-              <div className="line-broadcast-studio__meta"><strong>{summary?.lineFriends ?? 0}</strong><small>เพื่อน LINE ที่พร้อมรับข้อความ</small></div>
+          <SectionCard title="สถานะ LINE">
+            <div className="bo-status-list">
+              <div className={`bo-status-row ${summary?.lineConfigured ? 'ready' : ''}`}><span className="bo-status-icon">{summary?.lineConfigured ? <CheckCircle2 /> : <Settings2 />}</span><div><strong>Messaging API</strong><span>{summary?.lineConfigured ? 'พร้อมใช้งาน' : 'รอตั้งค่า Channel Token / Secret'}</span></div><span className="bo-status-pill">{summary?.lineConfigured ? 'พร้อม' : 'รอเชื่อม'}</span></div>
+              <div className={`bo-status-row ${summary?.lineBasicIdConfigured ? 'ready' : ''}`}><span className="bo-status-icon">{summary?.lineBasicIdConfigured ? <CheckCircle2 /> : <Globe2 />}</span><div><strong>LINE OA Link</strong><span>{summary?.lineBasicIdConfigured ? 'ปุ่มหน้าเว็บพร้อมส่งเข้า LINE' : 'รอตั้งค่า LINE OA URL'}</span></div><span className="bo-status-pill">{summary?.lineBasicIdConfigured ? 'พร้อม' : 'รอเชื่อม'}</span></div>
             </div>
-            <div className="line-broadcast-mode">
-              {[{id:'text',label:'ข้อความ'},{id:'image',label:'รูปภาพ'},{id:'card',label:'การ์ด / Flex + CTA'}].map((option)=><button key={option.id} className={lineMode===option.id?'active':''} onClick={()=>setLineMode(option.id as 'text'|'image'|'card')}>{option.label}</button>)}
-            </div>
-            <div className="line-broadcast-body">
-              <div className="line-broadcast-form">
-                <label><span>ชื่อ Broadcast</span><input value={broadcastName} onChange={e=>setBroadcastName(e.target.value)} placeholder="เช่น โปรเที่ยวภูฏานเดือนนี้"/></label>
-                {lineMode==='text' && <label><span>ข้อความ</span><textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="พิมพ์ข้อความ Broadcast ที่ต้องการส่ง..." rows={8}/><small>เหมาะกับการประกาศข่าว, โปรโมชัน, หรือชวนคุยต่อใน LINE</small></label>}
-                {lineMode==='image' && <>
-                  <label><span>Image URL</span><input value={imageUrl} onChange={e=>setImageUrl(e.target.value)} placeholder="https://.../image.jpg"/><small>ใช้ลิงก์รูปแบบสาธารณะเท่านั้น</small></label>
-                  <label><span>Preview URL (ถ้ามี)</span><input value={imagePreviewUrl} onChange={e=>setImagePreviewUrl(e.target.value)} placeholder="https://.../preview.jpg"/><small>ถ้าเว้นว่าง ระบบจะใช้ URL เดียวกับรูปหลัก</small></label>
-                  <label><span>ข้อความแนบใต้รูป (ไม่บังคับ)</span><textarea value={imageCaption} onChange={e=>setImageCaption(e.target.value)} placeholder="เช่น เปิดรับจองทริปส่วนตัว ทักหาเราได้เลย" rows={5}/></label>
-                </>}
-                {lineMode==='card' && <>
-                  <label><span>หัวข้อการ์ด</span><input value={cardTitle} onChange={e=>setCardTitle(e.target.value)} placeholder="เช่น Private Journey to Bhutan"/></label>
-                  <label><span>รายละเอียด</span><textarea value={cardBody} onChange={e=>setCardBody(e.target.value)} placeholder="อธิบายจุดขายแบบสั้น กระชับ อ่านง่าย" rows={6}/></label>
-                  <label><span>Hero Image URL (ไม่บังคับ)</span><input value={cardImageUrl} onChange={e=>setCardImageUrl(e.target.value)} placeholder="https://.../cover.jpg"/></label>
-                  <div className="line-broadcast-form-grid2">
-                    <label><span>ปุ่ม CTA</span><input value={cardButtonLabel} onChange={e=>setCardButtonLabel(e.target.value)} placeholder="คุยใน LINE"/></label>
-                    <label><span>CTA URL</span><input value={cardButtonUrl} onChange={e=>setCardButtonUrl(e.target.value)} placeholder="https://lin.ee/qQQMmYIt"/></label>
-                  </div>
-                  <label><span>Alt Text</span><input value={cardAltText} onChange={e=>setCardAltText(e.target.value)} placeholder="ข้อความอธิบายเวลา LINE แสดงแบบข้อความแทนการ์ด"/></label>
-                </>}
+          </SectionCard>
+          <SectionCard
+            title={`Broadcast · ${summary?.lineFriends ?? 0} เพื่อน`}
+            actions={
+              <div className="marketing-period-switch" aria-label="รูปแบบ Broadcast">
+                {[{ id: 'text', label: 'ข้อความ' }, { id: 'image', label: 'รูปภาพ' }, { id: 'card', label: 'การ์ด' }].map((option) => (
+                  <button key={option.id} type="button" className={lineMode === option.id ? 'active' : ''} onClick={() => setLineMode(option.id as 'text' | 'image' | 'card')}>{option.label}</button>
+                ))}
               </div>
-              <div className="line-broadcast-preview">
-                <div className="line-broadcast-preview__label">ตัวอย่างก่อนส่ง</div>
-                <LineBroadcastPreview mode={lineMode} text={message} imageUrl={imageUrl} imageCaption={imageCaption} cardTitle={cardTitle} cardBody={cardBody} cardImageUrl={cardImageUrl} cardButtonLabel={cardButtonLabel}/>
-                <ul className="line-broadcast-tips"><li>ข้อความยาวเกินไปควรแบ่งเป็นหลายส่วนเพื่อให้อ่านง่าย</li><li>การ์ด Flex เหมาะกับโปรโมชัน แพ็กเกจ และปุ่ม CTA ชัดเจน</li><li>ถ้าส่งรูปภาพ ต้องใช้ URL ที่เปิดสาธารณะได้จริง</li></ul>
-              </div>
+            }
+          >
+            <div className="bo-settings-list">
+              <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>ชื่อ Broadcast</strong></div><div className="bo-settings-row-control"><input value={broadcastName} onChange={(e) => setBroadcastName(e.target.value)} placeholder="เช่น โปรเที่ยวภูฏานเดือนนี้" /></div></div>
+              {lineMode === 'text' && (
+                <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>ข้อความ</strong><span>ประกาศข่าว · โปรโมชัน · ชวนคุยต่อ</span></div><div className="bo-settings-row-control"><textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="พิมพ์ข้อความ Broadcast..." rows={6} /></div></div>
+              )}
+              {lineMode === 'image' && <>
+                <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>Image URL</strong><span>ลิงก์สาธารณะ https://</span></div><div className="bo-settings-row-control"><input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://.../image.jpg" /></div></div>
+                <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>Preview URL</strong><span>เว้นว่าง = ใช้ URL รูปหลัก</span></div><div className="bo-settings-row-control"><input value={imagePreviewUrl} onChange={(e) => setImagePreviewUrl(e.target.value)} placeholder="https://.../preview.jpg" /></div></div>
+                <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>ข้อความแนบใต้รูป</strong></div><div className="bo-settings-row-control"><textarea value={imageCaption} onChange={(e) => setImageCaption(e.target.value)} placeholder="ข้อความใต้รูป (ไม่บังคับ)" rows={4} /></div></div>
+              </>}
+              {lineMode === 'card' && <>
+                <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>หัวข้อการ์ด</strong></div><div className="bo-settings-row-control"><input value={cardTitle} onChange={(e) => setCardTitle(e.target.value)} placeholder="Private Journey to Bhutan" /></div></div>
+                <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>รายละเอียด</strong></div><div className="bo-settings-row-control"><textarea value={cardBody} onChange={(e) => setCardBody(e.target.value)} placeholder="จุดขายแบบสั้น กระชับ" rows={5} /></div></div>
+                <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>Hero Image URL</strong></div><div className="bo-settings-row-control"><input value={cardImageUrl} onChange={(e) => setCardImageUrl(e.target.value)} placeholder="https://.../cover.jpg" /></div></div>
+                <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>ปุ่ม CTA</strong></div><div className="bo-settings-row-control"><input value={cardButtonLabel} onChange={(e) => setCardButtonLabel(e.target.value)} placeholder="คุยใน LINE" /></div></div>
+                <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>CTA URL</strong></div><div className="bo-settings-row-control"><input value={cardButtonUrl} onChange={(e) => setCardButtonUrl(e.target.value)} placeholder="https://lin.ee/qQQMmYIt" /></div></div>
+                <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>Alt Text</strong></div><div className="bo-settings-row-control"><input value={cardAltText} onChange={(e) => setCardAltText(e.target.value)} placeholder="ข้อความอธิบายการ์ด" /></div></div>
+              </>}
+              <div className="bo-settings-row"><div className="bo-settings-row-label"><strong>ตัวอย่างก่อนส่ง</strong></div><div className="bo-settings-row-control"><LineBroadcastPreview mode={lineMode} text={message} imageUrl={imageUrl} imageCaption={imageCaption} cardTitle={cardTitle} cardBody={cardBody} cardImageUrl={cardImageUrl} cardButtonLabel={cardButtonLabel} /></div></div>
             </div>
-            <div className="line-broadcast-actions"><small>{summary?.lineConfigured ? 'พร้อมส่งผ่าน Messaging API' : 'ยังส่งไม่ได้จนกว่าจะตั้งค่า LINE Channel Access Token / Secret ให้ครบ'}</small><button onClick={broadcast} disabled={!summary?.lineConfigured || !broadcastReady}><Send/>ส่ง Broadcast</button></div>
-          </section>
+            <div className="marketing-config-actions">
+              <small>{summary?.lineConfigured ? 'พร้อมส่งผ่าน Messaging API' : 'ยังส่งไม่ได้จนกว่าจะตั้งค่า LINE Channel Access Token / Secret'}</small>
+              <button type="button" onClick={broadcast} disabled={!summary?.lineConfigured || !broadcastReady}><Send />ส่ง Broadcast</button>
+            </div>
+          </SectionCard>
         </>}
 
         {tab==='seo' && <>
-          <section className="growth-title"><span>SEO MIGRATION</span><h1>SEO เดิม<br/>ไม่ถูกทิ้ง</h1><p>Public Website ยังเป็น Next.js และเก็บ Legacy URL / Sitemap / Robots / Metadata จาก V8.7 ไว้ เพื่อย้ายจาก Wix แบบลดความเสี่ยงต่อ Ranking</p></section>
-          <div className="seo-check-grid"><article><strong>Legacy Wix URLs</strong><span>Preserved via rewrites</span></article><article><strong>Sitemap.xml</strong><span>Auto generated</span></article><article><strong>robots.txt</strong><span>/admin และ API ถูกกันออก</span></article><article><strong>Package Metadata</strong><span>Dynamic from public package data</span></article></div>
+          <SectionCard title="SEO Checklist">
+            <div className="bo-status-list">
+              <div className="bo-status-row ready"><span className="bo-status-icon"><CheckCircle2 /></span><div><strong>Legacy Wix URLs</strong><span>Preserved via rewrites</span></div><span className="bo-status-pill">พร้อม</span></div>
+              <div className="bo-status-row ready"><span className="bo-status-icon"><CheckCircle2 /></span><div><strong>Sitemap.xml</strong><span>Auto generated</span></div><span className="bo-status-pill">พร้อม</span></div>
+              <div className="bo-status-row ready"><span className="bo-status-icon"><CheckCircle2 /></span><div><strong>robots.txt</strong><span>/admin และ API ถูกกันออก</span></div><span className="bo-status-pill">พร้อม</span></div>
+              <div className="bo-status-row ready"><span className="bo-status-icon"><CheckCircle2 /></span><div><strong>Package Metadata</strong><span>Dynamic from public package data</span></div><span className="bo-status-pill">พร้อม</span></div>
+            </div>
+          </SectionCard>
         </>}
-      </main>
     </div>
   </div>;
 }
 
-function FunnelStage({value,label}:{value:number;label:string}){
-  return <div><strong>{value}</strong><span>{label}</span></div>;
+function FunnelStageTable({ stages }: { stages: { label: string; value: number; base: number; sub?: string }[] }) {
+  return (
+    <div className="module-table-wrap bo-table-wrap bo-funnel-table"><table className="module-table bo-table"><thead><tr><th>Stage</th><th>Count</th><th>Conv.</th><th>Progress</th></tr></thead><tbody>
+      {stages.map((stage) => {
+        const conversion = stage.base > 0 ? Math.min(100, Math.round((stage.value / stage.base) * 100)) : 0;
+        return (
+          <tr key={stage.label}>
+            <td><strong>{stage.label}</strong>{stage.sub && <small style={{ display: 'block', color: 'var(--muted)' }}>{stage.sub}</small>}</td>
+            <td><strong>{stage.value}</strong></td>
+            <td>{conversion}%</td>
+            <td><div className="bo-funnel-bar"><i style={{ width: `${conversion}%` }} /></div></td>
+          </tr>
+        );
+      })}
+    </tbody></table></div>
+  );
 }
 
-function FunnelDetail({index,label,value,sub,base}:{index:string;label:string;value:number;sub:string;base:number}){
-  const conversion=base>0?Math.min(100,Math.round((value/base)*100)):0;
-  return <article><div className="funnel-detail-top"><small>{index}</small><b>{conversion}%</b></div><strong>{value}</strong><h3>{label}</h3><span>{sub}</span><div className="funnel-detail-track"><i style={{width:`${conversion}%`}}/></div></article>;
+function RetargetingTableRow({ label, value, desc, action }: { label: string; value: number; desc: string; action: string }) {
+  return <tr><td><strong>{label}</strong></td><td><strong>{value}</strong></td><td>{desc}</td><td><span style={{ color: 'var(--muted)', fontSize: 12 }}>{action}</span></td></tr>;
 }
 
-function AudienceCard({tone,icon:Icon,label,value,desc,action}:{tone:'cold'|'warm'|'hot'|'known';icon:React.ComponentType<any>;label:string;value:number;desc:string;action:string}){
-  return <article className={`retargeting-audience retargeting-audience--${tone}`}><div className="retargeting-audience-top"><i><Icon/></i><b>{value}</b></div><strong>{label}</strong><p>{desc}</p><span>{action}</span><small>FIRST-PARTY AUDIENCE</small></article>;
+function MetaStatusRow({ icon: Icon, label, ready, detail }: { icon: React.ComponentType<any>; label: string; ready: boolean; detail: string }) {
+  return (
+    <div className={`bo-status-row ${ready ? 'ready' : ''}`}>
+      <span className="bo-status-icon"><Icon /></span>
+      <div><strong>{label}</strong><span>{detail}</span></div>
+      <span className="bo-status-pill">{ready ? 'พร้อม' : 'รอเชื่อม'}</span>
+    </div>
+  );
 }
 
-function MetaStatusCard({icon:Icon,label,ready,detail}:{icon:React.ComponentType<any>;label:string;ready:boolean;detail:string}){
-  return <article className={ready?'ready':''}><i><Icon/></i><div><small>{ready?'CONNECTED / READY':'WAITING'}</small><strong>{label}</strong><span>{detail}</span></div><b>{ready?'พร้อม':'รอเชื่อม'}</b></article>;
+function MetaEventTableRow({ source, meta, trigger, state }: { source: string; meta: string; trigger: string; state: 'ready' | 'reserved' }) {
+  return (
+    <tr>
+      <td><code>{source}</code></td>
+      <td><strong>{meta}</strong></td>
+      <td>{trigger}</td>
+      <td><span className={`bo-status-pill ${state === 'ready' ? 'ready' : ''}`}>{state === 'ready' ? 'พร้อม' : 'เตรียมไว้'}</span></td>
+    </tr>
+  );
 }
 
-function MetaEvent({source,meta,trigger,state}:{source:string;meta:string;trigger:string;state:'ready'|'reserved'}){
-  return <div className="meta-event-row"><code>{source}</code><span>→</span><strong>{meta}</strong><p>{trigger}</p><b className={state}>{state==='ready'?'พร้อม':'เตรียมไว้'}</b></div>;
+function MetaAudienceRecipeTableRow({ recipe, onCopy }: { recipe: MetaAudienceRecipe; onCopy: (text: string, label: string) => void }) {
+  const recipeText = `${recipe.name}\nSource: ${recipe.source}\nRetention: ${recipe.retention}\nRule: ${recipe.rule}\nUse: ${recipe.use}${recipe.exclude ? `\nExclude: ${recipe.exclude}` : ''}`;
+  return (
+    <tr>
+      <td><strong>{recipe.name}</strong>{recipe.note && <small style={{ display: 'block', color: 'var(--muted)' }}>{recipe.note}</small>}</td>
+      <td>{recipe.priority}</td>
+      <td>{recipe.source}</td>
+      <td>{recipe.retention}</td>
+      <td><span style={{ fontSize: 12 }}>{recipe.rule}</span></td>
+      <td>
+        <div className="bo-row-actions">
+          <button type="button" className="bo-icon-btn" title="คัดลอกชื่อ" aria-label="คัดลอกชื่อ Audience" onClick={() => void onCopy(recipe.name, 'ชื่อ Audience')}><Copy /></button>
+          <button type="button" className="bo-icon-btn" title="คัดลอกสูตร" aria-label="คัดลอกสูตร Audience" onClick={() => void onCopy(recipeText, 'สูตร Audience')}><Copy /></button>
+        </div>
+      </td>
+    </tr>
+  );
 }
 
-function LiveVisitorRow({visitor}:{visitor:LiveVisitor}){
-  const page=visitor.packageSlug ? `แพ็กเกจ: ${visitor.packageSlug}` : visitor.pagePath || '/';
-  const ago=visitor.lastSeenSeconds<=5?'เมื่อสักครู่':`${visitor.lastSeenSeconds} วิ.`;
-  return <div className="realtime-row"><span><i className="live-dot"/><strong>{visitor.visitorId||'Anonymous'}</strong><small>{visitor.sessionId||'Session'}</small></span><span><strong>{page}</strong><small>{visitor.pagePath}</small></span><span><strong>{visitor.source||'Direct'}</strong><small>{visitor.campaign||'—'}</small></span><span><strong>{visitor.device}</strong><small>{visitor.eventName==='heartbeat'?'Active':'Interacting'}</small></span><span><strong>{ago}</strong><small>Live</small></span></div>;
+function LiveVisitorTableRow({ visitor }: { visitor: LiveVisitor }) {
+  const page = visitor.packageSlug ? `แพ็กเกจ: ${visitor.packageSlug}` : visitor.pagePath || '/';
+  const ago = visitor.lastSeenSeconds <= 5 ? 'เมื่อสักครู่' : `${visitor.lastSeenSeconds} วิ.`;
+  return (
+    <tr>
+      <td><strong>{visitor.visitorId || 'Anonymous'}</strong><small style={{ display: 'block', color: 'var(--muted)' }}>{visitor.sessionId || 'Session'}</small></td>
+      <td><strong>{page}</strong><small style={{ display: 'block', color: 'var(--muted)' }}>{visitor.pagePath}</small></td>
+      <td><strong>{visitor.source || 'Direct'}</strong><small style={{ display: 'block', color: 'var(--muted)' }}>{visitor.campaign || '—'}</small></td>
+      <td>{visitor.device}</td>
+      <td>{ago}</td>
+    </tr>
+  );
 }
 
-function AudiencePresetCard({item}:{item:AudiencePreset}){
-  const tone=item.intent.toLowerCase().replace(/\s+/g,'-');
-  return <article className={`audience-preset audience-preset--${tone}`}><div className="audience-preset-top"><small>{item.source}</small><b>{item.intent}</b></div><strong>{item.count}</strong><h3>{item.name}</h3><p>{item.description}</p><span>อนาคต: {item.futureMeta}</span></article>;
+function AudiencePresetTableRow({ item }: { item: AudiencePreset }) {
+  return (
+    <tr>
+      <td><strong>{item.name}</strong><small style={{ display: 'block', color: 'var(--muted)' }}>{item.description}</small></td>
+      <td>{item.source}</td>
+      <td>{item.intent}</td>
+      <td><strong>{item.count}</strong></td>
+      <td><span style={{ color: 'var(--muted)', fontSize: 12 }}>{item.futureMeta}</span></td>
+    </tr>
+  );
 }
 
 function LineBroadcastPreview({ mode, text, imageUrl, imageCaption, cardTitle, cardBody, cardImageUrl, cardButtonLabel }:{ mode:'text'|'image'|'card'; text:string; imageUrl:string; imageCaption:string; cardTitle:string; cardBody:string; cardImageUrl:string; cardButtonLabel:string; }){
@@ -673,9 +835,116 @@ function LineBroadcastPreview({ mode, text, imageUrl, imageCaption, cardTitle, c
   return <div className="line-preview-card"><div className="line-preview-image">{cardImageUrl.trim()?<img src={cardImageUrl.trim()} alt="Flex preview"/>:<span>FLEX HERO IMAGE</span>}</div><div className="line-preview-copy"><strong>{cardTitle.trim() || 'หัวข้อการ์ด'}</strong><p>{cardBody.trim() || 'รายละเอียดการ์ดจะขึ้นตรงนี้'}</p><button type="button">{cardButtonLabel.trim() || 'CTA Button'}</button></div></div>;
 }
 
-function WebsitePriceRow({row,onSave}:{row:PriceRow;onSave:(row:PriceRow,price:string,visible:boolean)=>void}){
-  const [price,setPrice]=useState(row.override?.price_override_thb?.toString()||'');
-  const [visible,setVisible]=useState(row.override?.visible!==false);
-  useEffect(()=>{setPrice(row.override?.price_override_thb?.toString()||'');setVisible(row.override?.visible!==false)},[row.override?.price_override_thb,row.override?.visible]);
-  return <article><div><small>{row.nights+1} DAYS / {row.nights} NIGHTS</small><strong>{row.name}</strong><span>เว้นราคา Override ว่าง = ใช้ราคาที่คำนวณจาก Pricing</span></div><label><span>ราคาแสดงหน้าเว็บ</span><input type="number" min="0" step="500" value={price} onChange={e=>setPrice(e.target.value)} placeholder="Auto"/></label><label className="website-visible"><input type="checkbox" checked={visible} onChange={e=>setVisible(e.target.checked)}/><span>แสดงบนเว็บไซต์</span></label><button onClick={()=>onSave(row,price,visible)}><Save/>บันทึก</button></article>;
+function WebsitePriceTableRow({ row, onSave }: { row: PriceRow; onSave: (row: PriceRow, price: string, visible: boolean) => void }) {
+  const [price, setPrice] = useState(row.override?.price_override_thb?.toString() || '');
+  const [visible, setVisible] = useState(row.override?.visible !== false);
+  useEffect(() => { setPrice(row.override?.price_override_thb?.toString() || ''); setVisible(row.override?.visible !== false); }, [row.override?.price_override_thb, row.override?.visible]);
+  return (
+    <tr>
+      <td><strong>{row.name}</strong></td>
+      <td>{row.nights + 1}D / {row.nights}N</td>
+      <td><input type="number" min="0" step="500" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Auto" /></td>
+      <td><Toggle checked={visible} onChange={setVisible} label="แสดง" ariaLabel={`แสดง ${row.name} บนเว็บไซต์`} /></td>
+      <td><button type="button" className="bo-icon-btn" title="บันทึก" aria-label="บันทึก" onClick={() => onSave(row, price, visible)}><Save /></button></td>
+    </tr>
+  );
 }
+
+const DEMO_LIVE_VISITORS: LiveVisitor[] = [
+  { sessionId: 'sess_demo_1', visitorId: 'vis_8f2a', pagePath: '/packages/bhutan-highlights', packageSlug: 'bhutan-highlights', source: 'google.com', campaign: 'brand', device: 'Mobile', lastSeenAt: new Date().toISOString(), lastSeenSeconds: 3, eventName: 'page_view' },
+  { sessionId: 'sess_demo_2', visitorId: 'vis_3c91', pagePath: '/packages/festival-tour', packageSlug: 'festival-tour', source: 'facebook.com', campaign: 'retarget', device: 'Desktop', lastSeenAt: new Date().toISOString(), lastSeenSeconds: 8, eventName: 'ViewContent' },
+  { sessionId: 'sess_demo_3', visitorId: 'vis_7b44', pagePath: '/visa', packageSlug: '', source: 'Direct', campaign: '', device: 'Mobile', lastSeenAt: new Date().toISOString(), lastSeenSeconds: 12, eventName: 'page_view' },
+];
+
+const DEMO_SUMMARY: Summary = {
+  periodDays: 30,
+  trackingConfigured: true,
+  trackingStorageReady: true,
+  trackingMode: 'rls_fallback',
+  liveSessions: 3,
+  liveVisitors: DEMO_LIVE_VISITORS,
+  liveWindowSeconds: 18,
+  uniqueVisitors: 842,
+  pageViews: 2105,
+  packageViews: 456,
+  packageViewVisitors: 312,
+  lineClicks: 89,
+  lineClickVisitors: 74,
+  websiteLeads: 23,
+  lineFriends: 156,
+  lineFriendVisitors: 42,
+  lineFriendsWithoutTracking: 28,
+  visitorsNoLineClick: 768,
+  packageVisitorsNoLineClick: 238,
+  lineClickVisitorsNoFriend: 12,
+  lineConfigured: false,
+  lineBasicIdConfigured: true,
+  metaPixelConfigured: false,
+  metaCapiConfigured: false,
+  metaTestEventConfigured: false,
+  metaPixelIdMasked: null,
+  googleAdsVisitors: 45,
+  googleTagConfigured: false,
+  ga4Configured: false,
+  googleAdsConfigured: false,
+  googleAdsLineConversionConfigured: false,
+  googleAdsLeadConversionConfigured: false,
+  googleTagIdMasked: null,
+  ga4IdMasked: null,
+  googleAdsIdMasked: null,
+};
+
+const DEMO_REALTIME: RealtimeSnapshot = {
+  liveSessions: 3,
+  liveVisitors: DEMO_LIVE_VISITORS,
+  liveWindowSeconds: 18,
+  heartbeatSeconds: 6,
+  pollSeconds: 2,
+  storageReady: true,
+};
+
+const DEMO_AUDIENCE: AudienceData = {
+  days: 30,
+  tagStorageReady: true,
+  sources: { website: true, line: true, crm: true, meta: false },
+  audiences: [
+    { id: 'all_visitors', name: 'All Website Visitors', count: 842, source: 'Website', intent: 'Warm', futureMeta: 'Retarget', description: 'เข้าเว็บอย่างน้อย 1 ครั้งในช่วงที่เลือก' },
+    { id: 'package_viewers', name: 'Package Viewers', count: 312, source: 'Website', intent: 'Hot', futureMeta: 'ViewContent', description: 'เปิดดูหน้าแพ็กเกจ' },
+    { id: 'line_intent', name: 'LINE Intent', count: 74, source: 'Website', intent: 'High', futureMeta: 'LineAddFriendClick', description: 'กด CTA ไป LINE OA' },
+    { id: 'line_friends', name: 'LINE Friends', count: 156, source: 'LINE', intent: 'Engaged', futureMeta: 'CRM Segment', description: 'เพิ่มเพื่อน OA แล้ว' },
+  ],
+  tags: [
+    { tag: 'website_visitor', count: 842, source: 'website' },
+    { tag: 'package_interest', count: 312, source: 'website' },
+    { tag: 'line_intent', count: 74, source: 'website' },
+    { tag: 'line_friend', count: 156, source: 'line' },
+  ],
+  note: 'LINE userId ใช้แบ่งกลุ่มใน CRM ได้ · Meta/Google Retargeting ใช้ Website tag และข้อมูลติดต่อที่ได้รับอนุญาต',
+};
+
+const DEMO_INTEGRATIONS: IntegrationSettings = {
+  storageReady: true,
+  meta: {
+    enabled: false,
+    pixelId: '',
+    pixelIdMasked: null,
+    testEventCode: '',
+    testEventConfigured: false,
+    capiConfigured: false,
+    accessTokenMasked: null,
+    secretStorageReady: false,
+    tokenSource: '',
+    source: '',
+    updatedAt: null,
+    lastTestAt: null,
+    lastTestOk: null,
+    lastTestMessage: null,
+    lastTestEventsReceived: 0,
+  },
+  line: {
+    enabled: true,
+    url: 'https://lin.ee/qQQMmYIt',
+    source: '',
+    updatedAt: null,
+  },
+};

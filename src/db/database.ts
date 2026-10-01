@@ -783,4 +783,33 @@ export const database = {
     }
   },
 
+  // ponytail: mock-only until phase 2 DB migration
+  async getAgents() {
+    if (!isSupabaseConfigured) return mockDb.getAgents();
+    return mockDb.getAgents();
+  },
+  async saveAgent(agent: import('../types').Agent) {
+    if (!isSupabaseConfigured) return void mockDb.saveAgent(agent);
+    return void mockDb.saveAgent(agent);
+  },
+  async deleteAgent(id: string) {
+    if (!isSupabaseConfigured) return void mockDb.deleteAgent(id);
+    return void mockDb.deleteAgent(id);
+  },
+  async getDocCounters() {
+    if (!isSupabaseConfigured) return mockDb.getDocCounters();
+    return mockDb.getDocCounters();
+  },
+  async saveDocCounters(state: import('../shared/docNumber').DocCounterState) {
+    if (!isSupabaseConfigured) return void mockDb.saveDocCounters(state);
+    return void mockDb.saveDocCounters(state);
+  },
+  async allocateDocNumber(type: import('../shared/docNumber').DocType) {
+    const { nextDocNumber } = await import('../shared/docNumber');
+    const current = await this.getDocCounters();
+    const { no, state } = nextDocNumber(current, type);
+    await this.saveDocCounters(state);
+    return no;
+  },
+
 };

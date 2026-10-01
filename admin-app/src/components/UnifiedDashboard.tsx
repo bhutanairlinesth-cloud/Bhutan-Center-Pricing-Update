@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-import { BarChart3, Calculator, ClipboardList, Globe2, LineChart, LogOut, Megaphone, Settings2, Users } from 'lucide-react';
+import { BarChart3, Calculator, ClipboardList, Globe2, LineChart, Megaphone, Settings2 } from 'lucide-react';
 import { CustomerTracking, QuotationRecord, User } from '../types';
-import { Brand } from './Brand';
+import { PageHeader, SectionCard } from '../shared/ui';
 
 interface Props {
   currentUser: User;
@@ -22,36 +22,42 @@ export function UnifiedDashboard({ currentUser, trackings, quotations, onOpenPri
     quotes: quotations.length,
   }), [trackings, quotations]);
 
-  return <div className="unified-shell">
-    <header className="unified-topbar">
-      <Brand/>
-      <div className="unified-user"><span><b>{currentUser.name}</b><small>{currentUser.role}</small></span><button onClick={onLogout} title="ออกจากระบบ"><LogOut/></button></div>
-    </header>
+  const upcoming = [...trackings]
+    .filter((x) => x.travelStartDate && !['lost', 'completed'].includes(x.status))
+    .sort((a, b) => (a.travelStartDate || '').localeCompare(b.travelStartDate || ''))
+    .slice(0, 5);
+  const needsAction = trackings.filter((x) => x.nextAction && !['lost', 'completed'].includes(x.status)).slice(0, 5);
 
-    <main className="unified-main">
-      <section className="unified-hero">
-        <div><span className="unified-eyebrow">BHUTAN CENTER · UNIFIED BACK OFFICE</span><h1>ทุกอย่างอยู่ใน<br/>ระบบเดียวกัน</h1><p>Pricing, Customer Tracking, Quotation, Invoice, Website, LINE และ Marketing ใช้ข้อมูลชุดเดียวกัน</p></div>
-        <a className="unified-site-link" href="/" target="_blank" rel="noreferrer"><Globe2/><span><small>PUBLIC WEBSITE</small><strong>เปิด BhutanCenter.org</strong></span>↗</a>
-      </section>
-
-      <section className="unified-stat-grid">
-        <article><span>ลูกค้าที่กำลังติดตาม</span><strong>{stats.active}</strong><small>Active opportunities</small></article>
-        <article><span>ส่งใบเสนอราคาแล้ว</span><strong>{stats.quoteSent}</strong><small>Quote sent</small></article>
-        <article><span>ปิดการขาย</span><strong>{stats.won}</strong><small>Won customers</small></article>
-        <article><span>ใบเสนอราคาทั้งหมด</span><strong>{stats.quotes}</strong><small>Quotation archive</small></article>
-      </section>
-
-      <section className="unified-modules">
-        <button onClick={onOpenPricing}><i><Calculator/></i><span><small>PRICING</small><strong>Pricing Desk</strong><p>คำนวณราคา Retail / Agent และออกใบเสนอราคา</p></span><b>→</b></button>
-        <button onClick={onOpenTracking}><i><ClipboardList/></i><span><small>CRM / SALES</small><strong>Customer Tracking</strong><p>ติดตามลูกค้า Invoice การชำระเงิน และความพร้อมเดินทาง</p></span><b>→</b></button>
-        <button onClick={onOpenGrowth}><i><Megaphone/></i><span><small>WEBSITE / LINE</small><strong>Website & Marketing</strong><p>Funnel, LINE OA, ราคาเว็บไซต์ และ Broadcast</p></span><b>→</b></button>
-        {currentUser.role === 'admin' && <button onClick={onOpenAdmin}><i><Settings2/></i><span><small>SYSTEM</small><strong>System Settings</strong><p>Tour Programs, Hotels, Flight, Visa, Users และการตั้งค่าหลัก</p></span><b>→</b></button>}
-      </section>
-
-      <section className="unified-flow-card">
-        <div><span className="unified-eyebrow">SALES FLOW</span><h2>Website → LINE → Lead → Quote → Customer</h2><p>หน้า Website และ LINE เป็นช่องทางเข้าหาลูกค้า ส่วน Customer Tracking เดิมยังเป็นข้อมูลหลักของทีมขาย</p></div>
-        <div className="unified-flow"><span><Globe2/>Website</span><b>→</b><span><Users/>LINE / Lead</span><b>→</b><span><ClipboardList/>Tracking</span><b>→</b><span><BarChart3/>Quotation</span><b>→</b><span><LineChart/>Won</span></div>
-      </section>
-    </main>
-  </div>;
+  return (
+    <div className="module-list-page bo-list-page">
+      <PageHeader title="Dashboard" subtitle={`${currentUser.name} · ${currentUser.role}`} />
+      <div className="unified-stat-grid">
+        <article><span>กำลังติดตาม</span><strong>{stats.active}</strong></article>
+        <article><span>ส่ง QT แล้ว</span><strong>{stats.quoteSent}</strong></article>
+        <article><span>ปิดการขาย</span><strong>{stats.won}</strong></article>
+        <article><span>ใบเสนอราคา</span><strong>{stats.quotes}</strong></article>
+      </div>
+      <div className="bo-detail-grid">
+        <SectionCard title="ทริปใกล้เดินทาง">
+          {upcoming.length ? upcoming.map((t) => (
+            <p key={t.id} className="bo-list-row"><strong className="mono">{t.bookingNo || '—'}</strong> {t.customerName} · {t.travelStartDate}</p>
+          )) : <p className="muted">ไม่มีทริปที่กำหนดวันเดินทาง</p>}
+        </SectionCard>
+        <SectionCard title="งานที่ต้องทำ">
+          {needsAction.length ? needsAction.map((t) => (
+            <p key={t.id} className="bo-list-row"><strong>{t.bookingNo || t.customerName}</strong> — {t.nextAction}</p>
+          )) : <p className="muted">ไม่มีงานค้าง</p>}
+        </SectionCard>
+      </div>
+      <SectionCard title="เมนูลัด">
+        <div className="unified-modules unified-modules--compact">
+          <button type="button" onClick={onOpenPricing}><Calculator /> ใบเสนอราคา</button>
+          <button type="button" onClick={onOpenTracking}><ClipboardList /> การจอง</button>
+          <button type="button" onClick={onOpenGrowth}><Megaphone /> การตลาด</button>
+          {currentUser.role === 'admin' && <button type="button" onClick={onOpenAdmin}><Settings2 /> ข้อมูลหลัก</button>}
+          <a href="/" target="_blank" rel="noreferrer"><Globe2 /> เปิดเว็บไซต์</a>
+        </div>
+      </SectionCard>
+    </div>
+  );
 }

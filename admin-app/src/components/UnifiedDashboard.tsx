@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { Calculator, ClipboardList, FileText, Globe2, Megaphone, Settings2 } from 'lucide-react';
+import { BarChart3, Calculator, ClipboardList, Globe2, LineChart, Megaphone, Settings2 } from 'lucide-react';
 import { CustomerTracking, QuotationRecord, User } from '../types';
+import { PageHeader, SectionCard } from '../shared/ui';
 
 interface Props {
   currentUser: User;
@@ -13,61 +14,50 @@ interface Props {
   onLogout: () => void;
 }
 
-const statusLabel: Record<string,string> = {
-  new: 'ใหม่', contacted: 'ติดต่อแล้ว', quote_sent: 'ส่ง QT แล้ว', won: 'ปิดการขาย',
-  lost: 'ไม่สำเร็จ', completed: 'จบทริป', booked: 'จองแล้ว', confirmed: 'ยืนยันแล้ว',
-};
-
-export function UnifiedDashboard({ currentUser, trackings, quotations, onOpenPricing, onOpenTracking, onOpenAdmin, onOpenGrowth }: Props) {
+export function UnifiedDashboard({ currentUser, trackings, quotations, onOpenPricing, onOpenTracking, onOpenAdmin, onOpenGrowth, onLogout }: Props) {
   const stats = useMemo(() => ({
     active: trackings.filter((x) => !['lost','completed'].includes(x.status)).length,
-    quoteSent: trackings.filter((x) => x.status === 'quote_sent').length,
     won: trackings.filter((x) => x.status === 'won').length,
+    quoteSent: trackings.filter((x) => x.status === 'quote_sent').length,
     quotes: quotations.length,
   }), [trackings, quotations]);
 
-  const recent = useMemo(() => [...trackings]
-    .sort((a,b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))
-    .slice(0, 5), [trackings]);
+  const upcoming = [...trackings]
+    .filter((x) => x.travelStartDate && !['lost', 'completed'].includes(x.status))
+    .sort((a, b) => (a.travelStartDate || '').localeCompare(b.travelStartDate || ''))
+    .slice(0, 5);
+  const needsAction = trackings.filter((x) => x.nextAction && !['lost', 'completed'].includes(x.status)).slice(0, 5);
 
-  return <div className="ui-v2-dashboard">
-    <section className="ui-v2-page-heading">
-      <div><span>OVERVIEW</span><h1>Dashboard</h1></div>
-      <div className="ui-v2-heading-actions">
-        <button onClick={onOpenPricing}><Calculator/>Pricing Desk</button>
-        <button className="primary" onClick={onOpenTracking}><ClipboardList/>ลูกค้า</button>
+  return (
+    <div className="module-list-page bo-list-page">
+      <PageHeader title="Dashboard" subtitle={`${currentUser.name} · ${currentUser.role}`} />
+      <div className="unified-stat-grid">
+        <article><span>กำลังติดตาม</span><strong>{stats.active}</strong></article>
+        <article><span>ส่ง QT แล้ว</span><strong>{stats.quoteSent}</strong></article>
+        <article><span>ปิดการขาย</span><strong>{stats.won}</strong></article>
+        <article><span>ใบเสนอราคา</span><strong>{stats.quotes}</strong></article>
       </div>
-    </section>
-
-    <section className="ui-v2-stat-grid">
-      <article><span>กำลังติดตาม</span><strong>{stats.active}</strong></article>
-      <article><span>ส่ง QT แล้ว</span><strong>{stats.quoteSent}</strong></article>
-      <article><span>ปิดการขาย</span><strong>{stats.won}</strong></article>
-      <article><span>ใบเสนอราคา</span><strong>{stats.quotes}</strong></article>
-    </section>
-
-    <section className="ui-v2-dashboard-grid">
-      <article className="ui-v2-card ui-v2-recent-card">
-        <header><strong>รายการล่าสุด</strong><button onClick={onOpenTracking}>ดูทั้งหมด →</button></header>
-        <div className="ui-v2-trip-list">
-          {recent.length ? recent.map((item) => <button key={item.id} onClick={onOpenTracking}>
-            <div><strong>{item.bookingNo || item.sourceQuotationNo || '—'}</strong><span>{item.customerName || item.opportunityName}</span></div>
-            <div><span>{item.travelStartDate || '—'}</span><small>{statusLabel[item.status] || item.status}</small></div>
-          </button>) : <div className="ui-v2-empty">ยังไม่มีรายการ</div>}
+      <div className="bo-detail-grid">
+        <SectionCard title="ทริปใกล้เดินทาง">
+          {upcoming.length ? upcoming.map((t) => (
+            <p key={t.id} className="bo-list-row"><strong className="mono">{t.bookingNo || '—'}</strong> {t.customerName} · {t.travelStartDate}</p>
+          )) : <p className="muted">ไม่มีทริปที่กำหนดวันเดินทาง</p>}
+        </SectionCard>
+        <SectionCard title="งานที่ต้องทำ">
+          {needsAction.length ? needsAction.map((t) => (
+            <p key={t.id} className="bo-list-row"><strong>{t.bookingNo || t.customerName}</strong> — {t.nextAction}</p>
+          )) : <p className="muted">ไม่มีงานค้าง</p>}
+        </SectionCard>
+      </div>
+      <SectionCard title="เมนูลัด">
+        <div className="unified-modules unified-modules--compact">
+          <button type="button" onClick={onOpenPricing}><Calculator /> ใบเสนอราคา</button>
+          <button type="button" onClick={onOpenTracking}><ClipboardList /> การจอง</button>
+          <button type="button" onClick={onOpenGrowth}><Megaphone /> การตลาด</button>
+          {currentUser.role === 'admin' && <button type="button" onClick={onOpenAdmin}><Settings2 /> ข้อมูลหลัก</button>}
+          <a href="/" target="_blank" rel="noreferrer"><Globe2 /> เปิดเว็บไซต์</a>
         </div>
-      </article>
-
-      <article className="ui-v2-card ui-v2-quick-card">
-        <header><strong>เมนูลัด</strong></header>
-        <div className="ui-v2-quick-grid">
-          <button onClick={onOpenPricing}><i><Calculator/></i><span>Pricing Desk</span></button>
-          <button onClick={onOpenTracking}><i><ClipboardList/></i><span>ลูกค้า & การจอง</span></button>
-          <button onClick={onOpenGrowth}><i><Megaphone/></i><span>การตลาด</span></button>
-          {currentUser.role === 'admin' && <button onClick={onOpenAdmin}><i><Settings2/></i><span>ข้อมูลหลัก</span></button>}
-          <a href="/" target="_blank" rel="noreferrer"><i><Globe2/></i><span>เปิดเว็บไซต์</span></a>
-          <button onClick={onOpenTracking}><i><FileText/></i><span>เอกสารขาย</span></button>
-        </div>
-      </article>
-    </section>
-  </div>;
+      </SectionCard>
+    </div>
+  );
 }

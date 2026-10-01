@@ -1,4 +1,6 @@
-import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, User } from '../types';
+import { Agent, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, User } from '../types';
+import { DocCounterState } from '../shared/docNumber';
+import { DEMO_AGENTS, DEMO_DOC_COUNTERS, DEMO_INVOICES, DEMO_PAYMENTS, DEMO_QUOTATIONS, DEMO_SEED_FLAG, DEMO_TRACKINGS } from './demoSeed';
 
 const DEFAULT_USERS: User[] = [
   { id: 'usr_1', name: 'OMG Experience Admin', email: 'info@omgexp.com', role: 'admin', createdAt: new Date().toISOString() },
@@ -90,7 +92,20 @@ const KEYS = {
   invoices: 'bhutan_v11_invoices',
   payments: 'bhutan_v12_payments',
   quotations: 'bhutan_v12_10_quotations',
+  agents: 'bhutan_v13_agents',
+  docCounters: 'bhutan_v13_doc_counters',
 };
+
+function seedDemoIfEmpty() {
+  if (localStorage.getItem(DEMO_SEED_FLAG)) return;
+  localStorage.setItem(KEYS.quotations, JSON.stringify(DEMO_QUOTATIONS));
+  localStorage.setItem(KEYS.trackings, JSON.stringify(DEMO_TRACKINGS));
+  localStorage.setItem(KEYS.invoices, JSON.stringify(DEMO_INVOICES));
+  localStorage.setItem(KEYS.payments, JSON.stringify(DEMO_PAYMENTS));
+  localStorage.setItem(KEYS.agents, JSON.stringify(DEMO_AGENTS));
+  localStorage.setItem(KEYS.docCounters, JSON.stringify(DEMO_DOC_COUNTERS));
+  localStorage.setItem(DEMO_SEED_FLAG, '1');
+}
 
 function read<T>(key: string, fallback: T): T {
   const current = localStorage.getItem(key);
@@ -102,7 +117,9 @@ function read<T>(key: string, fallback: T): T {
 }
 
 export const mockDb = {
-  getUsers: () => read<User[]>(KEYS.users, DEFAULT_USERS),
+  ensureDemoSeed: () => { seedDemoIfEmpty(); },
+
+  getUsers: () => { seedDemoIfEmpty(); return read<User[]>(KEYS.users, DEFAULT_USERS); },
   saveUser(user: User) {
     const list = this.getUsers();
     const index = list.findIndex((x) => x.id === user.id);
@@ -132,9 +149,21 @@ export const mockDb = {
   getSettings: () => ({ ...DEFAULT_SETTINGS, ...read<GlobalSettings>(KEYS.settings, DEFAULT_SETTINGS) }),
   saveSettings(settings: GlobalSettings) { localStorage.setItem(KEYS.settings, JSON.stringify(settings)); },
 
-  getQuotations: (): QuotationRecord[] => read<QuotationRecord[]>(KEYS.quotations, []).map((item) => ({
+  getAgents: (): Agent[] => { seedDemoIfEmpty(); return read<Agent[]>(KEYS.agents, DEMO_AGENTS); },
+  saveAgent(agent: Agent) {
+    const list = this.getAgents();
+    const index = list.findIndex((x) => x.id === agent.id);
+    if (index >= 0) list[index] = agent; else list.push(agent);
+    localStorage.setItem(KEYS.agents, JSON.stringify(list));
+  },
+  deleteAgent(id: string) { localStorage.setItem(KEYS.agents, JSON.stringify(this.getAgents().filter((x) => x.id !== id))); },
+
+  getDocCounters: (): DocCounterState => { seedDemoIfEmpty(); return read<DocCounterState>(KEYS.docCounters, DEMO_DOC_COUNTERS); },
+  saveDocCounters(state: DocCounterState) { localStorage.setItem(KEYS.docCounters, JSON.stringify(state)); },
+
+  getQuotations: (): QuotationRecord[] => { seedDemoIfEmpty(); return read<QuotationRecord[]>(KEYS.quotations, []).map((item) => ({
     ...item, status: item.status ?? 'sent', confirmedAt: item.confirmedAt ?? '', convertedTrackingId: item.convertedTrackingId ?? '',
-  })),
+  })); },
   saveQuotation(item: QuotationRecord) {
     const list = this.getQuotations();
     const index = list.findIndex((x) => x.id === item.id);
@@ -143,7 +172,7 @@ export const mockDb = {
   },
   deleteQuotation(id: string) { localStorage.setItem(KEYS.quotations, JSON.stringify(this.getQuotations().filter((x) => x.id !== id))); },
 
-  getTrackings: (): CustomerTracking[] => read<CustomerTracking[]>(KEYS.trackings, []).map((item): CustomerTracking => ({
+  getTrackings: (): CustomerTracking[] => { seedDemoIfEmpty(); return read<CustomerTracking[]>(KEYS.trackings, []).map((item): CustomerTracking => ({
     ...item,
     sourceQuotationId: item.sourceQuotationId ?? '',
     sourceQuotationNo: item.sourceQuotationNo ?? '',
@@ -171,7 +200,9 @@ export const mockDb = {
     landPaidAt: item.landPaidAt ?? '',
     landTransferReference: item.landTransferReference ?? '',
     profitAmount: item.profitAmount ?? 0,
-  })),
+    bookingNo: item.bookingNo ?? '',
+    agentId: item.agentId ?? '',
+  })); },
   saveTracking(item: CustomerTracking) {
     const list = this.getTrackings();
     const index = list.findIndex((x) => x.id === item.id);
@@ -184,7 +215,7 @@ export const mockDb = {
     localStorage.setItem(KEYS.payments, JSON.stringify(this.getPaymentTransactions().filter((x) => x.trackingId !== id)));
   },
 
-  getInvoices: (): PaymentInvoice[] => read<PaymentInvoice[]>(KEYS.invoices, []).map((item) => ({
+  getInvoices: (): PaymentInvoice[] => { seedDemoIfEmpty(); return read<PaymentInvoice[]>(KEYS.invoices, []).map((item) => ({
     ...item,
     sequenceNumber: item.sequenceNumber ?? (item.installment === 'deposit' ? 1 : item.installment === 'balance' ? 2 : item.installment === 'full' ? 1 : 3),
     title: item.title ?? '',
@@ -199,7 +230,7 @@ export const mockDb = {
     paymentAccountName: item.paymentAccountName ?? '',
     paymentAccountNumber: item.paymentAccountNumber ?? '',
     paymentQrUrl: item.paymentQrUrl ?? '',
-  })),
+  })); },
   saveInvoice(item: PaymentInvoice) {
     const list = this.getInvoices();
     const index = list.findIndex((x) => x.id === item.id);
@@ -208,7 +239,7 @@ export const mockDb = {
   },
   deleteInvoice(id: string) { localStorage.setItem(KEYS.invoices, JSON.stringify(this.getInvoices().filter((x) => x.id !== id))); },
 
-  getPaymentTransactions: (): PaymentTransaction[] => read<PaymentTransaction[]>(KEYS.payments, []).map((item) => ({ ...item, invoiceId: item.invoiceId ?? '' })),
+  getPaymentTransactions: (): PaymentTransaction[] => { seedDemoIfEmpty(); return read<PaymentTransaction[]>(KEYS.payments, []).map((item) => ({ ...item, invoiceId: item.invoiceId ?? '', receiptNo: item.receiptNo ?? '' })); },
   savePaymentTransaction(item: PaymentTransaction) {
     const list = this.getPaymentTransactions();
     const index = list.findIndex((x) => x.id === item.id);

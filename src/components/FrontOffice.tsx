@@ -1,35 +1,41 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight, BadgePercent, BedDouble, BriefcaseBusiness, Building2, CalendarDays, Check, ClipboardList,
-  ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LogOut, Plane, RotateCcw,
+  ChevronDown, CircleDollarSign, FileText, Hotel as HotelIcon, LayoutDashboard, LogOut, Plane, RotateCcw,
   Settings2, ShieldCheck, Sparkles, Users, WalletCards,
 } from 'lucide-react';
-import { CustomerDetails, GlobalSettings, HotelCategory, PricingChannel, PricingInput, QuotationRecord, TourPackage, User } from '../types';
+import { Agent, GlobalSettings, HotelCategory, PricingChannel, PricingInput, QuotationRecord, TourPackage, User } from '../types';
 import { useI18n, LanguageSwitch } from '../i18n';
 import { calculatePrice, getConfiguredMargin, getPackageSingleSupplement } from '../utils/pricing';
-import { formatDate, formatNumber, formatTHB, formatUSD, makeId, makeQuotationNo } from '../utils/format';
-import { printElementAsA4 } from '../utils/printA4';
+import { formatDate, formatNumber, formatTHB, formatUSD, makeId } from '../utils/format';
+import { database } from '../db/database';
 import { Brand } from './Brand';
 import { Modal } from './Ui';
+import { PageHeader } from '../shared/ui';
 import { AdditionalItemsEditor } from './AdditionalItemsEditor';
+import {
+  applyAgentToCustomer,
+  customerFieldsFromQuotation,
+  emptyCustomerFields,
+  QuotationCustomerFields,
+} from './QuotationDocument';
 
 interface FrontOfficeProps {
+  embedded?: boolean;
+  initialQuotation?: QuotationRecord;
   settings: GlobalSettings;
   packages: TourPackage[];
   currentUser: User;
   onSaveQuotation: (item: QuotationRecord) => Promise<void>;
+  onSaved?: (id: string) => void;
+  onOpenDashboard: () => void;
   onOpenTracking: () => void;
   onOpenAdmin: () => void;
   onLogout: () => void;
 }
 
-const emptyCustomer: CustomerDetails = { name: '', phone: '', email: '', invoiceAddress: '', note: '' };
-
-export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
-  const { t, language } = useI18n();
-  const firstPackage = packages[0];
-  const firstCategory: HotelCategory = '3 Stars';
-  const [input, setInput] = useState<PricingInput>({
+function defaultPricingInput(firstPackage: TourPackage | undefined, firstCategory: HotelCategory = '3 Stars'): PricingInput {
+  return {
     channel: 'retail',
     pricingMode: 'standard',
     packageId: firstPackage?.id || '',
@@ -52,16 +58,54 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     groupAirportTaxOverrideTHB: null,
     groupMarginPerTravelerOverrideTHB: null,
     groupSellingPriceOverrideTHB: null,
-  });
-  const [customer, setCustomer] = useState<CustomerDetails>(emptyCustomer);
-  const [customerOpen, setCustomerOpen] = useState(false);
-  const [quoteOpen, setQuoteOpen] = useState(false);
-  const [quotationNo, setQuotationNo] = useState(makeQuotationNo());
-  const [savingQuote, setSavingQuote] = useState(false);
+  };
+}
 
+function clonePricingInput(input: PricingInput): PricingInput {
+  return { ...input, additionalItems: input.additionalItems.map((item) => ({ ...item })) };
+}
+
+const AGENT_RATE_HOTEL_DEFAULTS: Partial<Record<HotelCategory, { thimphu: string[]; punakha: string[]; paro: string[] }>> = {
+  '3 Stars': {
+    thimphu: ['Thimphu Central', 'Hotel Changangkha', 'Lhakyi Hotel', 'Phuntsho Pelri'],
+    punakha: ['River Valley', 'Hotel Lobesa', 'Meri Puensum Hotel'],
+    paro: ['Paro Metta Resort', 'Mandala Resort', 'Paro Grand', 'Olathang Cottage'],
+  },
+  '4 Stars': {
+    thimphu: ['Thimphu Capital Hotel', 'Ariya Hotel'],
+    punakha: ['RKPO Green Resort', 'Lobesa Boutique Hotel'],
+    paro: ['Kaachi Grand', 'Tashi Namgay Resort'],
+  },
+};
+
+function getDefaultAgentHotelExamples(hotelCategory: HotelCategory, nights: number): string {
+  const group = AGENT_RATE_HOTEL_DEFAULTS[hotelCategory];
+  if (!group) return '';
+  const lines = [`Thimphu : ${group.thimphu.join(' / ')}`];
+  if (nights >= 4) lines.push(`Punakha : ${group.punakha.join(' / ')}`);
+  lines.push(`Paro : ${group.paro.join(' / ')}`);
+  return lines.join('\n');
+}
+
+export function FrontOffice({ embedded = false, initialQuotation, settings, packages, currentUser, onSaveQuotation, onSaved, onOpenDashboard, onOpenTracking, onOpenAdmin, onLogout }: FrontOfficeProps) {
+  const { t, language } = useI18n();
+  const firstPackage = packages[0];
+  const firstCategory: HotelCategory = '3 Stars';
+  const isEdit = Boolean(initialQuotation);
+  const [input, setInput] = useState<PricingInput>(() => (
+    initialQuotation ? clonePricingInput(initialQuotation.pricingInput) : defaultPricingInput(firstPackage, firstCategory)
+  ));
+  const [customer, setCustomer] = useState<QuotationCustomerFields>(() => (
+    initialQuotation ? customerFieldsFromQuotation(initialQuotation) : emptyCustomerFields()
+  ));
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [savingQuote, setSavingQuote] = useState(false);
   useEffect(() => {
     if (!input.packageId && packages[0]) setInput((value) => ({ ...value, packageId: packages[0].id }));
   }, [packages, input.packageId]);
+  useEffect(() => {
+    void database.getAgents().then((list) => setAgents(list.filter((a) => a.active)));
+  }, []);
 
 
   const result = useMemo(() => calculatePrice(input, settings, packages), [input, settings, packages]);
@@ -86,13 +130,21 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
   const defaultRegularLand = result?.regularLandCostPerPerson || 0;
   const effectiveRegularLand = input.regularLandCostPerPersonOverrideTHB ?? defaultRegularLand;
   const effectiveTlLand = input.tourLeaderLandCostPerPersonTHB ?? 0;
-  const effectiveGroupTicket = input.groupTicketPriceOverrideTHB ?? (input.channel === 'agent' ? (settings.agentTicketPriceTHB ?? 25220) : settings.ticketPriceTHB);
+  const baseChannelTicket = input.channel === 'agent' ? (settings.agentTicketPriceTHB ?? 25220) : settings.ticketPriceTHB;
+  const defaultGroupTicket = input.passengerCount >= groupDiscountMinPax && groupDiscountPercent > 0
+    ? Math.round(baseChannelTicket * (1 - groupDiscountPercent / 100))
+    : baseChannelTicket;
+  const effectiveGroupTicket = input.groupTicketPriceOverrideTHB ?? defaultGroupTicket;
   const effectiveGroupTax = input.groupAirportTaxOverrideTHB ?? settings.airportTaxTHB;
-  const configuredMargin = getConfiguredMargin(settings, input.channel, input.hotelCategory);
-  const effectiveGroupMargin = input.groupMarginPerTravelerOverrideTHB ?? configuredMargin;
+  const effectiveGroupMargin = input.groupMarginPerTravelerOverrideTHB ?? getConfiguredMargin(settings, input.channel, input.hotelCategory);
 
   function update<K extends keyof PricingInput>(key: K, value: PricingInput[K]) {
     setInput((current) => ({ ...current, [key]: value }));
+  }
+
+  function pickAgent(agentId: string) {
+    const agent = agents.find((a) => a.id === agentId);
+    setCustomer((value) => applyAgentToCustomer(value, agent));
   }
 
   function setPricingMode(mode: PricingInput['pricingMode']) {
@@ -114,56 +166,90 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
     });
   }
 
-  async function openQuotation() {
-    if (!result || savingQuote || !customer.name.trim()) return;
-    const nextQuotationNo = makeQuotationNo();
+  async function saveQuotation() {
+    if (!result || savingQuote) return;
     const now = new Date().toISOString();
-    const quotation: QuotationRecord = {
-      id: makeId('quote'), quotationNo: nextQuotationNo, status: 'sent',
-      customerName: customer.name.trim(), phone: customer.phone.trim(), email: customer.email.trim(),
-      invoiceAddress: customer.invoiceAddress.trim(), note: customer.note.trim(),
-      channel: result.channel, pricingMode: result.pricingMode, packageId: input.packageId, packageName: result.packageName,
-      hotelCategory: result.hotelCategory, travelDate: result.travelDate, passengerCount: result.passengerCount,
-      chargeablePassengerCount: result.chargeablePassengerCount, tourLeaderCount: result.tourLeaderCount,
-      sellingPricePerPerson: result.sellingPricePerPerson, childPassengerCount: result.childPassengerCount, childSellingPricePerPerson: result.childSellingPricePerPerson, totalAmount: result.groupTotal,
-      pricingInput: { ...input, additionalItems: input.additionalItems.map((item) => ({ ...item })) },
-      pricingResult: { ...result, additionalItems: result.additionalItems.map((item) => ({ ...item })) },
-      createdById: currentUser.id, createdByName: currentUser.name, confirmedAt: '', convertedTrackingId: '', createdAt: now, updatedAt: now,
+    const pricingInput = clonePricingInput(input);
+    const pricingResult = { ...result, additionalItems: result.additionalItems.map((item) => ({ ...item })) };
+    const pricingFields = {
+      channel: result.channel,
+      pricingMode: result.pricingMode,
+      packageId: input.packageId,
+      packageName: result.packageName,
+      hotelCategory: result.hotelCategory,
+      travelDate: result.travelDate,
+      passengerCount: result.passengerCount,
+      chargeablePassengerCount: result.chargeablePassengerCount,
+      tourLeaderCount: result.tourLeaderCount,
+      sellingPricePerPerson: result.sellingPricePerPerson,
+      childPassengerCount: result.childPassengerCount,
+      childSellingPricePerPerson: result.childSellingPricePerPerson,
+      totalAmount: result.groupTotal,
+      pricingInput,
+      pricingResult,
+      updatedAt: now,
+    };
+    const quotation: QuotationRecord = initialQuotation ? {
+      ...initialQuotation,
+      ...pricingFields,
+      ...customer,
+    } : {
+      id: makeId('quote'),
+      quotationNo: await database.allocateDocNumber('QT'),
+      status: 'sent',
+      ...customer,
+      ...pricingFields,
+      createdById: currentUser.id,
+      createdByName: currentUser.name,
+      confirmedAt: '',
+      convertedTrackingId: '',
+      createdAt: now,
     };
     setSavingQuote(true);
     try {
       await onSaveQuotation(quotation);
-      setQuotationNo(nextQuotationNo);
-      setCustomerOpen(false);
-      setQuoteOpen(true);
+      onSaved?.(quotation.id);
     } finally { setSavingQuote(false); }
   }
 
-  return <div className="front-shell">
-    <header className="front-header">
+  const calculatorTitle = isEdit ? (language === 'th' ? 'แก้ไขใบเสนอราคา' : 'Edit quotation') : t('calculatorTitle');
+  const calculatorSubtitle = isEdit
+    ? (language === 'th' ? `${initialQuotation?.quotationNo} · บันทึกแล้วกลับไปหน้าใบเสนอราคา` : `${initialQuotation?.quotationNo} · Save to return to the quotation page`)
+    : t('calculatorSubtitle');
+
+  return <div className={embedded ? 'front-embedded' : 'front-shell'}>
+    {!embedded && <header className="front-header">
       <Brand/>
       <div className="front-header-actions">
+        <button className="ghost-button desktop-only" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button>
         <LanguageSwitch compact/>
         <button className="ghost-button desktop-only" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>
         <span className="user-chip"><i>{currentUser.name?.[0]?.toUpperCase() || 'U'}</i><span><b>{currentUser.name}</b><small>{currentUser.role}</small></span></span>
         {currentUser.role === 'admin' && <button className="ghost-button desktop-only" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}
         <button className="icon-button" onClick={onLogout} title={t('logout')}><LogOut/></button>
       </div>
-    </header>
+    </header>}
 
     <main className="front-main">
-      <section className="page-intro">
-        <div><span className="eyebrow"><Sparkles/> LIVE PRICING</span><h1>{t('calculatorTitle')}</h1><p>{t('calculatorSubtitle')}</p></div>
-        <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
-      </section>
+      <div className={embedded ? 'module-list-page bo-list-page bo-list-page--wide' : undefined}>
+        {embedded ? (
+          <PageHeader title={calculatorTitle} subtitle={calculatorSubtitle} />
+        ) : (
+          <section className="page-intro page-intro--pricing">
+            <div><span className="eyebrow"><Sparkles/> LIVE PRICING</span><h1>{calculatorTitle}</h1><p>{calculatorSubtitle}</p></div>
+            <div className="pricing-page-actions">
+              <div className="mobile-workspace-actions"><button className="ghost-button" onClick={onOpenDashboard}><LayoutDashboard/>Dashboard</button><button className="ghost-button" onClick={onOpenTracking}><ClipboardList/>{language === 'th' ? 'ติดตามลูกค้า' : 'Customer tracking'}</button>{currentUser.role === 'admin' && <button className="ghost-button mobile-admin" onClick={onOpenAdmin}><Settings2/>{t('backOffice')}</button>}</div>
+            </div>
+          </section>
+        )}
 
-      <div className="calculator-layout">
+        <div className="calculator-layout">
         <section className="calculator-form-card">
           <div className="section-block">
             <div className="section-title"><span>01</span><div><h2>{t('channel')}</h2><p>Retail / Wholesale</p></div></div>
             <div className="channel-grid">
-              <ChannelCard active={input.channel === 'retail'} channel="retail" title={t('retail')} detail={t('retailHint')} meta={`${formatTHB(settings.ticketPriceTHB, language)} · ${t('margin')} ${formatTHB(input.hotelCategory === '5 Stars' ? (settings.hotel5StarMarginTHB ?? 10000) : settings.marginTHB, language)}`} onClick={() => update('channel', 'retail')}/>
-              <ChannelCard active={input.channel === 'agent'} channel="agent" title={t('agent')} detail={t('agentHint')} meta={`${formatTHB(settings.agentTicketPriceTHB ?? 25220, language)} · -${formatNumber(agentDiscount, 2)}% · ${t('margin')} ${formatTHB(input.hotelCategory === '5 Stars' ? (settings.hotel5StarMarginTHB ?? 10000) : (settings.agentMarginTHB ?? 3000), language)}`} onClick={() => update('channel', 'agent')}/>
+              <ChannelCard active={input.channel === 'retail'} channel="retail" title={t('retail')} detail={t('retailHint')} meta={`${formatTHB(settings.ticketPriceTHB, language)} · ${t('margin')} ${formatTHB(getConfiguredMargin(settings, 'retail', input.hotelCategory), language)}`} onClick={() => update('channel', 'retail')}/>
+              <ChannelCard active={input.channel === 'agent'} channel="agent" title={t('agent')} detail={t('agentHint')} meta={`${formatTHB(settings.agentTicketPriceTHB ?? 25220, language)} · -${formatNumber(agentDiscount, 2)}% · ${t('margin')} ${formatTHB(getConfiguredMargin(settings, 'agent', input.hotelCategory), language)}`} onClick={() => update('channel', 'agent')}/>
             </div>
             <div className="pricing-mode-switch">
               <button type="button" className={!isGroupTL ? 'active' : ''} onClick={() => setPricingMode('standard')}>
@@ -182,7 +268,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
               <label className="field span-2"><span>{t('package')}</span><div className="select-wrap"><Plane/><select value={input.packageId} onChange={(event) => setInput((value) => ({ ...value, packageId: event.target.value, singleSupplementOverrideTHB: null }))}>{packages.map((pkg) => <option value={pkg.id} key={pkg.id}>{pkg.name}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{isGroupTL ? (language === 'th' ? 'ผู้เดินทางทั้งหมด (รวม TL)' : 'Total travellers (incl. TL)') : t('passengers')}</span><div className="select-wrap"><Users/><select value={input.passengerCount} onChange={(event) => {
                 const pax = Number(event.target.value); setInput((value) => ({ ...value, passengerCount: pax, chargeablePassengerCount: value.pricingMode === 'group_tl' ? Math.min(pax, Math.max(1, value.chargeablePassengerCount)) : pax, businessUpgradeCount: Math.min(value.businessUpgradeCount, Math.max(0, pax - Math.min(pax, value.childPassengerCount || 0))), singleRoomCount: Math.min(value.singleRoomCount, pax), childPassengerCount: Math.min(value.childPassengerCount || 0, pax) }));
-              }}>{Array.from({ length: 50 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{!isGroupTL && pax >= groupDiscountMinPax && groupDiscountPercent > 0 ? ` · ${groupDiscountLabel}` : ''}</option>)}</select><ChevronDown/></div></label>
+              }}>{Array.from({ length: 50 }, (_, index) => index + 1).map((pax) => <option value={pax} key={pax}>{pax} {t('people')}{pax >= groupDiscountMinPax && groupDiscountPercent > 0 ? ` · ${groupDiscountLabel}` : ''}</option>)}</select><ChevronDown/></div></label>
               <label className="field"><span>{t('travelDate')}</span><div className="input-with-icon simple"><CalendarDays/><input type="date" value={input.travelDate} onChange={(event) => update('travelDate', event.target.value)}/></div></label>
               <label className="field span-2"><span>{t('hotelLevel')}</span><div className="select-wrap"><Building2/><select value={input.hotelCategory} onChange={(event) => setInput((value) => ({ ...value, hotelCategory: event.target.value as HotelCategory, singleSupplementOverrideTHB: null }))}><option value="3 Stars">3 Stars</option><option value="4 Stars">4 Stars</option><option value="5 Stars">5 Stars</option></select><ChevronDown/></div></label>
             </div>
@@ -208,7 +294,7 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
               <div className="group-tl-money-grid">
                 <label className="field money-input"><span>{language === 'th' ? 'LAND ผู้ชำระ / ท่าน' : 'Regular LAND / pax'}</span><div><input type="number" min="0" step="1" value={effectiveRegularLand} onChange={(event) => update('regularLandCostPerPersonOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{language === 'th' ? 'รวมที่พัก SDF วีซ่า และบริการภาคพื้น' : 'Hotel, SDF, visa and ground services'}</small></label>
                 <label className="field money-input"><span>{language === 'th' ? 'LAND ของ TL / ท่าน' : 'TL LAND / pax'}</span><div><input type="number" min="0" step="1" value={effectiveTlLand} onChange={(event) => update('tourLeaderLandCostPerPersonTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{language === 'th' ? 'กรอกหลังหักค่าที่พักฟรี แต่ยังรวม SDF/วีซ่า' : 'After free hotel; still includes SDF/visa'}</small></label>
-                <label className="field money-input"><span>{language === 'th' ? 'ค่าโดยสาร Economy (ไม่รวมภาษี) / ผู้เดินทางจริง' : 'Economy fare excl. tax / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTicket} onChange={(event) => update('groupTicketPriceOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
+                <label className="field money-input"><span>{language === 'th' ? 'ค่าโดยสาร Economy (ไม่รวมภาษี) / ผู้เดินทางจริง' : 'Economy fare excl. tax / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTicket} onChange={(event) => update('groupTicketPriceOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div><small>{input.passengerCount >= groupDiscountMinPax && groupDiscountPercent > 0 ? (language === 'th' ? `${input.channel === 'agent' ? 'Agent ' : ''}${formatTHB(baseChannelTicket, language)} → ลดกรุ๊ป ${groupDiscountDisplay}% = ${formatTHB(defaultGroupTicket, language)}` : `${input.channel === 'agent' ? 'Agent ' : ''}${formatTHB(baseChannelTicket, language)} → group ${groupDiscountDisplay}% off = ${formatTHB(defaultGroupTicket, language)}`) : (language === 'th' ? 'ยังไม่ถึงจำนวนขั้นต่ำสำหรับส่วนลดกรุ๊ป' : 'Group discount threshold not reached')}</small></label>
                 <label className="field money-input"><span>{language === 'th' ? 'ภาษีสนามบิน / ผู้เดินทางจริง' : 'Airport tax / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupTax} onChange={(event) => update('groupAirportTaxOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
                 <label className="field money-input"><span>{language === 'th' ? 'Margin / ผู้เดินทางจริง' : 'Margin / actual traveller'}</span><div><input type="number" min="0" step="1" value={effectiveGroupMargin} onChange={(event) => update('groupMarginPerTravelerOverrideTHB', Math.max(0, Number(event.target.value)))}/><em>THB</em></div></label>
                 <label className="field money-input"><span>{language === 'th' ? 'ราคาขายจริง / ผู้ชำระ (แก้ได้)' : 'Final selling / paying pax (editable)'}</span><div><input type="number" min="0" step="500" value={input.groupSellingPriceOverrideTHB ?? 0} onChange={(event) => update('groupSellingPriceOverrideTHB', Number(event.target.value) > 0 ? Number(event.target.value) : null)}/><em>THB</em></div><small>{language === 'th' ? 'ใส่ 0 เพื่อใช้ราคาแนะนำอัตโนมัติ' : 'Enter 0 to use the recommended price'}</small></label>
@@ -217,9 +303,68 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
             </div>}
           </div>
 
-          <div className="single-room-row">
-            <div className="upgrade-icon single"><BedDouble/></div>
-            <div className="upgrade-copy"><b>{t('singleRoom')}</b><span>{t('singleRoomHint')}</span></div>
+          <div className="section-divider"/>
+          <div className="section-block">
+            <div className="section-title"><span>03</span><div><h2>{language === 'th' ? 'ลูกค้า' : 'Customer'}</h2><p>{language === 'th' ? 'ไม่บังคับ · แก้ไขภายหลังได้ที่ปุ่ม แก้ไข' : 'Optional · edit later via the Edit button'}</p></div></div>
+            <div className="form-grid">
+              {input.channel === 'agent' ? (
+                <label className="field span-2">
+                  <span>{language === 'th' ? 'เอเจนต์ / บริษัท' : 'Agent / company'}</span>
+                  <div className="select-wrap">
+                    <Building2/>
+                    <select value={customer.agentId} onChange={(event) => pickAgent(event.target.value)}>
+                      <option value="">{language === 'th' ? '— เลือกเอเจนต์ —' : '— Select agent —'}</option>
+                      {agents.map((agent) => (
+                        <option key={agent.id} value={agent.id}>{agent.code ? `${agent.code} · ` : ''}{agent.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown/>
+                  </div>
+                </label>
+              ) : (
+                <label className="field span-2">
+                  <span>{language === 'th' ? 'ชื่อลูกค้า / บริษัท' : 'Customer / company name'}</span>
+                  <div className="input-with-icon simple">
+                    <Users/>
+                    <input
+                      value={customer.customerName}
+                      onChange={(event) => setCustomer((value) => ({ ...value, customerName: event.target.value }))}
+                      placeholder={language === 'th' ? 'ชื่อลูกค้าหรือบริษัท' : 'Customer or company name'}
+                    />
+                  </div>
+                </label>
+              )}
+              <label className="field">
+                <span>{language === 'th' ? 'โทรศัพท์' : 'Phone'}</span>
+                <div className="input-with-icon simple">
+                  <input value={customer.phone} onChange={(event) => setCustomer((value) => ({ ...value, phone: event.target.value }))}/>
+                </div>
+              </label>
+              <label className="field">
+                <span>{language === 'th' ? 'อีเมล' : 'Email'}</span>
+                <div className="input-with-icon simple">
+                  <input type="email" value={customer.email} onChange={(event) => setCustomer((value) => ({ ...value, email: event.target.value }))}/>
+                </div>
+              </label>
+              <label className="field span-2">
+                <span>{language === 'th' ? 'ที่อยู่ออกใบแจ้งหนี้' : 'Invoice address'}</span>
+                <textarea rows={2} value={customer.invoiceAddress} onChange={(event) => setCustomer((value) => ({ ...value, invoiceAddress: event.target.value }))}/>
+              </label>
+              <label className="field span-2">
+                <span>{language === 'th' ? 'หมายเหตุ' : 'Note'}</span>
+                <textarea rows={2} value={customer.note} onChange={(event) => setCustomer((value) => ({ ...value, note: event.target.value }))}/>
+              </label>
+            </div>
+          </div>
+
+          <CalculatorExtraSection
+            className="calc-extra-section--single"
+            icon={<BedDouble />}
+            title={t('singleRoom')}
+            hint={language === 'th' ? 'ส่วนเสริม — เปิดเมื่อมีห้องพักเดี่ยว' : 'Optional — open when single rooms apply'}
+            badge={input.singleRoomCount > 0 ? `${input.singleRoomCount} ${t('people')}` : undefined}
+            defaultOpen={input.singleRoomCount > 0 || input.singleSupplementOverrideTHB != null}
+          >
             <div className="single-room-controls">
               <div className="single-room-price">
                 <label>{t('singleSupplement')}</label>
@@ -230,15 +375,21 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
               </div>
               <div className="single-room-count"><label>{t('singleRoomCount')}</label><div className="stepper"><button type="button" onClick={() => update('singleRoomCount', Math.max(0, input.singleRoomCount - 1))}>−</button><strong>{input.singleRoomCount}</strong><button type="button" onClick={() => update('singleRoomCount', Math.min(input.passengerCount, input.singleRoomCount + 1))}>+</button></div></div>
             </div>
-          </div>
+          </CalculatorExtraSection>
 
-          <div className="upgrade-row business-upgrade-row">
-            <div className="upgrade-icon"><BriefcaseBusiness/></div>
-            <div className="upgrade-copy"><b>{t('businessUpgrade')}</b><span>{isGroupTL
+          <CalculatorExtraSection
+            className="calc-extra-section--business"
+            icon={<BriefcaseBusiness />}
+            title={t('businessUpgrade')}
+            hint={language === 'th' ? 'ส่วนเสริม — เปิดเมื่อมีอัปเกรด Business Class' : 'Optional — open for Business Class upgrades'}
+            badge={input.businessUpgradeCount > 0 ? `${input.businessUpgradeCount} ${language === 'th' ? 'ท่าน' : 'pax'}` : undefined}
+            defaultOpen={input.businessUpgradeCount > 0 || input.businessUpgradePriceOverrideTHB != null}
+          >
+            <p className="calc-extra-section-note">{isGroupTL
               ? (language === 'th'
                 ? `ผู้โดยสาร BC เป็นส่วนหนึ่งของผู้เดินทางจริง ${input.passengerCount} ท่าน และคิดส่วนเพิ่มเฉพาะจำนวนที่อัปเกรด`
                 : `BC passengers are included within the ${input.passengerCount} actual travellers; the surcharge applies only to those upgraded.`)
-              : t('businessUpgradeHint')}</span></div>
+              : t('businessUpgradeHint')}</p>
             <div className="business-upgrade-controls">
               <div className="business-upgrade-price">
                 <label>{isGroupTL ? (language === 'th' ? 'ส่วนต่างค่าโดยสาร BC / ท่าน' : 'BC fare difference / pax') : (language === 'th' ? 'ส่วนเพิ่ม / ท่าน' : 'Upgrade / pax')}</label>
@@ -251,14 +402,24 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
                 ? (language === 'th' ? `จำนวน BC (จาก ${input.passengerCount} ท่าน)` : `BC pax (of ${input.passengerCount})`)
                 : (language === 'th' ? 'จำนวนผู้โดยสาร' : 'Passengers')}</label><div className="stepper"><button type="button" onClick={() => update('businessUpgradeCount', Math.max(0, input.businessUpgradeCount - 1))}>−</button><strong>{input.businessUpgradeCount}</strong><button type="button" onClick={() => update('businessUpgradeCount', Math.min(isGroupTL ? input.passengerCount : adultPax, input.businessUpgradeCount + 1))}>+</button></div></div>
             </div>
-          </div>
+          </CalculatorExtraSection>
 
-          <AdditionalItemsEditor
-            items={input.additionalItems}
-            passengerCount={input.passengerCount}
-            language={language}
-            onChange={(items) => update('additionalItems', items)}
-          />
+          <CalculatorExtraSection
+            className="calc-extra-section--addons"
+            icon={<Sparkles />}
+            title={language === 'th' ? 'รายการเพิ่มเติม' : 'Additional services'}
+            hint={language === 'th' ? 'ส่วนเสริม — เปิดเมื่อมีบริการพิเศษ' : 'Optional — open for extra services'}
+            badge={input.additionalItems.length > 0 ? (language === 'th' ? `${input.additionalItems.length} รายการ` : `${input.additionalItems.length} items`) : undefined}
+            defaultOpen={input.additionalItems.length > 0}
+          >
+            <AdditionalItemsEditor
+              headless
+              items={input.additionalItems}
+              passengerCount={input.passengerCount}
+              language={language}
+              onChange={(items) => update('additionalItems', items)}
+            />
+          </CalculatorExtraSection>
         </section>
 
         <aside className="price-summary-card">
@@ -310,27 +471,56 @@ export function FrontOffice({ settings, packages, currentUser, onSaveQuotation, 
             {(result?.additionalItemsTotal || 0) > 0 && <div><span>{language === 'th' ? 'รายการเพิ่มเติม' : 'Additional services'}</span><b>+ {formatTHB(result?.additionalItemsTotal || 0, language)}</b></div>}
           </div>
           <div className="group-total"><span>{language === 'th' ? 'ยอดรวมทั้งหมด ก่อนออกเอกสาร' : 'Grand total before document'}</span><strong>{formatTHB(result?.groupTotal || 0, language)}</strong><small>{isGroupTL ? (language === 'th' ? `เรียกเก็บ ${chargeablePax} ท่าน จากผู้เดินทางจริง ${input.passengerCount} ท่าน` : `${chargeablePax} billed from ${input.passengerCount} actual travellers`) : (language === 'th' ? 'ระบบคำนวณจากจำนวนผู้เดินทางและรายการทั้งหมดอัตโนมัติ' : 'Automatically calculated from all travellers and services')}</small></div>
-          <button className="primary-button quote-button" disabled={!result} onClick={() => setCustomerOpen(true)}><FileText/><span>{t('createQuote')}</span><ArrowRight/></button>
+          <button className="primary-button quote-button" disabled={!result || savingQuote} onClick={() => { void saveQuotation(); }}><FileText/><span>{savingQuote ? (language === 'th' ? 'กำลังบันทึก...' : 'Saving...') : isEdit ? (language === 'th' ? 'บันทึกการแก้ไข' : 'Save changes') : t('createQuote')}</span><ArrowRight/></button>
           <div className="summary-foot"><CircleDollarSign/><span>1 USD = {formatNumber(settings.exchangeRateUSD, 2)} THB · Rounded up / 500 THB</span></div>
         </aside>
       </div>
+      </div>
     </main>
 
-    <Modal open={customerOpen} title={t('customerInfo')} onClose={() => setCustomerOpen(false)}>
-      <div className="customer-form">
-        <label className="field"><span>{t('customerName')}</span><input value={customer.name} onChange={(event) => setCustomer((value) => ({ ...value, name: event.target.value }))} autoFocus/></label>
-        <div className="form-grid">
-          <label className="field"><span>{t('phone')}</span><input value={customer.phone} onChange={(event) => setCustomer((value) => ({ ...value, phone: event.target.value }))}/></label>
-          <label className="field"><span>{t('email')}</span><input type="email" value={customer.email} onChange={(event) => setCustomer((value) => ({ ...value, email: event.target.value }))}/></label>
-        </div>
-        <label className="field"><span>{language === 'th' ? 'ที่อยู่สำหรับออกเอกสาร (ไม่บังคับ)' : 'Billing / invoice address (optional)'}</span><textarea rows={3} value={customer.invoiceAddress} onChange={(event) => setCustomer((value) => ({ ...value, invoiceAddress: event.target.value }))} placeholder={language === 'th' ? 'ชื่อบริษัท ที่อยู่ เลขประจำตัวผู้เสียภาษี หรือเว้นว่างได้' : 'Company, address, tax ID, or leave blank'}/></label>
-        <label className="field"><span>{t('note')}</span><textarea rows={3} value={customer.note} onChange={(event) => setCustomer((value) => ({ ...value, note: event.target.value }))}/></label>
-        <div className="modal-actions"><button className="ghost-button" onClick={() => setCustomerOpen(false)}>{t('cancel')}</button><button className="primary-button" onClick={() => { void openQuotation(); }} disabled={!customer.name.trim() || savingQuote}>{savingQuote ? (language === 'th' ? 'กำลังบันทึก...' : 'Saving...') : t('continue')}<ArrowRight/></button></div>
-      </div>
-    </Modal>
-
-    {result && <QuotationPreview open={quoteOpen} onClose={() => setQuoteOpen(false)} result={result} customer={customer} currentUser={currentUser} quotationNo={quotationNo}/>}    
   </div>;
+}
+
+export function AgentRateSheetRoute({ settings, packages, onBack }: { settings: GlobalSettings; packages: TourPackage[]; onBack: () => void }) {
+  return (
+    <div className="front-shell front-shell--embedded agent-rate-route">
+      <AgentRateSheetModal open settings={settings} packages={packages} onClose={onBack} />
+    </div>
+  );
+}
+
+function CalculatorExtraSection({
+  icon,
+  title,
+  hint,
+  badge,
+  defaultOpen = false,
+  className = '',
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  hint: string;
+  badge?: string;
+  defaultOpen?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className={`calc-extra-section ${open ? 'expanded' : ''} ${className}`.trim()}>
+      <button type="button" className="calc-extra-section-head" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        <span className="calc-extra-section-icon">{icon}</span>
+        <span className="calc-extra-section-copy">
+          <strong>{title}</strong>
+          <small>{hint}</small>
+        </span>
+        {badge && <span className="calc-extra-section-badge">{badge}</span>}
+        <ChevronDown className="calc-extra-section-chevron" aria-hidden />
+      </button>
+      {open && <div className="calc-extra-section-body">{children}</div>}
+    </section>
+  );
 }
 
 function ChannelCard({ active, channel, title, detail, meta, onClick }: { active: boolean; channel: PricingChannel; title: string; detail: string; meta: string; onClick: () => void }) {
@@ -343,161 +533,215 @@ function PriceLine({ icon, label, value, note }: { icon: React.ReactNode; label:
   return <div className="price-line"><span className="price-icon">{icon}</span><span className="price-label"><b>{label}</b>{note && <small>{note}</small>}</span><strong>{value}</strong></div>;
 }
 
-function formatTravelPeriod(value: string, nights: number, language: 'th' | 'en'): string {
-  if (!value) return '-';
-  const start = new Date(`${value}T12:00:00`);
-  if (Number.isNaN(start.getTime())) return '-';
-  const end = new Date(start);
-  end.setDate(end.getDate() + Math.max(0, nights));
 
-  const formatter = new Intl.DateTimeFormat(language === 'th' ? 'th-TH' : 'en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-  const period = `${formatter.format(start)} - ${formatter.format(end)}`;
-  return language === 'en' ? period.toUpperCase() : period;
+type AgentRateSheetRow = {
+  packageId: string;
+  packageName: string;
+  nights: number;
+  hotelCategory: HotelCategory;
+  ticketAndTax: number;
+  businessUpgrade: number;
+  landPax1: number;
+  landPax2: number;
+  landPax3Plus: number;
+  singleSupplement: number;
+};
+
+const AGENT_RATE_HOTELS: HotelCategory[] = ['3 Stars', '4 Stars', '5 Stars'];
+
+function createAgentRatePricingInput(packageId: string, hotelCategory: HotelCategory, passengerCount: number): PricingInput {
+  return {
+    channel: 'agent',
+    pricingMode: 'standard',
+    packageId,
+    passengerCount,
+    chargeablePassengerCount: passengerCount,
+    hotelCategory,
+    travelDate: '',
+    businessUpgradeCount: 0,
+    businessUpgradePriceOverrideTHB: null,
+    singleRoomCount: 0,
+    singleSupplementOverrideTHB: null,
+    childPassengerCount: 0,
+    childSellingPricePerPersonTHB: null,
+    childTicketPricePerPersonTHB: null,
+    childAirportTaxPerPersonTHB: null,
+    additionalItems: [],
+    regularLandCostPerPersonOverrideTHB: null,
+    tourLeaderLandCostPerPersonTHB: null,
+    groupTicketPriceOverrideTHB: null,
+    groupAirportTaxOverrideTHB: null,
+    groupMarginPerTravelerOverrideTHB: null,
+    groupSellingPriceOverrideTHB: null,
+  };
 }
 
-function QuotationPreview({ open, onClose, result, customer, currentUser, quotationNo }: {
-  open: boolean; onClose: () => void; result: NonNullable<ReturnType<typeof calculatePrice>>; customer: CustomerDetails; currentUser: User; quotationNo: string;
+function buildAgentRateRow(settings: GlobalSettings, packages: TourPackage[], packageId: string, hotelCategory: HotelCategory): AgentRateSheetRow | null {
+  const pkg = packages.find((item) => item.id === packageId);
+  if (!pkg) return null;
+  const result1 = calculatePrice(createAgentRatePricingInput(packageId, hotelCategory, 1), settings, packages);
+  const result2 = calculatePrice(createAgentRatePricingInput(packageId, hotelCategory, 2), settings, packages);
+  const result3 = calculatePrice(createAgentRatePricingInput(packageId, hotelCategory, 3), settings, packages);
+  if (!result1 || !result2 || !result3) return null;
+  const landNet = (result: NonNullable<ReturnType<typeof calculatePrice>>) => Math.max(0, result.sellingPricePerPerson - result.airTicketPerPerson - result.airportTaxPerPerson);
+  return {
+    packageId,
+    packageName: pkg.name,
+    nights: pkg.nights,
+    hotelCategory,
+    ticketAndTax: result3.airTicketPerPerson + result3.airportTaxPerPerson,
+    businessUpgrade: Number(settings.businessUpgradeTHB ?? 15000),
+    landPax1: landNet(result1),
+    landPax2: landNet(result2),
+    landPax3Plus: landNet(result3),
+    singleSupplement: getPackageSingleSupplement(pkg, hotelCategory),
+  };
+}
+
+export function AgentRateSheetModal({ open, onClose, settings, packages, defaultPackageId, defaultHotelCategory }: {
+  open: boolean;
+  onClose: () => void;
+  settings: GlobalSettings;
+  packages: TourPackage[];
+  defaultPackageId?: string;
+  defaultHotelCategory?: HotelCategory;
 }) {
-  const { t, language } = useI18n();
-  const issued = new Date();
-  const hotelLevelLabel = language === 'th'
-    ? result.hotelCategory.replace(/\s*Stars?/i, ' ดาว')
-    : result.hotelCategory;
-  const includedItems = language === 'th'
-    ? [
-        'ตั๋วเครื่องบินไป–กลับ ชั้นประหยัด (Economy Class)',
-        `ที่พักโรงแรมระดับ ${hotelLevelLabel}`,
-        'อาหารทุกมื้อ: อาหารเช้าและอาหารเย็นที่โรงแรม และอาหารกลางวันที่ร้านอาหารท้องถิ่น',
-        'ไกด์ท้องถิ่นที่สื่อสารภาษาอังกฤษและร่วมเดินทางตลอดทริป',
-        'ค่าภาษีและค่าธรรมเนียมรายวันของรัฐบาล (SDF)',
-        'ค่าธรรมเนียมเข้าสถานที่ท่องเที่ยวและอนุสรณ์สถานตามโปรแกรม',
-        'ค่าธรรมเนียมวีซ่าประเทศภูฏาน',
-        'รถรับส่งส่วนตัวตามที่ระบุไว้ในโปรแกรม',
-        'โปรแกรมท่องเที่ยวและสถานที่ท่องเที่ยวตามกำหนดการ',
-        'บริการรับ–ส่งที่สนามบินพาโร',
-        'ประกันการเดินทางแบบระบุวัน',
-      ]
-    : [
-        'Round-trip economy class airfare',
-        `${hotelLevelLabel} hotel accommodation`,
-        'All meals: breakfast and dinner at the hotel, and lunch at local restaurants',
-        'English-speaking local guide travelling with the group throughout the trip',
-        'Government Sustainable Development Fee (SDF)',
-        'Admission fees for attractions and monuments listed in the itinerary',
-        'Bhutan visa fee',
-        'Private transfers as specified in the itinerary',
-        'Tour programme and sightseeing as scheduled',
-        'Paro Airport arrival and departure transfers',
-        'Travel insurance covering the stated travel dates',
-      ];
-  const excludedItems = language === 'th'
-    ? [
-        'ค่าเช่าม้าขึ้นวัดทักซัง',
-        'ค่าทิปไกด์ 3 USD และคนขับรถ 2 USD รวม 5 USD ต่อคน/วัน',
-        'ค่าใช้จ่ายส่วนตัวหรือรายการอื่นนอกเหนือจากโปรแกรม',
-      ]
-    : [
-        'Horse rental for the Tiger’s Nest hike',
-        'Tips: USD 3 for the guide and USD 2 for the driver, total USD 5 per person/day',
-        'Personal expenses and any services not specified in the itinerary',
-      ];
-  return <Modal open={open} title={t('quotation')} onClose={onClose} wide>
-    <div className="quote-toolbar no-print"><button className="ghost-button" onClick={onClose}>{t('editInput')}</button><button className="primary-button" onClick={() => { void printElementAsA4('quotation-print-area', `${quotationNo} - ${customer.name}`); }}><FileText/>{t('printPdf')}</button></div>
-    <article className="quotation-sheet" id="quotation-print-area">
-      <header className="quote-header">
-        <div><Brand/><p>Travel design · Flights · Bhutan experiences</p></div>
-        <div className="quote-title"><span>{result.channel === 'retail' ? 'RETAIL' : 'AGENT'}</span><h1>{t('quotation')}</h1><b>{quotationNo}</b></div>
-      </header>
-      <div className="quote-accent"/>
-      <section className="quote-meta-grid">
-        <div><span>{t('preparedFor')}</span><strong>{customer.name || '-'}</strong><small>{[customer.phone, customer.email].filter(Boolean).join(' · ') || '-'}</small>{customer.invoiceAddress && <small className="quote-address">{customer.invoiceAddress}</small>}</div>
-        <div><span>{t('issueDate')}</span><strong>{formatDate(issued, language)}</strong><small>{t('preparedBy')}: {currentUser.name}</small></div>
-      </section>
-      <section className="quote-trip-card">
-        <div><span>{t('package')}</span><strong>{result.packageName}</strong></div>
-        <div><span>{t('travelDate')}</span><strong>{result.travelDate ? formatDate(result.travelDate, language) : '-'}</strong></div>
-        <div><span>{t('hotelLevel')}</span><strong>{result.hotelCategory}</strong><small>{result.nights} {t('nights')}</small></div>
-        <div><span>{t('passengers')}</span><strong>{result.passengerCount} {t('people')}</strong><small>{result.pricingMode === 'group_tl' ? (language === 'th' ? `เรียกเก็บ ${result.chargeablePassengerCount} · TL ${result.tourLeaderCount}` : `${result.chargeablePassengerCount} billed · ${result.tourLeaderCount} TL`) : result.childPassengerCount > 0 ? (language === 'th' ? `${result.adultPassengerCount} ผู้ใหญ่ · ${result.childPassengerCount} เด็ก` : `${result.adultPassengerCount} adults · ${result.childPassengerCount} children`) : `${result.nights} ${t('nights')}`}</small></div>
-      </section>
-      <section className="quote-price-table quote-passenger-table">
-        <div className="quote-table-head quote-six-columns">
-          <span>{language === 'th' ? 'รายการผู้โดยสาร / บริการ' : 'Passenger / Service'}</span>
-          <span>PTC</span>
-          <span>{language === 'th' ? 'จำนวน' : 'QTY'}</span>
-          <span>{language === 'th' ? 'ราคาขาย / ท่าน' : 'Selling / Pax'}</span>
-          <span>{language === 'th' ? 'เพิ่มเติม' : 'Additional'}</span>
-          <span>{language === 'th' ? 'รวม (บาท)' : 'Total (THB)'}</span>
-        </div>
-        {result.adultPassengerCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row">
-          <span className="quote-service-cell">
-            <b className="quote-travel-period">{formatTravelPeriod(result.travelDate, result.nights, language)}</b>
-            <strong>{language === 'th' ? `แพ็กเกจ ${result.nights + 1} วัน ${result.nights} คืน โรงแรม ${result.hotelCategory}` : `Package ${result.nights + 1}D${result.nights}N ${result.hotelCategory} Hotel`}</strong>
-            <small>{result.packageName}{result.hasGroupFlightDiscount ? ` · ${t('groupDiscount')} ${formatNumber(result.groupDiscountPercentApplied, 2)}%` : ''}</small>
-          </span>
-          <span className="quote-center-cell"><b>ADT</b></span><span className="quote-center-cell"><b>{result.pricingMode === 'group_tl' ? result.chargeablePassengerCount : result.adultPassengerCount}</b></span>
-          <span className="quote-number-cell"><b>{formatNumber(result.sellingPricePerPerson, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
-          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.pricingMode === 'group_tl' ? result.groupSubtotal : result.adultSubtotal, 2)}</b></span>
-        </div>}
-        {result.childPassengerCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-child-row">
-          <span className="quote-service-cell"><strong>{language === 'th' ? `แพ็กเกจเด็ก ${result.nights + 1} วัน ${result.nights} คืน` : `Child package ${result.nights + 1}D${result.nights}N`}</strong><small>{result.hotelCategory} · {result.packageName}</small></span>
-          <span className="quote-center-cell"><b>CHD</b></span><span className="quote-center-cell"><b>{result.childPassengerCount}</b></span>
-          <span className="quote-number-cell"><b>{formatNumber(result.childSellingPricePerPerson, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
-          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.childSubtotal, 2)}</b></span>
-        </div>}
-        {result.businessUpgradeCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row">
-          <span className="quote-service-cell"><strong>Business Class Upgrade</strong><small>{result.pricingMode === 'group_tl'
-            ? (language === 'th' ? `${result.businessUpgradeCount} ท่าน จากผู้เดินทางจริง ${result.passengerCount} ท่าน` : `${result.businessUpgradeCount} of ${result.passengerCount} actual travellers`)
-            : (language === 'th' ? 'อัปเกรดชั้นโดยสาร' : 'Cabin upgrade')}</small></span>
-          <span className="quote-center-cell"><b>ADT</b></span><span className="quote-center-cell"><b>{result.businessUpgradeCount}</b></span>
-          <span className="quote-number-cell"><b>{formatNumber(result.businessUpgradePerPerson, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
-          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.businessUpgradeTotal, 2)}</b></span>
-        </div>}
-        {result.additionalItems.map((item) => <div className="quote-table-row quote-six-columns quote-passenger-row quote-extra-row" key={item.id}>
-          <span className="quote-service-cell"><strong>{item.description || (language === 'th' ? 'รายการเพิ่มเติม' : 'Additional service')}</strong><small>{item.basis === 'per_person' ? (language === 'th' ? 'คิดต่อท่าน' : 'Per person') : item.basis === 'per_group' ? (language === 'th' ? 'เหมาทั้งกลุ่ม' : 'Per group') : (language === 'th' ? 'จำนวนกำหนดเอง' : 'Custom quantity')}</small></span>
-          <span className="quote-center-cell"><b>SRV</b></span><span className="quote-center-cell"><b>{formatNumber(item.quantity, 0)}</b></span>
-          <span className="quote-number-cell"><b>{formatNumber(item.unitPriceTHB, 2)}</b></span><span className="quote-number-cell"><b>—</b></span>
-          <span className="quote-number-cell quote-line-total"><b>{formatNumber(item.totalTHB, 2)}</b></span>
-        </div>)}
-        {result.singleRoomCount > 0 && <div className="quote-table-row quote-six-columns quote-passenger-row quote-single-room-row">
-          <span className="quote-service-cell"><strong>{language === 'th' ? 'ส่วนต่างห้องพักเดี่ยว' : 'Single-room supplement'}</strong><small>{result.hotelCategory} · {result.nights} {t('nights')}</small></span>
-          <span className="quote-center-cell"><b>ADT</b></span>
-          <span className="quote-center-cell"><b>{result.singleRoomCount}</b></span>
-          <span className="quote-number-cell"><b>{formatNumber(result.singleSupplementPerPerson, 2)}</b></span>
-          <span className="quote-number-cell"><b>—</b></span>
-          <span className="quote-number-cell quote-line-total"><b>{formatNumber(result.singleSupplementTotal, 2)}</b></span>
-        </div>}
-        <div className="quote-table-grand-total">
-          <span>{language === 'th' ? 'ยอดรวมสุทธิ' : 'Grand Total'}</span>
-          <strong>THB {formatNumber(result.groupTotal, 2)}</strong>
-        </div>
-      </section>
-      {result.pricingMode === 'group_tl' && <section className="quote-group-tl-note">
-        <strong>{language === 'th' ? `เงื่อนไขกรุ๊ป ${result.chargeablePassengerCount}+${result.tourLeaderCount} TL` : `Group arrangement ${result.chargeablePassengerCount}+${result.tourLeaderCount} TL`}</strong>
-        <span>{language === 'th'
-          ? `เดินทางจริง ${result.passengerCount} ท่าน เรียกเก็บราคาเฉลี่ย ${result.chargeablePassengerCount} ท่าน โดย Tour Leader ${result.tourLeaderCount} ท่านได้รับยกเว้นเฉพาะค่าที่พัก ส่วนตั๋วเครื่องบิน ภาษี SDF วีซ่า และค่าใช้จ่ายที่เกี่ยวข้องยังรวมครบตามจำนวนผู้เดินทางจริง`
-          : `${result.passengerCount} actual travellers; pricing is averaged across ${result.chargeablePassengerCount} paying travellers. ${result.tourLeaderCount} tour leader(s) receive complimentary hotel only; airfare, airport tax, SDF, visa and related costs remain included for every actual traveller.`}</span>
-        {(result.businessUpgradeTotal > 0 || result.singleSupplementTotal > 0 || result.additionalItemsTotal > 0) && <small>{language === 'th' ? 'ราคาแพ็กเกจพื้นฐานคิดเฉพาะผู้ชำระ ส่วน Business Class พักเดี่ยว และรายการเพิ่มเติมแสดงแยกตามจำนวนผู้ใช้บริการจริงภายในผู้เดินทางทั้งหมด' : 'The base package is billed to paying travellers; Business Class, single-room and other services are shown separately for the actual travellers who use them.'}</small>}
-      </section>}
-      <section className="quote-scope-grid">
-        <div className="quote-scope-card quote-included">
-          <h3>{language === 'th' ? 'ราคารวม' : 'Package Includes'}</h3>
-          <ol>{includedItems.map((item, index) => <li key={`included-${index}`}>{item}</li>)}</ol>
-        </div>
-        <div className="quote-scope-card quote-excluded">
-          <h3>{language === 'th' ? 'ราคาไม่รวม' : 'Package Excludes'}</h3>
-          <ul>{excludedItems.map((item, index) => <li key={`excluded-${index}`}>{item}</li>)}</ul>
-        </div>
-      </section>
-      {customer.note && <section className="quote-total-area quote-total-area-simple">
-        <div className="quote-note"><span>{t('note')}</span><p>{customer.note}</p></div>
-      </section>}
-      <section className="quote-terms"><h3>{t('terms')}</h3><ol><li>{t('term1')}</li><li>{t('term2')}</li><li>{t('term3')}</li></ol></section>
-      <footer className="quote-footer"><div><strong>OMG Experience Co., Ltd.</strong><span>info@omgexp.com · 02 630 4600 · omgexp.com</span></div><div className="quote-sign"><span>Authorized signature</span></div></footer>
-    </article>
+  const [selectedPackageIds, setSelectedPackageIds] = useState<string[]>([]);
+  const [selectedHotels, setSelectedHotels] = useState<HotelCategory[]>([]);
+  const [agentName, setAgentName] = useState('');
+  const [validUntil, setValidUntil] = useState('');
+  const [note, setNote] = useState('ราคาสำหรับ Agent เท่านั้น กรุ๊ปตั้งแต่ 10 ท่านขึ้นไปกรุณาสอบถามราคาอีกครั้ง');
+  const [hotelExamples, setHotelExamples] = useState<Record<HotelCategory, string>>({ '3 Stars': '', '4 Stars': '', '5 Stars': '' });
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedPackageIds((current) => current.length ? current : [defaultPackageId || packages[0]?.id].filter(Boolean) as string[]);
+    setSelectedHotels((current) => current.length ? current : [defaultHotelCategory || '3 Stars']);
+  }, [open, defaultPackageId, defaultHotelCategory, packages]);
+
+  const rows = useMemo(() => selectedPackageIds.flatMap((packageId) => selectedHotels
+    .map((hotelCategory) => buildAgentRateRow(settings, packages, packageId, hotelCategory))
+    .filter((item): item is AgentRateSheetRow => Boolean(item))), [selectedPackageIds, selectedHotels, settings, packages]);
+
+  function togglePackage(packageId: string) {
+    setSelectedPackageIds((current) => current.includes(packageId) ? current.filter((id) => id !== packageId) : [...current, packageId]);
+  }
+  function toggleHotel(hotelCategory: HotelCategory) {
+    setSelectedHotels((current) => current.includes(hotelCategory) ? current.filter((item) => item !== hotelCategory) : [...current, hotelCategory]);
+  }
+
+  const fileTitle = `Agent Rate Sheet - ${selectedPackageIds.length} Program${selectedPackageIds.length === 1 ? '' : 's'}`;
+
+  return <Modal open={open} title="Agent Rate Sheet / ใบราคาเอเจนต์" onClose={onClose} wide>
+    <div className="agent-rate-builder no-print">
+      <div className="agent-rate-builder__intro">
+        <div><span>AGENT SALES TOOL</span><h2>สร้างใบราคา Agent จากข้อมูล Pricing ปัจจุบัน</h2><p>เลือกหลายโปรแกรมและหลายระดับโรงแรมได้ในครั้งเดียว ระบบจะคำนวณ Net Agent จากสูตรเดียวกับหน้าคำนวณราคา และแยกแต่ละโปรแกรม/โรงแรมเป็นคนละหน้าใน PDF</p></div>
+        <button className="primary-button" disabled={!rows.length} onClick={() => { void printElementAsA4('agent-rate-sheet-print-area', fileTitle); }}><FileText/>ดาวน์โหลด / Print PDF</button>
+      </div>
+      <div className="agent-rate-builder__grid">
+        <section>
+          <h3>1. เลือกโปรแกรม</h3>
+          <div className="agent-rate-choice-list">{packages.map((pkg) => <button key={pkg.id} className={selectedPackageIds.includes(pkg.id) ? 'active' : ''} onClick={() => togglePackage(pkg.id)}><i>{selectedPackageIds.includes(pkg.id) ? <Check/> : null}</i><span><strong>{pkg.nights + 1} วัน {pkg.nights} คืน</strong><small>{pkg.name}</small></span></button>)}</div>
+        </section>
+        <section>
+          <h3>2. เลือกระดับโรงแรม</h3>
+          <div className="agent-rate-hotel-options">{AGENT_RATE_HOTELS.map((hotel) => <button key={hotel} className={selectedHotels.includes(hotel) ? 'active' : ''} onClick={() => toggleHotel(hotel)}><i>{selectedHotels.includes(hotel) ? <Check/> : null}</i>{hotel.replace(' Stars',' ดาว')}</button>)}</div>
+          <div className="agent-rate-hotel-notes">
+            {selectedHotels.map((hotel) => <label key={hotel}>
+              <span>โรงแรม {hotel.replace(' Stars',' ดาว')} สำหรับเอกสาร (ไม่บังคับ)</span>
+              <textarea rows={3} value={hotelExamples[hotel]} onChange={(e) => setHotelExamples((current) => ({ ...current, [hotel]: e.target.value }))} placeholder="ปล่อยว่าง = ใช้รายชื่อโรงแรมมาตรฐานของ Bhutan Center อัตโนมัติ"/>
+              <small>{hotel === '3 Stars' || hotel === '4 Stars' ? 'ระบบมีรายชื่อโรงแรมมาตรฐานให้แล้ว และจะแสดงเมืองตามโปรแกรมอัตโนมัติ' : '5 ดาวยังไม่มีรายชื่อมาตรฐานในชุดนี้ สามารถกรอกเองได้'}</small>
+            </label>)}
+          </div>
+        </section>
+        <section>
+          <h3>3. ข้อมูลเอกสาร</h3>
+          <label><span>ชื่อ Agent / บริษัท (ไม่บังคับ)</span><input value={agentName} onChange={(e) => setAgentName(e.target.value)} placeholder="เช่น Jasmine Travel"/></label>
+          <label><span>ราคาใช้ได้ถึงวันที่ (ไม่บังคับ)</span><input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}/></label>
+          <label><span>หมายเหตุ</span><textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)}/></label>
+        </section>
+      </div>
+      <div className="agent-rate-builder__summary"><strong>{rows.length}</strong><span>หน้าที่จะออกใน PDF</span><small>{selectedPackageIds.length} โปรแกรม × {selectedHotels.length} ระดับโรงแรม</small></div>
+    </div>
+
+    <div className="agent-rate-print-stack" id="agent-rate-sheet-print-area">
+      {rows.length ? rows.map((row, index) => {
+        const customHotels = hotelExamples[row.hotelCategory]?.trim() || '';
+        const resolvedHotels = customHotels || getDefaultAgentHotelExamples(row.hotelCategory, row.nights);
+        return <AgentRateSheetPage key={`${row.packageId}-${row.hotelCategory}`} row={row} settings={settings} agentName={agentName} validUntil={validUntil} note={note} hotelExamples={resolvedHotels} page={index + 1} totalPages={rows.length}/>;
+      }) : <div className="agent-rate-empty">เลือกอย่างน้อย 1 โปรแกรม และ 1 ระดับโรงแรม</div>}
+    </div>
   </Modal>;
+}
+
+function AgentRateSheetPage({ row, settings, agentName, validUntil, note, hotelExamples, page, totalPages }: {
+  row: AgentRateSheetRow;
+  settings: GlobalSettings;
+  agentName: string;
+  validUntil: string;
+  note: string;
+  hotelExamples: string;
+  page: number;
+  totalPages: number;
+}) {
+  const hotelLabel = row.hotelCategory.replace(' Stars', ' ดาว');
+  const included = [
+    'ตั๋วเครื่องบินไป-กลับ ชั้นประหยัด Bhutan Airlines',
+    `ที่พักโรงแรมระดับ ${hotelLabel}`,
+    'อาหารทุกมื้อตามโปรแกรม',
+    'ไกด์ท้องถิ่นที่สื่อสารภาษาอังกฤษ',
+    'ค่าธรรมเนียมรายวันของรัฐบาล (SDF)',
+    'ค่าเข้าชมสถานที่ท่องเที่ยวตามโปรแกรม',
+    'ค่าธรรมเนียมวีซ่าประเทศภูฏาน',
+    'รถรับส่งและโปรแกรมท่องเที่ยวตามกำหนดการ',
+    'บริการรับ-ส่งสนามบินพาโร',
+    'ประกันการเดินทางแบบระบุวัน',
+  ];
+  const excluded = [
+    'ค่าเช่าม้าขึ้นวัดทักซัง',
+    'ค่าทิปไกด์และคนขับรถ',
+    'ค่าใช้จ่ายส่วนตัวและรายการอื่นนอกเหนือจากโปรแกรม',
+  ];
+  return <article className="agent-rate-page">
+    <header className="agent-rate-page__header">
+      <div><Brand/><small>OMG Experience Co., Ltd. · Bhutan Travel Specialist</small></div>
+      <div><span>NET AGENT RATE</span><strong>{page}/{totalPages}</strong></div>
+    </header>
+    <section className="agent-rate-page__title">
+      <span>{agentName.trim() ? `Prepared for: ${agentName.trim()}` : 'AGENT / PARTNER RATE'}</span>
+      <h1>ราคาโปรแกรมทัวร์ภูฏาน {row.nights + 1} วัน {row.nights} คืน</h1>
+      <h2>พักโรงแรม {hotelLabel} (Net Agent)</h2>
+      <p>{row.packageName}</p>
+    </section>
+    <table className="agent-rate-table">
+      <thead><tr><th>รายการ</th><th>ราคา (บาท)</th></tr></thead>
+      <tbody>
+        <tr><td><b>1. Economy Ticket + Taxes (Bhutan Airlines)</b><small>Agent airfare + airport taxes สำหรับ 1-9 ท่าน</small></td><td>{formatNumber(row.ticketAndTax, 0)}</td></tr>
+        <tr><td className="indent">Upgrade Business Class (Optional)</td><td>{formatNumber(row.businessUpgrade, 0)}</td></tr>
+        <tr><td><b>2. Land + SDF + Visa (บาท/ท่าน)</b></td><td></td></tr>
+        <tr><td className="indent">เดินทาง 1 ท่าน</td><td>{formatNumber(row.landPax1, 0)}</td></tr>
+        <tr><td className="indent">เดินทาง 2 ท่าน</td><td>{formatNumber(row.landPax2, 0)}</td></tr>
+        <tr><td className="indent">เดินทาง 3 - 9 ท่าน</td><td>{formatNumber(row.landPax3Plus, 0)}</td></tr>
+        <tr><td className="indent">GIT 10 PAX+</td><td>On Request</td></tr>
+        <tr><td><b>Single Supplement (นอนเดี่ยว)</b></td><td>{row.singleSupplement > 0 ? formatNumber(row.singleSupplement, 0) : 'On Request'}</td></tr>
+      </tbody>
+    </table>
+    <section className="agent-rate-airfare-note">
+      <strong>หมายเหตุเรื่องตั๋วเครื่องบิน</strong>
+      <p>ราคา Economy Ticket + Taxes ด้านบนเป็นราคารวมตั๋ว Agent + Airport Tax แล้ว โดยค่าโดยสาร Agent พื้นฐานอยู่ที่ ฿{formatNumber(Number(settings.agentTicketPriceTHB ?? 25220), 0)} และ Airport Tax ฿{formatNumber(Number(settings.airportTaxTHB ?? 6500), 0)} / ท่าน</p>
+    </section>
+    {hotelExamples.trim() && <section className="agent-rate-hotels"><h3>โรงแรมมาตรฐาน {hotelLabel}</h3><p>{hotelExamples}</p></section>}
+    <section className="agent-rate-scope">
+      <div><h3>ราคารวม</h3><ul>{included.map((item) => <li key={item}>{item}</li>)}</ul></div>
+      <div><h3>ราคาไม่รวม</h3><ul>{excluded.map((item) => <li key={item}>{item}</li>)}</ul></div>
+    </section>
+    <section className="agent-rate-notes">
+      <strong>หมายเหตุ</strong>
+      <p>{note || 'ราคาสำหรับ Agent เท่านั้น'}</p>
+      {validUntil && <p>ราคานี้ใช้ได้ถึงวันที่ {formatDate(validUntil, 'th')}</p>}
+      <small>ราคานี้ดึงจากข้อมูล Pricing ของ Bhutan Center ณ วันที่ออกเอกสาร ราคาตั๋ว อัตราแลกเปลี่ยน ภาษี วีซ่า LAND และ Margin อาจเปลี่ยนแปลงได้ตามวันที่ยืนยันการจอง</small>
+    </section>
+    <footer><strong>Bhutan Center · OMG Experience Co., Ltd.</strong><span>Agent Rate Sheet · {new Date().toLocaleDateString('th-TH')}</span></footer>
+  </article>;
 }
 

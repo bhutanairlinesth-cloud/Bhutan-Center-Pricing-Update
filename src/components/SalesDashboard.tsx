@@ -4,14 +4,19 @@ import {
   Coins, FileClock, Landmark, Plane, ReceiptText, TrendingUp, WalletCards,
 } from 'lucide-react';
 import { CustomerTracking, PaymentInvoice, PaymentTransaction, TravelerAddition } from '../types';
+import { getJourneyStage, nextRecommendedAction, stageTagKey } from './CustomerTracking';
 import { formatDate, formatNumber, formatTHB } from '../utils/format';
 import { useI18n } from '../i18n';
+import { PageHeader } from '../shared/ui';
+import { StatusBadge } from '../shared/StatusBadge';
 
 interface Props {
   trackings: CustomerTracking[];
   invoices: PaymentInvoice[];
   payments: PaymentTransaction[];
   onOpenTracking: () => void;
+  embedded?: boolean;
+  headerActions?: React.ReactNode;
 }
 
 interface JobMetrics {
@@ -128,22 +133,12 @@ function monthOf(value: string) {
   return month >= 0 && month <= 11 ? month : -1;
 }
 
-function journeyLabel(item: CustomerTracking, th: boolean) {
-  if (item.closedAt || item.status === 'completed') return th ? 'ปิดจบงาน' : 'Closed';
-  if (item.landPaidAt) return th ? 'ชำระ LAND แล้ว' : 'LAND paid';
-  if (item.fullPaymentReceivedAt) return th ? 'ชำระครบแล้ว' : 'Fully paid';
-  if (item.visaReceivedAt) return th ? 'ได้รับวีซ่าแล้ว' : 'Visa received';
-  if (item.documentsSentToLandAt) return th ? 'ส่งเอกสารให้ LAND แล้ว' : 'Sent to LAND';
-  if (item.firstPaymentReceivedAt) return th ? 'รับชำระค่าตั๋วแล้ว' : 'Ticket payment received';
-  if (item.invoice1SentAt) return th ? 'ออก Invoice 1 แล้ว' : 'Invoice 1 issued';
-  if (item.bookingConfirmedAt) return th ? 'ยืนยันการจอง' : 'Booking confirmed';
-  if (item.quotationSentAt) return th ? 'ส่งใบเสนอราคา' : 'Quotation sent';
-  return th ? 'กำลังติดตาม' : 'Following up';
-}
+type SalesReportTab = 'summary' | 'closed' | 'open';
 
-export function SalesDashboard({ trackings, invoices, payments, onOpenTracking }: Props) {
+export function SalesDashboard({ trackings, invoices, payments, onOpenTracking, embedded = false, headerActions }: Props) {
   const { language } = useI18n();
   const th = language === 'th';
+  const [reportTab, setReportTab] = useState<SalesReportTab>('summary');
   const metrics = useMemo(
     () => trackings.filter((item) => item.status !== 'lost').map((item) => metricFor(item, invoices, payments)),
     [trackings, invoices, payments],
@@ -195,19 +190,24 @@ export function SalesDashboard({ trackings, invoices, payments, onOpenTracking }
   });
   const maxMonthValue = Math.max(1, ...months.flatMap((month) => [month.sales, month.expenses, Math.max(0, month.profit)]));
 
-  return <div className="sales-dashboard admin-stack">
-    <section className="sales-dashboard-head">
-      <div>
-        <span className="eyebrow"><TrendingUp/> {th ? 'ภาพรวมธุรกิจ' : 'BUSINESS OVERVIEW'}</span>
-        <h2>{th ? 'Dashboard ยอดขาย ค่าใช้จ่าย และกำไร' : 'Sales, expense and profit dashboard'}</h2>
-        <p>{th ? 'กำไรจะแสดงเฉพาะงานที่ปิดจบแล้วเท่านั้น งานที่ยังดำเนินการจะแสดงเป็นยอดขายและยอดคงเหลือ' : 'Profit is recognized only after a customer case is closed. Open work shows sales and outstanding amounts only.'}</p>
-      </div>
-      <div className="dashboard-head-actions">
-        <label><span>{th ? 'ปีรายงาน' : 'Report year'}</span><select value={year} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => setYear(Number(event.target.value))}>{years.map((item) => <option key={item} value={item}>{th ? item + 543 : item}</option>)}</select></label>
-        <button className="primary-button" onClick={onOpenTracking}><ReceiptText/>{th ? 'เปิดติดตามลูกค้า' : 'Open customer tracking'}<ArrowRight/></button>
-      </div>
-    </section>
+  const reportTabs: { id: SalesReportTab; label: string }[] = [
+    { id: 'summary', label: th ? 'สรุป' : 'Summary' },
+    { id: 'closed', label: th ? 'งานที่ปิดแล้ว' : 'Closed jobs' },
+    { id: 'open', label: th ? 'งานที่เปิดอยู่' : 'Open jobs' },
+  ];
 
+  const yearActions = (
+    <div className="dashboard-head-actions">
+      <label><span>{th ? 'ปีรายงาน' : 'Report year'}</span><select value={year} onChange={(event: React.ChangeEvent<HTMLSelectElement>) => setYear(Number(event.target.value))}>{years.map((item) => <option key={item} value={item}>{th ? item + 543 : item}</option>)}</select></label>
+      <button type="button" className="primary-button" onClick={onOpenTracking}><ReceiptText/>{th ? 'เปิดติดตามลูกค้า' : 'Open customer tracking'}<ArrowRight/></button>
+    </div>
+  );
+
+  const dashboardBody = <>
+
+    <div className="sales-report-tabs">{reportTabs.map((item) => <button key={item.id} type="button" className={reportTab === item.id ? 'active' : ''} onClick={() => setReportTab(item.id)}>{item.label}</button>)}</div>
+
+    {reportTab === 'summary' && <>
     <section className="dashboard-kpi-grid">
       <Kpi icon={CircleDollarSign} tone="green" label={th ? 'ยอดขายที่สร้างในปี' : 'Sales booked this year'} value={formatTHB(allSales, language)} note={`${soldThisYear.length} ${th ? 'งาน' : 'jobs'}`}/>
       <Kpi icon={Plane} tone="blue" label={th ? 'ค่าตั๋วและภาษีทั้งหมด' : 'Total airfare and tax'} value={formatTHB(allAirfare, language)} note={th ? 'รวมผู้เดินทางทุกชุด' : 'All passenger batches'}/>
@@ -248,17 +248,45 @@ export function SalesDashboard({ trackings, invoices, payments, onOpenTracking }
       </div>)}</div>
       <div className="monthly-chart-foot"><span>{th ? 'ตัวเลขท้ายแถว: งานขาย / งานปิด' : 'End values: booked jobs / closed jobs'}</span></div>
     </section>
+    </>}
 
-    <section className="dashboard-panel dashboard-table-panel">
+    {reportTab === 'closed' && <section className="dashboard-panel dashboard-table-panel">
       <div className="dashboard-panel-head"><div><span>{th ? 'รายการปิดจบแล้ว' : 'CLOSED JOBS'}</span><h3>{th ? 'กำไรจริงรายลูกค้า' : 'Realized profit by customer'}</h3></div><CheckCircle2/></div>
       {closedThisYear.length === 0 ? <DashboardEmpty text={th ? 'ยังไม่มีงานที่ปิดจบในปีนี้' : 'No closed jobs in this year'}/> : <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>{th ? 'ลูกค้า / โปรแกรม' : 'Customer / package'}</th><th>{th ? 'ปิดงาน' : 'Closed'}</th><th>{th ? 'ยอดขาย' : 'Sales'}</th><th>{th ? 'ตั๋ว+ภาษี' : 'Airfare+tax'}</th><th>LAND</th><th>{th ? 'ต้นทุนอื่น' : 'Other costs'}</th><th>{th ? 'กำไรจริง' : 'Profit'}</th></tr></thead><tbody>{closedThisYear.sort((a, b) => (b.closedDate || '').localeCompare(a.closedDate || '')).map((item) => <tr key={item.tracking.id}><td><b>{item.tracking.customerName || item.tracking.opportunityName}</b><small>{item.tracking.packageName} · {item.tracking.passengerCount + activeAdditions(item.tracking).reduce((sum, entry) => sum + positive(entry.passengerCount), 0)} {th ? 'ท่าน' : 'pax'}</small></td><td>{formatDate(item.closedDate, language)}</td><td>{formatTHB(item.sales, language)}</td><td>{formatTHB(item.airfare, language)}</td><td>{formatTHB(item.land, language)}</td><td>{formatTHB(item.otherCosts, language)}</td><td className={item.profit >= 0 ? 'positive' : 'negative'}><strong>{formatTHB(item.profit, language)}</strong></td></tr>)}</tbody></table></div>}
-    </section>
+    </section>}
 
-    <section className="dashboard-panel dashboard-table-panel open-jobs-panel">
+    {reportTab === 'open' && <section className="dashboard-panel dashboard-table-panel open-jobs-panel">
       <div className="dashboard-panel-head"><div><span>{th ? 'รายการที่ยังไม่ปิดจบ' : 'OPEN JOBS'}</span><h3>{th ? 'ยอดขายคงค้างและงานถัดไป' : 'Open sales and next actions'}</h3></div><Clock3/></div>
-      {openThisYear.length === 0 ? <DashboardEmpty text={th ? 'ไม่มีงานค้างในปีนี้' : 'No open jobs in this year'}/> : <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>{th ? 'ลูกค้า / โปรแกรม' : 'Customer / package'}</th><th>{th ? 'สถานะ' : 'Status'}</th><th>{th ? 'วันเดินทาง' : 'Travel date'}</th><th>{th ? 'ยอดขาย' : 'Sales'}</th><th>{th ? 'รับแล้ว' : 'Received'}</th><th>{th ? 'คงเหลือ' : 'Outstanding'}</th><th>{th ? 'งานถัดไป' : 'Next action'}</th></tr></thead><tbody>{openThisYear.sort((a, b) => (a.tracking.travelStartDate || '9999').localeCompare(b.tracking.travelStartDate || '9999')).map((item) => <tr key={item.tracking.id}><td><b>{item.tracking.customerName || item.tracking.opportunityName}</b><small>{item.tracking.packageName} · {item.tracking.passengerCount + activeAdditions(item.tracking).reduce((sum, entry) => sum + positive(entry.passengerCount), 0)} {th ? 'ท่าน' : 'pax'}</small></td><td><span className="dashboard-status-pill">{journeyLabel(item.tracking, th)}</span></td><td>{formatDate(item.tracking.travelStartDate, language)}</td><td>{formatTHB(item.sales, language)}</td><td>{formatTHB(item.received, language)}</td><td><strong>{formatTHB(item.outstanding, language)}</strong></td><td><b>{item.tracking.nextAction || (th ? 'ตรวจสอบขั้นตอนถัดไป' : 'Review next step')}</b><small>{item.tracking.nextActionDueDate ? formatDate(item.tracking.nextActionDueDate, language) : (th ? 'ยังไม่กำหนด Deadline' : 'No deadline')}</small></td></tr>)}</tbody></table></div>}
-    </section>
-  </div>;
+      {openThisYear.length === 0 ? <DashboardEmpty text={th ? 'ไม่มีงานค้างในปีนี้' : 'No open jobs in this year'}/> : <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>{th ? 'ลูกค้า / โปรแกรม' : 'Customer / package'}</th><th>{th ? 'สถานะ' : 'Status'}</th><th>{th ? 'วันเดินทาง' : 'Travel date'}</th><th>{th ? 'ยอดขาย' : 'Sales'}</th><th>{th ? 'รับแล้ว' : 'Received'}</th><th>{th ? 'คงเหลือ' : 'Outstanding'}</th><th>{th ? 'งานถัดไป' : 'Next action'}</th></tr></thead><tbody>{openThisYear.sort((a, b) => (a.tracking.travelStartDate || '9999').localeCompare(b.tracking.travelStartDate || '9999')).map((item) => <tr key={item.tracking.id}><td><b>{item.tracking.customerName || item.tracking.opportunityName}</b><small>{item.tracking.packageName} · {item.tracking.passengerCount + activeAdditions(item.tracking).reduce((sum, entry) => sum + positive(entry.passengerCount), 0)} {th ? 'ท่าน' : 'pax'}</small></td><td><StatusBadge status={stageTagKey(getJourneyStage(item.tracking))} /></td><td>{formatDate(item.tracking.travelStartDate, language)}</td><td>{formatTHB(item.sales, language)}</td><td>{formatTHB(item.received, language)}</td><td><strong>{formatTHB(item.outstanding, language)}</strong></td><td><b>{item.tracking.nextAction || nextRecommendedAction(item.tracking, th)}</b><small>{item.tracking.nextActionDueDate ? formatDate(item.tracking.nextActionDueDate, language) : (th ? 'ยังไม่กำหนด Deadline' : 'No deadline')}</small></td></tr>)}</tbody></table></div>}
+    </section>}
+  </>;
+
+  if (embedded) {
+    return (
+      <div className="module-list-page bo-list-page">
+        <PageHeader
+          title={th ? 'รายงานยอดขาย' : 'Sales dashboard'}
+          subtitle={th ? 'กำไรจะแสดงเฉพาะงานที่ปิดจบแล้วเท่านั้น งานที่ยังดำเนินการจะแสดงเป็นยอดขายและยอดคงเหลือ' : 'Profit is recognized only after a customer case is closed. Open work shows sales and outstanding amounts only.'}
+          actions={<>{headerActions}{yearActions}</>}
+        />
+        <div className="sales-dashboard admin-stack">{dashboardBody}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sales-dashboard admin-stack">
+      <section className="sales-dashboard-head">
+        <div>
+          <span className="eyebrow"><TrendingUp/> {th ? 'ภาพรวมธุรกิจ' : 'BUSINESS OVERVIEW'}</span>
+          <h2>{th ? 'Dashboard ยอดขาย ค่าใช้จ่าย และกำไร' : 'Sales, expense and profit dashboard'}</h2>
+          <p>{th ? 'กำไรจะแสดงเฉพาะงานที่ปิดจบแล้วเท่านั้น งานที่ยังดำเนินการจะแสดงเป็นยอดขายและยอดคงเหลือ' : 'Profit is recognized only after a customer case is closed. Open work shows sales and outstanding amounts only.'}</p>
+        </div>
+        <div className="dashboard-head-actions">{yearActions}</div>
+      </section>
+      {dashboardBody}
+    </div>
+  );
 }
 
 function Kpi({ icon: Icon, tone, label, value, note }: { icon: React.ComponentType<any>; tone: string; label: string; value: string; note: string }) {

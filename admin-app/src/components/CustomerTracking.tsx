@@ -1102,10 +1102,10 @@ export function CustomerTrackingWorkspace(props: Props) {
   async function createTravelerAdditionInvoice(tracking: CustomerTracking, rawDraft: TravelerAddition, dueDate: string) {
     const draft = normalizeTravelerAddition(rawDraft);
     const names = draft.passengerNames.split(/\r?\n/).map((name) => name.trim()).filter(Boolean);
-    if (tracking.documentsSentToLandAt || tracking.visaReceivedAt || tracking.readyToTravelAt || tracking.tripReturnedAt || tracking.closedAt) {
+    if (tracking.tripReturnedAt || tracking.closedAt) {
       window.alert(th
-        ? 'รายการนี้ผ่านขั้นตอนส่งเอกสารยื่นวีซ่าหรือปิดทริปแล้ว หากเป็นการเปลี่ยนวันเดินทางให้ใช้เมนู “เลื่อนตั๋ว / เดินทางล่าช้า”'
-        : 'This booking has already moved to visa submission or trip closure. Use “Ticket change / delayed travel” for date changes.');
+        ? 'ทริปนี้เดินทางกลับหรือปิดงานแล้ว จึงไม่สามารถเพิ่มผู้เดินทางใหม่ได้'
+        : 'This trip has already returned or been closed, so new travellers can no longer be added.');
       return false;
     }
     if (!draft.pnr.trim()) {
@@ -1577,7 +1577,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
   }
   const selectedPackage = packages.find((x) => x.id === currentForm.packageId);
   const currentStage = getJourneyStage(currentForm);
-  const travelerAdditionLocked = Boolean(currentForm.documentsSentToLandAt || currentForm.visaReceivedAt || currentForm.readyToTravelAt || currentForm.tripReturnedAt || currentForm.closedAt);
+  const travelerAdditionLocked = Boolean(currentForm.tripReturnedAt || currentForm.closedAt);
   const pendingAddedTicketInvoices = pendingTravelerTicketInvoices(currentForm, invoices, payments);
   const addedInvoice1Documents = travelerTicketInvoicesFor(currentForm, invoices);
   const fullPaymentInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'full' && invoice.status !== 'cancelled');
@@ -2084,8 +2084,8 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
             <div>
               <b>{th ? 'มีผู้เดินทางเพิ่มหลังออกตั๋วชุดแรก?' : 'Travellers added after the first ticket issue?'}</b>
               <small>{travelerAdditionLocked
-                ? (th ? 'ปิดการเพิ่มผู้เดินทางแล้ว เพราะรายการเข้าสู่ขั้นส่งเอกสารยื่นวีซ่าหรือขั้นหลังจากนั้น' : 'Adding travellers is closed because the booking has reached visa submission or a later stage.')
-                : (th ? 'กดเพิ่มเพื่อออก Invoice ค่าตั๋วของผู้เดินทางชุดใหม่ก่อน จากนั้นระบบจะรวมมูลค่าแพ็กเกจของทุกคนไว้ใน Invoice 2' : 'Create a ticket invoice for the new group first; the system then consolidates every traveller’s package value into Invoice 2.')}</small>
+                ? (th ? 'ปิดการเพิ่มผู้เดินทางแล้ว เพราะทริปเดินทางกลับหรือปิดงานแล้ว' : 'Adding travellers is closed because the trip has returned or been closed.')
+                : (th ? 'เพิ่มได้แม้ออกตั๋วหรือยื่นวีซ่าชุดเดิมแล้ว โดยออก Invoice ค่าตั๋วของผู้เดินทางใหม่ก่อน จากนั้นระบบจะรวมจำนวนผู้เดินทางและมูลค่าแพ็กเกจล่าสุดไว้ใน Invoice 2' : 'Travellers can still be added after the original tickets or visa submission. Issue their ticket invoice first; Invoice 2 will then use the latest traveller count and package value.')}</small>
             </div>
           </div>
           <div className="traveler-addition-inline-stats">
@@ -2664,7 +2664,10 @@ function InvoicePreview({ value, settings, language, payments, invoices, onClose
     ? { ...selectedAccount, paymentBankName: invoice.paymentBankName, paymentAccountName: invoice.paymentAccountName, paymentAccountNumber: invoice.paymentAccountNumber, paymentQrUrl: invoice.paymentQrUrl || selectedAccount.paymentQrUrl }
     : selectedAccount;
   const displaySequence = isInvoice1 || isFull ? 1 : (invoice.sequenceNumber || (isBalance ? 2 : 3));
-  const totalTravellers = snapshot?.totalPassengerCount ?? (tracking.passengerCount + addedPassengerCount(tracking));
+  const currentTotalTravellers = totalPackagePassengerCount(tracking);
+  const totalTravellers = (isBalance || isFull)
+    ? currentTotalTravellers
+    : (snapshot?.totalPassengerCount ?? currentTotalTravellers);
   const invoicePassengerNames = ticketBatch?.passengerNames || [];
 
   async function updateStatus(next: PaymentStageStatus) {

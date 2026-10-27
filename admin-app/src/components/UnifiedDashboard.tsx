@@ -15,12 +15,39 @@ interface Props {
 }
 
 export function UnifiedDashboard({ currentUser, trackings, quotations, onOpenPricing, onOpenTracking, onOpenAdmin, onOpenGrowth, onLogout }: Props) {
-  const stats = useMemo(() => ({
-    active: trackings.filter((x) => !['lost','completed'].includes(x.status)).length,
-    won: trackings.filter((x) => x.status === 'won').length,
-    quoteSent: trackings.filter((x) => x.status === 'quote_sent').length,
-    quotes: quotations.length,
-  }), [trackings, quotations]);
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const buddhistYear = currentYear + 543;
+  const todayKey = `${currentYear}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  const stats = useMemo(() => {
+    const annualTrips = trackings.filter((item) => {
+      if (item.status === 'lost' || !item.travelStartDate) return false;
+      return Number(item.travelStartDate.slice(0, 4)) === currentYear;
+    });
+    const activePassengerCount = (item: CustomerTracking) => {
+      const original = Math.max(0, Number(item.passengerCount || 0));
+      const added = (item.travelerAdditions || [])
+        .filter((entry) => entry.status !== 'cancelled')
+        .reduce((sum, entry) => sum + Math.max(0, Number(entry.passengerCount || 0)), 0);
+      return original + added;
+    };
+    const yearPassengers = annualTrips.reduce((sum, item) => sum + activePassengerCount(item), 0);
+    const yearTraveled = annualTrips
+      .filter((item) => item.travelStartDate <= todayKey)
+      .reduce((sum, item) => sum + activePassengerCount(item), 0);
+    const yearUpcoming = Math.max(0, yearPassengers - yearTraveled);
+
+    return {
+      active: trackings.filter((x) => !['lost','completed'].includes(x.status)).length,
+      won: trackings.filter((x) => x.status === 'won').length,
+      quoteSent: trackings.filter((x) => x.status === 'quote_sent').length,
+      quotes: quotations.length,
+      yearPassengers,
+      yearTraveled,
+      yearUpcoming,
+    };
+  }, [trackings, quotations, currentYear, todayKey]);
 
   return <div className="unified-shell">
     <header className="unified-topbar">
@@ -39,6 +66,7 @@ export function UnifiedDashboard({ currentUser, trackings, quotations, onOpenPri
         <article><span>ส่งใบเสนอราคาแล้ว</span><strong>{stats.quoteSent}</strong><small>Quote sent</small></article>
         <article><span>ปิดการขาย</span><strong>{stats.won}</strong><small>Won customers</small></article>
         <article><span>ใบเสนอราคาทั้งหมด</span><strong>{stats.quotes}</strong><small>Quotation archive</small></article>
+        <article><span>ผู้เดินทางปี {buddhistYear}</span><strong>{stats.yearPassengers}</strong><small>เดินทางแล้ว {stats.yearTraveled} · รอเดินทาง {stats.yearUpcoming} ท่าน</small></article>
       </section>
 
       <section className="unified-modules">

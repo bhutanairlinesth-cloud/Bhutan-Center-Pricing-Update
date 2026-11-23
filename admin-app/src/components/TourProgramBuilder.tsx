@@ -18,7 +18,8 @@ type Props = {
   onDeleteFestival: (id: string) => Promise<void>;
 };
 
-const CITY_OPTIONS = ['Paro', 'Thimphu', 'Punakha', 'Gangtey', 'Haa'];
+const MAIN_CITY_OPTIONS = ['Paro', 'Thimphu', 'Punakha', 'Gangtey'];
+const CATALOG_CITY_OPTIONS = ['Paro', 'Thimphu', 'Punakha', 'Gangtey', 'Haa'];
 
 const uid = (prefix: string) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
@@ -454,7 +455,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, attractio
         <label className="field"><span>ระดับโรงแรม</span><select value={editing.hotelCategory} onChange={(e) => set('hotelCategory', e.target.value as HotelCategory)}><option>3 Stars</option><option>4 Stars</option><option>5 Stars</option></select></label>
         <div className="field">
   <span>เมืองหลักในทริป</span>
-  <div className="tour-city-picker">{CITY_OPTIONS.map((city) => <button key={city} type="button" className={editing.cities.includes(city) ? 'active' : ''} onClick={() => toggleCity(city)}>{city}</button>)}</div>
+  <div className="tour-city-picker">{MAIN_CITY_OPTIONS.map((city) => <button key={city} type="button" className={editing.cities.includes(city) ? 'active' : ''} onClick={() => toggleCity(city)}>{city}</button>)}</div>
   <small>เลือกเมืองหลักที่ต้องการเดินทาง: Paro / Thimphu / Punakha / Gangtey</small>
 </div>
 <div className="field">
@@ -469,7 +470,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, attractio
           <span>สถานที่ที่ลูกค้าต้องการไปเป็นพิเศษ</span>
           <small>ติ๊กเฉพาะจุดที่ลูกค้าระบุ ระบบจะเพิ่มเมืองและจัดวันให้เอง โดยไม่ใส่สถานที่ซ้ำ</small>
           <div className="tour-required-grid">
-            {CITY_OPTIONS.map((city) => {
+            {CATALOG_CITY_OPTIONS.map((city) => {
               const cityItems = attractions.filter((item) => item.city === city && item.isActive);
               if (!cityItems.length) return null;
               return <div className="tour-required-city" key={city}>
@@ -491,7 +492,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, attractio
         <button type="button" className="ghost-button" onClick={() => setCatalogOpen((value) => !value)}>{catalogOpen ? 'ซ่อนคลัง' : 'จัดการคลังสถานที่'}</button>
       </div>
       {catalogOpen && <div className="tour-catalog-body">
-        <div className="tour-city-picker">{CITY_OPTIONS.map((city) => <button type="button" key={city} className={catalogCity === city ? 'active' : ''} onClick={() => setCatalogCity(city)}>{city}</button>)}</div>
+        <div className="tour-city-picker">{CATALOG_CITY_OPTIONS.map((city) => <button type="button" key={city} className={catalogCity === city ? 'active' : ''} onClick={() => setCatalogCity(city)}>{city}</button>)}</div>
         <div className="tour-catalog-add">
           <label className="field"><span>ชื่อสถานที่</span><input value={newAttraction.name} onChange={(e) => setNewAttraction((prev) => ({ ...prev, name: e.target.value }))} placeholder="เช่น Dumtse Lhakhang"/></label>
           <label className="field"><span>ประเภท</span><select value={newAttraction.category} onChange={(e) => setNewAttraction((prev) => ({ ...prev, category: e.target.value }))}><option>Dzong</option><option>Temple</option><option>Museum</option><option>Nature</option><option>Viewpoint</option><option>Culture</option><option>Shopping</option><option>Other</option></select></label>

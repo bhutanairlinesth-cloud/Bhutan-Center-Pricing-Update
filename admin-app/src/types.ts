@@ -65,6 +65,34 @@ export interface TourPackage {
 
 export type TourProgramStatus = 'draft' | 'final';
 
+export interface TourAttraction {
+  id: string;
+  city: string;
+  name: string;
+  category: string;
+  durationMinutes: number;
+  description: string;
+  imageUrl: string;
+  isActive: boolean;
+  isFestivalVenue: boolean;
+  sortOrder: number;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TourFestival {
+  id: string;
+  name: string;
+  city: string;
+  venueAttractionId: string;
+  description: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TourProgramFlight {
   flightNo: string;
   departureAirport: string;

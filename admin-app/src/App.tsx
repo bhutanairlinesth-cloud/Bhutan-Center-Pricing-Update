@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { database } from './db/database';
 import { fetchProfile, isSupabaseConfigured, supabaseAuth } from './lib/supabase';
-import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, TourProgram, User } from './types';
+import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourAttraction, TourFestival, TourPackage, TourProgram, User } from './types';
 import { Login } from './components/Login';
 import { FrontOffice } from './components/FrontOffice';
 import { Admin } from './components/Admin';
@@ -47,6 +47,8 @@ export default function App() {
   const [payments, setPayments] = useState<PaymentTransaction[]>([]);
   const [quotations, setQuotations] = useState<QuotationRecord[]>([]);
   const [tourPrograms, setTourPrograms] = useState<TourProgram[]>([]);
+  const [tourAttractions, setTourAttractions] = useState<TourAttraction[]>([]);
+  const [tourFestivals, setTourFestivals] = useState<TourFestival[]>([]);
   const [workspace, setWorkspace] = useState<Workspace>(() => workspaceFromPath(typeof window !== 'undefined' ? window.location.pathname : '/admin'));
   const [currentPath, setCurrentPath] = useState(() => typeof window !== 'undefined' ? window.location.pathname : '/admin');
   const [loading, setLoading] = useState(true);
@@ -96,8 +98,8 @@ export default function App() {
   async function loadData(showLoading = true) {
     if (showLoading) setLoading(true);
     try {
-      const [nextSettings, nextHotels, nextPackages, nextUsers, nextTrackings, nextInvoices, nextPayments, nextQuotations, nextTourPrograms] = await Promise.all([
-        database.getSettings(), database.getHotels().catch(() => []), database.getPackages(), database.getUsers(), database.getTrackings(), database.getInvoices(), database.getPaymentTransactions(), database.getQuotations(), database.getTourPrograms(),
+      const [nextSettings, nextHotels, nextPackages, nextUsers, nextTrackings, nextInvoices, nextPayments, nextQuotations, nextTourPrograms, nextTourAttractions, nextTourFestivals] = await Promise.all([
+        database.getSettings(), database.getHotels().catch(() => []), database.getPackages(), database.getUsers(), database.getTrackings(), database.getInvoices(), database.getPaymentTransactions(), database.getQuotations(), database.getTourPrograms(), database.getTourAttractions(), database.getTourFestivals(),
       ]);
       setSettings(nextSettings);
       setHotels(nextHotels);
@@ -108,6 +110,8 @@ export default function App() {
       setPayments(nextPayments);
       setQuotations(nextQuotations);
       setTourPrograms(nextTourPrograms);
+      setTourAttractions(nextTourAttractions);
+      setTourFestivals(nextTourFestivals);
     } catch (error: any) {
       notify(`${t('error')}: ${error?.message || 'Unknown error'}`, 'error');
     } finally { if (showLoading) setLoading(false); }
@@ -230,6 +234,10 @@ export default function App() {
   const saveQuotation = async (value: QuotationRecord) => run(async () => { await database.saveQuotation(value); setQuotations(await database.getQuotations()); }, 'บันทึกใบเสนอราคาเรียบร้อยแล้ว');
   const deleteQuotation = async (id: string) => run(async () => { await database.deleteQuotation(id); setQuotations(await database.getQuotations()); }, t('deleted'));
   const saveTourProgram = async (value: TourProgram) => run(async () => { await database.saveTourProgram(value); setTourPrograms(await database.getTourPrograms()); }, 'บันทึกโปรแกรมทัวร์เรียบร้อยแล้ว');
+  const saveTourAttraction = async (value: TourAttraction) => run(async () => { await database.saveTourAttraction(value); setTourAttractions(await database.getTourAttractions()); }, 'บันทึกสถานที่เรียบร้อยแล้ว');
+  const deleteTourAttraction = async (id: string) => run(async () => { await database.deleteTourAttraction(id); setTourAttractions(await database.getTourAttractions()); }, t('deleted'));
+  const saveTourFestival = async (value: TourFestival) => run(async () => { await database.saveTourFestival(value); setTourFestivals(await database.getTourFestivals()); }, 'บันทึกเทศกาลเรียบร้อยแล้ว');
+  const deleteTourFestival = async (id: string) => run(async () => { await database.deleteTourFestival(id); setTourFestivals(await database.getTourFestivals()); }, t('deleted'));
   const deleteTourProgram = async (id: string) => run(async () => { await database.deleteTourProgram(id); setTourPrograms(await database.getTourPrograms()); }, t('deleted'));
   const deleteTracking = async (id: string) => run(async () => { await database.deleteTracking(id); setTrackings(await database.getTrackings()); setInvoices(await database.getInvoices()); setPayments(await database.getPaymentTransactions()); }, t('deleted'));
   const saveInvoice = async (value: PaymentInvoice) => run(async () => { await database.saveInvoice(value); setInvoices(await database.getInvoices()); });
@@ -258,7 +266,7 @@ export default function App() {
     {currentUser && settings && <UnifiedBackOfficeShell currentUser={currentUser} settings={settings} workspace={workspace} currentPath={currentPath} onNavigate={(next, path) => navigateWorkspace(next, path)} onLogout={logout}>
       {workspace === 'dashboard' && <UnifiedDashboard currentUser={currentUser} trackings={trackings} quotations={quotations} onOpenPricing={() => navigateWorkspace('front')} onOpenTracking={() => navigateWorkspace('tracking')} onOpenGrowth={() => navigateWorkspace('growth')} onOpenAdmin={() => navigateWorkspace('admin')} onLogout={logout}/>} 
       {workspace === 'front' && <FrontOffice settings={settings} packages={packages} currentUser={currentUser} onSaveQuotation={saveQuotation} onOpenDashboard={() => navigateWorkspace('dashboard')} onOpenTracking={() => navigateWorkspace('tracking')} onOpenAdmin={() => navigateWorkspace('admin')} onLogout={logout}/>} 
-      {workspace === 'tourProgram' && <TourProgramBuilder currentUser={currentUser} trackings={trackings} programs={tourPrograms} onSave={saveTourProgram} onDelete={deleteTourProgram}/>} 
+      {workspace === 'tourProgram' && <TourProgramBuilder currentUser={currentUser} trackings={trackings} programs={tourPrograms} attractions={tourAttractions} festivals={tourFestivals} onSave={saveTourProgram} onDelete={deleteTourProgram} onSaveAttraction={saveTourAttraction} onDeleteAttraction={deleteTourAttraction} onSaveFestival={saveTourFestival} onDeleteFestival={deleteTourFestival}/>} 
       {workspace === 'tracking' && <CustomerTrackingWorkspace settings={settings} packages={packages} users={users} currentUser={currentUser} trackings={trackings} invoices={invoices} payments={payments} quotations={quotations} onSaveQuotation={saveQuotation} onDeleteQuotation={deleteQuotation} onBack={() => navigateWorkspace('dashboard')} onOpenAdmin={() => navigateWorkspace('admin')} onLogout={logout} onSaveTracking={saveTracking} onDeleteTracking={deleteTracking} onSaveInvoice={saveInvoice} onDeleteInvoice={deleteInvoice} onSavePayment={savePayment} onDeletePayment={deletePayment} onUploadPaymentSlip={uploadPaymentSlip} onGetPaymentSlipUrl={getPaymentSlipUrl} onDeletePaymentSlip={deletePaymentSlip}/>} 
       {workspace === 'admin' && currentUser.role === 'admin' && <Admin
         embedded settings={settings} hotels={hotels} packages={packages} users={users} trackings={trackings} invoices={invoices} payments={payments} currentUser={currentUser} mode={database.mode}

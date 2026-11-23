@@ -1,4 +1,4 @@
-import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, User } from '../types';
+import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, TourProgram, User } from '../types';
 
 const DEFAULT_USERS: User[] = [
   { id: 'usr_1', name: 'OMG Experience Admin', email: 'info@omgexp.com', role: 'admin', createdAt: new Date().toISOString() },
@@ -90,6 +90,7 @@ const KEYS = {
   invoices: 'bhutan_v11_invoices',
   payments: 'bhutan_v12_payments',
   quotations: 'bhutan_v12_10_quotations',
+  tourPrograms: 'bhutan_v13_18_tour_programs',
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -142,6 +143,29 @@ export const mockDb = {
     localStorage.setItem(KEYS.quotations, JSON.stringify(list));
   },
   deleteQuotation(id: string) { localStorage.setItem(KEYS.quotations, JSON.stringify(this.getQuotations().filter((x) => x.id !== id))); },
+
+
+  getTourPrograms: (): TourProgram[] => read<TourProgram[]>(KEYS.tourPrograms, []).map((item) => ({
+    ...item,
+    status: item.status === 'final' ? 'final' : 'draft',
+    cities: item.cities ?? [],
+    outboundFlight: item.outboundFlight ?? { flightNo: '', departureAirport: 'BKK', arrivalAirport: 'PBH', departureTime: '', arrivalTime: '' },
+    inboundFlight: item.inboundFlight ?? { flightNo: '', departureAirport: 'PBH', arrivalAirport: 'BKK', departureTime: '', arrivalTime: '' },
+    options: item.options ?? {},
+    selectedFestivalIds: item.selectedFestivalIds ?? [],
+    days: item.days ?? [],
+    finalizedAt: item.finalizedAt ?? '',
+  })),
+  saveTourProgram(item: TourProgram) {
+    const list = this.getTourPrograms();
+    const index = list.findIndex((x) => x.id === item.id);
+    if (index >= 0) list[index] = item; else list.unshift(item);
+    localStorage.setItem(KEYS.tourPrograms, JSON.stringify(list));
+  },
+  deleteTourProgram(id: string) {
+    localStorage.setItem(KEYS.tourPrograms, JSON.stringify(this.getTourPrograms().filter((x) => x.id !== id)));
+  },
+
 
   getTrackings: (): CustomerTracking[] => read<CustomerTracking[]>(KEYS.trackings, []).map((item): CustomerTracking => ({
     ...item,

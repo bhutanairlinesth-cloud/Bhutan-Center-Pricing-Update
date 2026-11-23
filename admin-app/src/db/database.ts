@@ -1,4 +1,4 @@
-import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, User } from '../types';
+import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, TourProgram, User } from '../types';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { mockDb } from './mockDb';
 
@@ -156,6 +156,59 @@ const packageRow = (pkg: TourPackage) => ({
   updated_at: new Date().toISOString(),
 });
 
+
+
+const mapTourProgram = (row: any): TourProgram => ({
+  id: row.id,
+  trackingId: row.tracking_id || '',
+  customerName: row.customer_name || '',
+  title: row.title || '',
+  status: row.status === 'final' ? 'final' : 'draft',
+  startDate: row.start_date || '',
+  endDate: row.end_date || '',
+  cities: Array.isArray(row.cities) ? row.cities : [],
+  hotelCategory: row.hotel_category || '3 Stars',
+  outboundFlight: row.outbound_flight || { flightNo: '', departureAirport: 'BKK', arrivalAirport: 'PBH', departureTime: '', arrivalTime: '' },
+  inboundFlight: row.inbound_flight || { flightNo: '', departureAirport: 'PBH', arrivalAirport: 'BKK', departureTime: '', arrivalTime: '' },
+  options: row.options && typeof row.options === 'object' ? row.options : {},
+  selectedFestivalIds: Array.isArray(row.selected_festival_ids) ? row.selected_festival_ids : [],
+  days: Array.isArray(row.days) ? row.days : [],
+  guideName: row.guide_name || '',
+  guideContact: row.guide_contact || '',
+  roomType: row.room_type || '',
+  note: row.note || '',
+  createdById: row.created_by_id || '',
+  createdByName: row.created_by_name || '',
+  finalizedAt: row.finalized_at || '',
+  createdAt: row.created_at || new Date().toISOString(),
+  updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
+});
+
+const tourProgramRow = (item: TourProgram) => ({
+  id: item.id,
+  tracking_id: item.trackingId || null,
+  customer_name: item.customerName || '',
+  title: item.title || '',
+  status: item.status === 'final' ? 'final' : 'draft',
+  start_date: item.startDate || null,
+  end_date: item.endDate || null,
+  cities: item.cities || [],
+  hotel_category: item.hotelCategory || '3 Stars',
+  outbound_flight: item.outboundFlight || {},
+  inbound_flight: item.inboundFlight || {},
+  options: item.options || {},
+  selected_festival_ids: item.selectedFestivalIds || [],
+  days: item.days || [],
+  guide_name: item.guideName || '',
+  guide_contact: item.guideContact || '',
+  room_type: item.roomType || '',
+  note: item.note || '',
+  created_by_id: item.createdById || '',
+  created_by_name: item.createdByName || '',
+  finalized_at: item.finalizedAt || null,
+  created_at: item.createdAt,
+  updated_at: new Date().toISOString(),
+});
 
 
 const mapQuotation = (row: any): QuotationRecord => ({
@@ -616,6 +669,26 @@ export const database = {
     const { error } = await supabase.from('tour_packages').delete().eq('id', id);
     if (error) fail(error, 'ลบโปรแกรมทัวร์ไม่สำเร็จ');
   },
+
+
+  async getTourPrograms(): Promise<TourProgram[]> {
+    if (!isSupabaseConfigured) return mockDb.getTourPrograms();
+    const { data, error } = await supabase.from('tour_programs').select('*').order('created_at', { ascending: false });
+    if (error) { if (isMissingTable(error)) return []; fail(error, 'โหลด Tour Program ไม่สำเร็จ'); }
+    return (data || []).map(mapTourProgram);
+  },
+  async saveTourProgram(item: TourProgram): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.saveTourProgram(item);
+    const { data, error } = await supabase.from('tour_programs').upsert(tourProgramRow(item)).select('id').single();
+    if (error) fail(error, 'บันทึก Tour Program ไม่สำเร็จ');
+    if (!data?.id) throw new Error('บันทึก Tour Program ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+  },
+  async deleteTourProgram(id: string): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.deleteTourProgram(id);
+    const { error } = await supabase.from('tour_programs').delete().eq('id', id);
+    if (error) fail(error, 'ลบ Tour Program ไม่สำเร็จ');
+  },
+
 
   async getUsers(): Promise<User[]> {
     if (!isSupabaseConfigured) return mockDb.getUsers();

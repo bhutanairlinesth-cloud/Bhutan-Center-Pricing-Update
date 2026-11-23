@@ -1581,7 +1581,15 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
   const pendingAddedTicketInvoices = pendingTravelerTicketInvoices(currentForm, invoices, payments);
   const addedInvoice1Documents = travelerTicketInvoicesFor(currentForm, invoices);
   const fullPaymentInvoice = invoices.find((invoice) => invoice.trackingId === currentForm.id && invoice.installment === 'full' && invoice.status !== 'cancelled');
-  const fullPaymentPaidInFull = Boolean(fullPaymentInvoice) && (fullPaymentInvoice!.status === 'paid' || invoicePaidAmount(fullPaymentInvoice!.id, payments) >= fullPaymentInvoice!.amount - 0.01);
+  const fullPaymentTransactionsTotal = sumPayments(paymentsFor(currentForm.id, payments), 'full_payment');
+  const fullPaymentDue = fullPaymentInvoice?.amount ?? Math.max(0, customerGrandTotal(currentForm, invoices));
+  const fullPaymentPaidByInvoice = Boolean(fullPaymentInvoice)
+    && (fullPaymentInvoice!.status === 'paid' || invoicePaidAmount(fullPaymentInvoice!.id, payments) >= fullPaymentInvoice!.amount - 0.01);
+  const fullPaymentPaidByTransaction = fullPaymentDue > 0 && fullPaymentTransactionsTotal >= fullPaymentDue - 0.01;
+  const fullPaymentConfirmedInJourney = currentForm.depositStatus === 'paid'
+    && currentForm.balanceStatus === 'paid'
+    && Boolean(currentForm.fullPaymentReceivedAt);
+  const fullPaymentPaidInFull = fullPaymentPaidByInvoice || fullPaymentPaidByTransaction || fullPaymentConfirmedInJourney;
   const originalTicketPaidInFull = (currentForm.paymentPlan || 'installments') === 'full_payment'
     ? fullPaymentPaidInFull
     : ticketPaidAmount(currentForm, payments) >= Math.max(0, currentForm.depositAmount || 0) - 0.01;

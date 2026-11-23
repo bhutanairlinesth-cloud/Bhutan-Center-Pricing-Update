@@ -1,4 +1,4 @@
-import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, TourProgram, User } from '../types';
+import { CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourAttraction, TourFestival, TourPackage, TourProgram, User } from '../types';
 
 const DEFAULT_USERS: User[] = [
   { id: 'usr_1', name: 'OMG Experience Admin', email: 'info@omgexp.com', role: 'admin', createdAt: new Date().toISOString() },
@@ -91,6 +91,8 @@ const KEYS = {
   payments: 'bhutan_v12_payments',
   quotations: 'bhutan_v12_10_quotations',
   tourPrograms: 'bhutan_v13_18_tour_programs',
+  tourAttractions: 'bhutan_v13_19_tour_attractions',
+  tourFestivals: 'bhutan_v13_19_tour_festivals',
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -144,6 +146,24 @@ export const mockDb = {
   },
   deleteQuotation(id: string) { localStorage.setItem(KEYS.quotations, JSON.stringify(this.getQuotations().filter((x) => x.id !== id))); },
 
+
+  getTourAttractions: (): TourAttraction[] => read<TourAttraction[]>(KEYS.tourAttractions, []),
+  saveTourAttraction(item: TourAttraction) {
+    const list = this.getTourAttractions();
+    const index = list.findIndex((x) => x.id === item.id);
+    if (index >= 0) list[index] = item; else list.push(item);
+    localStorage.setItem(KEYS.tourAttractions, JSON.stringify(list));
+  },
+  deleteTourAttraction(id: string) { localStorage.setItem(KEYS.tourAttractions, JSON.stringify(this.getTourAttractions().filter((x) => x.id !== id))); },
+
+  getTourFestivals: (): TourFestival[] => read<TourFestival[]>(KEYS.tourFestivals, []),
+  saveTourFestival(item: TourFestival) {
+    const list = this.getTourFestivals();
+    const index = list.findIndex((x) => x.id === item.id);
+    if (index >= 0) list[index] = item; else list.push(item);
+    localStorage.setItem(KEYS.tourFestivals, JSON.stringify(list));
+  },
+  deleteTourFestival(id: string) { localStorage.setItem(KEYS.tourFestivals, JSON.stringify(this.getTourFestivals().filter((x) => x.id !== id))); },
 
   getTourPrograms: (): TourProgram[] => read<TourProgram[]>(KEYS.tourPrograms, []).map((item) => ({
     ...item,

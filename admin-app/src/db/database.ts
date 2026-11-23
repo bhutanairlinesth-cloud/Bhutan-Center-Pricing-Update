@@ -1,4 +1,4 @@
-import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourPackage, TourProgram, User } from '../types';
+import { CreateSystemUserInput, CustomerTracking, GlobalSettings, Hotel, PaymentInvoice, PaymentTransaction, QuotationRecord, TourAttraction, TourFestival, TourPackage, TourProgram, User } from '../types';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { mockDb } from './mockDb';
 
@@ -156,6 +156,63 @@ const packageRow = (pkg: TourPackage) => ({
   updated_at: new Date().toISOString(),
 });
 
+
+
+const mapTourAttraction = (row: any): TourAttraction => ({
+  id: row.id,
+  city: row.city || 'Paro',
+  name: row.name || '',
+  category: row.category || 'Other',
+  durationMinutes: Number(row.duration_minutes || 90),
+  description: row.description || '',
+  imageUrl: row.image_url || '',
+  isActive: row.is_active !== false,
+  isFestivalVenue: Boolean(row.is_festival_venue),
+  sortOrder: Number(row.sort_order || 0),
+  createdById: row.created_by_id || '',
+  createdAt: row.created_at || new Date().toISOString(),
+  updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
+});
+
+const tourAttractionRow = (item: TourAttraction) => ({
+  id: item.id,
+  city: item.city,
+  name: item.name,
+  category: item.category || 'Other',
+  duration_minutes: Math.max(15, Math.round(item.durationMinutes || 90)),
+  description: item.description || '',
+  image_url: item.imageUrl || '',
+  is_active: item.isActive !== false,
+  is_festival_venue: Boolean(item.isFestivalVenue),
+  sort_order: Math.round(item.sortOrder || 0),
+  created_by_id: item.createdById || '',
+  created_at: item.createdAt || new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+});
+
+const mapTourFestival = (row: any): TourFestival => ({
+  id: row.id,
+  name: row.name || '',
+  city: row.city || 'Paro',
+  venueAttractionId: row.venue_attraction_id || '',
+  description: row.description || '',
+  isActive: row.is_active !== false,
+  sortOrder: Number(row.sort_order || 0),
+  createdAt: row.created_at || new Date().toISOString(),
+  updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
+});
+
+const tourFestivalRow = (item: TourFestival) => ({
+  id: item.id,
+  name: item.name,
+  city: item.city,
+  venue_attraction_id: item.venueAttractionId || null,
+  description: item.description || '',
+  is_active: item.isActive !== false,
+  sort_order: Math.round(item.sortOrder || 0),
+  created_at: item.createdAt || new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+});
 
 
 const mapTourProgram = (row: any): TourProgram => ({
@@ -670,6 +727,39 @@ export const database = {
     if (error) fail(error, 'ลบโปรแกรมทัวร์ไม่สำเร็จ');
   },
 
+
+  async getTourAttractions(): Promise<TourAttraction[]> {
+    if (!isSupabaseConfigured) return mockDb.getTourAttractions();
+    const { data, error } = await supabase.from('tour_attractions').select('*').order('city').order('sort_order').order('name');
+    if (error) { if (isMissingTable(error)) return []; fail(error, 'โหลดคลังสถานที่ไม่สำเร็จ'); }
+    return (data || []).map(mapTourAttraction);
+  },
+  async saveTourAttraction(item: TourAttraction): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.saveTourAttraction(item);
+    const { error } = await supabase.from('tour_attractions').upsert(tourAttractionRow(item));
+    if (error) fail(error, 'บันทึกสถานที่ไม่สำเร็จ');
+  },
+  async deleteTourAttraction(id: string): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.deleteTourAttraction(id);
+    const { error } = await supabase.from('tour_attractions').delete().eq('id', id);
+    if (error) fail(error, 'ลบสถานที่ไม่สำเร็จ');
+  },
+  async getTourFestivals(): Promise<TourFestival[]> {
+    if (!isSupabaseConfigured) return mockDb.getTourFestivals();
+    const { data, error } = await supabase.from('tour_festivals').select('*').order('city').order('sort_order').order('name');
+    if (error) { if (isMissingTable(error)) return []; fail(error, 'โหลดคลังเทศกาลไม่สำเร็จ'); }
+    return (data || []).map(mapTourFestival);
+  },
+  async saveTourFestival(item: TourFestival): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.saveTourFestival(item);
+    const { error } = await supabase.from('tour_festivals').upsert(tourFestivalRow(item));
+    if (error) fail(error, 'บันทึกเทศกาลไม่สำเร็จ');
+  },
+  async deleteTourFestival(id: string): Promise<void> {
+    if (!isSupabaseConfigured) return void mockDb.deleteTourFestival(id);
+    const { error } = await supabase.from('tour_festivals').delete().eq('id', id);
+    if (error) fail(error, 'ลบเทศกาลไม่สำเร็จ');
+  },
 
   async getTourPrograms(): Promise<TourProgram[]> {
     if (!isSupabaseConfigured) return mockDb.getTourPrograms();

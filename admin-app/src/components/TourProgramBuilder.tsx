@@ -12,6 +12,16 @@ type Props = {
 };
 
 const CITY_OPTIONS = ['Paro', 'Thimphu', 'Punakha', 'Haa', 'Gangtey'];
+
+const uid = (prefix: string) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+const isoDate = (date: Date) => date.toISOString().slice(0, 10);
+const addDays = (date: string, offset: number) => {
+  if (!date) return '';
+  const d = new Date(date + 'T12:00:00');
+  d.setDate(d.getDate() + offset);
+  return isoDate(d);
+};
+
 function createProgram(currentUser: User): TourProgram {
   const start = isoDate(new Date());
   const end = addDays(start, 4);

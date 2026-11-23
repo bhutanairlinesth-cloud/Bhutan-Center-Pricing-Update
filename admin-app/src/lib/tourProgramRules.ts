@@ -109,7 +109,8 @@ export function getFestivalCity(options?: Record<string, unknown>): MainCity {
 
 export function programNameFor(totalDays: number, cities: string[], options?: Record<string, unknown>) {
   const standard = STANDARD_CITIES[totalDays];
-  if (getPenultimateProgram(options) === 'haa' || Boolean(options?.includeFestival)) return 'Custom to Bhutan';
+  const hasRequiredAttractions = Array.isArray(options?.requiredAttractionIds) && options.requiredAttractionIds.length > 0;
+  if (getPenultimateProgram(options) === 'haa' || Boolean(options?.includeFestival) || hasRequiredAttractions) return 'Custom to Bhutan';
   if (!standard || !sameCities(cities, standard)) return 'Custom to Bhutan';
   if (totalDays === 4) return 'JOURNEY TO BHUTAN';
   if (totalDays === 5) return 'WONDERS OF BHUTAN';

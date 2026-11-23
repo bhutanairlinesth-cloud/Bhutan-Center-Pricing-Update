@@ -5029,3 +5029,17 @@ textarea{min-height:74px}
   .tour-program-row { padding-left: 16px; }
   .tour-program-open { align-items: flex-start; flex-direction: column; }
 }
+
+.tour-planner-note {
+  min-height: 74px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.tour-planner-note b { color: var(--green-950); font-size: 13px; }
+.tour-planner-note span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.field-error { color: #b3261e !important; font-weight: 700; }

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, FileText, MapPinned, Plus, Printer, Save, Sparkles, Trash2 } from 'lucide-react';
-import { CustomerTracking, HotelCategory, TourProgram, TourProgramDay, User } from '../types';
+import { CustomerTracking, HotelCategory, TourAttraction, TourFestival, TourProgram, TourProgramDay, User } from '../types';
 import { diffTourDays, generateTourProgramDays, getPenultimateProgram, programNameFor, STANDARD_CITIES } from '../lib/tourProgramRules';
 import { dayJourneyLead, storyPlacesForProgram } from '../lib/tourProgramStory';
 
@@ -8,11 +8,17 @@ type Props = {
   currentUser: User;
   trackings: CustomerTracking[];
   programs: TourProgram[];
+  attractions: TourAttraction[];
+  festivals: TourFestival[];
   onSave: (program: TourProgram) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onSaveAttraction: (item: TourAttraction) => Promise<void>;
+  onDeleteAttraction: (id: string) => Promise<void>;
+  onSaveFestival: (item: TourFestival) => Promise<void>;
+  onDeleteFestival: (id: string) => Promise<void>;
 };
 
-const CITY_OPTIONS = ['Paro', 'Thimphu', 'Punakha', 'Gangtey'];
+const CITY_OPTIONS = ['Paro', 'Thimphu', 'Punakha', 'Gangtey', 'Haa'];
 
 const uid = (prefix: string) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
@@ -282,8 +288,11 @@ function openFullProgram(program: TourProgram, autoPrint = false) {
   }
 }
 
-export function TourProgramBuilder({ currentUser, trackings, programs, onSave, onDelete }: Props) {
+export function TourProgramBuilder({ currentUser, trackings, programs, attractions, festivals, onSave, onDelete, onSaveAttraction, onDeleteAttraction, onSaveFestival, onDeleteFestival }: Props) {
   const [editing, setEditing] = useState<TourProgram>(() => programs[0] || createProgram(currentUser));
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogCity, setCatalogCity] = useState('Paro');
+  const [newAttraction, setNewAttraction] = useState({ name: '', category: 'Other', durationMinutes: 90, description: '', isFestivalVenue: false });
   const linkedTracking = useMemo(() => trackings.find((x) => x.id === editing.trackingId), [trackings, editing.trackingId]);
   const canFinalize = Boolean(linkedTracking?.bookingConfirmedAt && (linkedTracking?.visaReceivedAt || linkedTracking?.visaSentAt));
   const totalDays = Math.max(1, diffTourDays(editing.startDate, editing.endDate));
@@ -296,7 +305,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
       const next = { ...prev, ...patch, updatedAt: new Date().toISOString() };
       const total = Math.max(1, diffTourDays(next.startDate, next.endDate));
       const titled = { ...next, title: programNameFor(total, next.cities, next.options) };
-      return { ...titled, days: generateTourProgramDays(titled) };
+      return { ...titled, days: generateTourProgramDays(titled, attractions, festivals) };
     });
   };
 
@@ -323,6 +332,60 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
     const next = editing.cities.includes(city) ? editing.cities.filter((x) => x !== city) : [...editing.cities, city];
     rebuild({ cities: next });
   };
+
+  const requiredAttractionIds = Array.isArray(editing.options.requiredAttractionIds)
+    ? editing.options.requiredAttractionIds.map(String)
+    : [];
+
+  const toggleRequiredAttraction = (id: string) => {
+    const nextIds = requiredAttractionIds.includes(id)
+      ? requiredAttractionIds.filter((item) => item !== id)
+      : [...requiredAttractionIds, id];
+    const requiredCities = attractions.filter((item) => nextIds.includes(item.id)).map((item) => item.city);
+    rebuild({
+      cities: Array.from(new Set([...editing.cities, ...requiredCities])),
+      options: { ...editing.options, requiredAttractionIds: nextIds },
+    });
+  };
+
+  async function addAttraction() {
+    if (!newAttraction.name.trim()) return window.alert('กรุณาระบุชื่อสถานที่');
+    const now = new Date().toISOString();
+    const item: TourAttraction = {
+      id: uid('attraction'),
+      city: catalogCity,
+      name: newAttraction.name.trim(),
+      category: newAttraction.category || 'Other',
+      durationMinutes: Math.max(15, Number(newAttraction.durationMinutes || 90)),
+      description: newAttraction.description.trim(),
+      imageUrl: '',
+      isActive: true,
+      isFestivalVenue: Boolean(newAttraction.isFestivalVenue),
+      sortOrder: attractions.filter((x) => x.city === catalogCity).length * 10 + 10,
+      createdById: currentUser.id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await onSaveAttraction(item);
+    setNewAttraction({ name: '', category: 'Other', durationMinutes: 90, description: '', isFestivalVenue: false });
+  }
+
+  async function addFestivalFromAttraction(attraction: TourAttraction) {
+    const name = window.prompt('ชื่อเทศกาล เช่น Paro Tshechu');
+    if (!name?.trim()) return;
+    const now = new Date().toISOString();
+    await onSaveFestival({
+      id: uid('festival'),
+      name: name.trim(),
+      city: attraction.city,
+      venueAttractionId: attraction.id,
+      description: 'จัดที่ ' + attraction.name,
+      isActive: true,
+      sortOrder: festivals.length * 10 + 10,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
 
   return <div className="admin-stack tour-program-builder">
     <section className="admin-hero tour-program-hero">
@@ -382,7 +445,55 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
   </div>
   <small>{getPenultimateProgram(editing.options) === 'haa' ? 'Day ก่อนกลับ: Paro → Haa → Paro และกลับมาพักคืนสุดท้ายที่ Paro' : 'Day ก่อนกลับ: Paro → Taktsang และพักคืนสุดท้ายที่ Paro'}</small>
 </div>
+        <div className="field">
+          <span>สถานที่ที่ลูกค้าต้องการไปเป็นพิเศษ</span>
+          <small>ติ๊กเฉพาะจุดที่ลูกค้าระบุ ระบบจะเพิ่มเมืองและจัดวันให้เอง โดยไม่ใส่สถานที่ซ้ำ</small>
+          <div className="tour-required-grid">
+            {CITY_OPTIONS.map((city) => {
+              const cityItems = attractions.filter((item) => item.city === city && item.isActive);
+              if (!cityItems.length) return null;
+              return <div className="tour-required-city" key={city}>
+                <b>{city}</b>
+                <div>{cityItems.map((item) => <label key={item.id} className={requiredAttractionIds.includes(item.id) ? 'selected' : ''}>
+                  <input type="checkbox" checked={requiredAttractionIds.includes(item.id)} onChange={() => toggleRequiredAttraction(item.id)}/>
+                  <span>{item.name}<small>{item.durationMinutes} นาที · {item.category}</small></span>
+                </label>)}</div>
+              </div>;
+            })}
+          </div>
+        </div>
       </div>
+    </section>
+
+    <section className="panel-card tour-catalog-card">
+      <div className="panel-heading">
+        <div><span>TRAVEL LIBRARY</span><h3>คลังสถานที่ท่องเที่ยว</h3><p>เพิ่มสถานที่ใหม่ครั้งเดียว แล้วใช้สร้างโปรแกรมลูกค้ารายอื่นได้ต่อ</p></div>
+        <button type="button" className="ghost-button" onClick={() => setCatalogOpen((value) => !value)}>{catalogOpen ? 'ซ่อนคลัง' : 'จัดการคลังสถานที่'}</button>
+      </div>
+      {catalogOpen && <div className="tour-catalog-body">
+        <div className="tour-city-picker">{CITY_OPTIONS.map((city) => <button type="button" key={city} className={catalogCity === city ? 'active' : ''} onClick={() => setCatalogCity(city)}>{city}</button>)}</div>
+        <div className="tour-catalog-add">
+          <label className="field"><span>ชื่อสถานที่</span><input value={newAttraction.name} onChange={(e) => setNewAttraction((prev) => ({ ...prev, name: e.target.value }))} placeholder="เช่น Dumtse Lhakhang"/></label>
+          <label className="field"><span>ประเภท</span><select value={newAttraction.category} onChange={(e) => setNewAttraction((prev) => ({ ...prev, category: e.target.value }))}><option>Dzong</option><option>Temple</option><option>Museum</option><option>Nature</option><option>Viewpoint</option><option>Culture</option><option>Shopping</option><option>Other</option></select></label>
+          <label className="field"><span>เวลาเที่ยวโดยประมาณ</span><input type="number" min="15" step="15" value={newAttraction.durationMinutes} onChange={(e) => setNewAttraction((prev) => ({ ...prev, durationMinutes: Number(e.target.value) }))}/></label>
+          <label className="field"><span>รายละเอียดสั้น ๆ</span><input value={newAttraction.description} onChange={(e) => setNewAttraction((prev) => ({ ...prev, description: e.target.value }))}/></label>
+          <label className="tour-toggle compact"><input type="checkbox" checked={newAttraction.isFestivalVenue} onChange={(e) => setNewAttraction((prev) => ({ ...prev, isFestivalVenue: e.target.checked }))}/><span><b>ใช้เป็นสถานที่จัดเทศกาลได้</b></span></label>
+          <button type="button" className="primary-button" onClick={addAttraction}><Plus/>เพิ่มสถานที่ใน {catalogCity}</button>
+        </div>
+        <div className="tour-catalog-list">
+          {attractions.filter((item) => item.city === catalogCity).map((item) => <div className="tour-catalog-row" key={item.id}>
+            <div><b>{item.name}</b><small>{item.category} · ประมาณ {item.durationMinutes} นาที{item.isFestivalVenue ? ' · รองรับเทศกาล' : ''}</small><span>{item.description}</span></div>
+            <div>
+              {item.isFestivalVenue && <button type="button" className="ghost-button small" onClick={() => addFestivalFromAttraction(item)}>+ ผูกเทศกาล</button>}
+              <button type="button" className="icon-button danger" onClick={() => onDeleteAttraction(item.id)} aria-label="ลบสถานที่"><Trash2/></button>
+            </div>
+          </div>)}
+        </div>
+        {festivals.filter((item) => item.city === catalogCity).length > 0 && <div className="tour-festival-library">
+          <b>เทศกาลใน {catalogCity}</b>
+          {festivals.filter((item) => item.city === catalogCity).map((festival) => <div key={festival.id}><span>{festival.name}</span><small>จัดที่ {attractions.find((item) => item.id === festival.venueAttractionId)?.name || '-'}</small><button type="button" className="icon-button danger" onClick={() => onDeleteFestival(festival.id)}><Trash2/></button></div>)}
+        </div>}
+      </div>}
     </section>
 
     <section className="panel-card">
@@ -405,8 +516,18 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
         <label className="tour-toggle"><input type="checkbox" checked={Boolean(editing.options.includeFestival)} onChange={(e) => rebuild({ options: { ...editing.options, includeFestival: e.target.checked } })}/><span><b>ทริปนี้มีเทศกาลที่ลูกค้าต้องการชม</b><small>ระบบจะล็อกวันและเมืองของเทศกาลก่อน แล้วค่อยจัดเส้นทางและสถานที่เที่ยววันที่เหลือ</small></span></label>
         {Boolean(editing.options.includeFestival) && <>
           <div className="form-grid">
-            <label className="field"><span>ชื่อเทศกาล</span><input value={String(editing.options.festivalName || '')} onChange={(e) => set('options', { ...editing.options, festivalName: e.target.value })}/></label>
-            <label className="field"><span>เมืองที่จัดเทศกาล</span><select value={String(editing.options.festivalCity || 'Paro')} onChange={(e) => rebuild({ options: { ...editing.options, festivalCity: e.target.value } })}>{CITY_OPTIONS.map((city) => <option key={city} value={city}>{city}</option>)}</select></label>
+            <label className="field"><span>เลือกเทศกาล</span><select value={editing.selectedFestivalIds[0] || ''} onChange={(e) => {
+              const festival = festivals.find((item) => item.id === e.target.value);
+              rebuild({
+                selectedFestivalIds: e.target.value ? [e.target.value] : [],
+                options: {
+                  ...editing.options,
+                  festivalName: festival?.name || '',
+                  festivalCity: festival?.city || 'Paro',
+                },
+              });
+            }}><option value="">— เลือกจากคลังเทศกาล —</option>{festivals.filter((item) => item.isActive).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.city} · {attractions.find((x) => x.id === item.venueAttractionId)?.name || '-'}</option>)}</select></label>
+            <label className="field"><span>สถานที่จัด</span><input readOnly value={attractions.find((item) => item.id === festivals.find((festival) => festival.id === editing.selectedFestivalIds[0])?.venueAttractionId)?.name || 'เลือกเทศกาลก่อน'}/><small>เมืองและสถานที่จัดจะถูกล็อกอัตโนมัติจากคลังเทศกาล</small></label>
           </div>
           <div className="form-grid">
             <label className="field"><span>วันที่เทศกาล</span><input type="date" min={editing.startDate || undefined} max={editing.endDate || undefined} value={festivalDate} onChange={(e) => rebuild({ options: { ...editing.options, festivalDate: e.target.value } })}/>{!festivalDateInTrip && <small className="field-error">วันที่เทศกาลอยู่นอกช่วงเดินทาง กรุณาเลือกวันที่ภายในทริป</small>}</label>

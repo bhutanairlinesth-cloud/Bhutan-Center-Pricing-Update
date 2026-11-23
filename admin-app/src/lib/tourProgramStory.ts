@@ -3,7 +3,7 @@ import { TourProgramDay } from '../types';
 export type StoryPlace = {
   key: string;
   title: string;
-  subtitle: string;
+  eyebrow: string;
   story: string;
   image: string;
 };
@@ -14,156 +14,237 @@ const commons = (fileName: string) =>
 export const STORY_PLACES: StoryPlace[] = [
   {
     key: 'paro-airport',
-    title: 'พาโร',
-    subtitle: 'PARO · THE GATEWAY TO BHUTAN',
-    story: 'ประตูแรกของการเดินทางคือพาโร เมืองในหุบเขาที่โอบล้อมด้วยภูเขาสูง และเป็นที่ตั้งของสนามบินนานาชาติของภูฏาน จากตรงนี้การเดินทางของเราจะค่อย ๆ ลึกเข้าไปสู่เมืองหลวง หุบเขา และเรื่องราวของอาณาจักรแห่งความสุข',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Bhutan_Airlines_Airbus_A319_%28A5-BAC%29_at_Paro_Airport.jpg/1920px-Bhutan_Airlines_Airbus_A319_%28A5-BAC%29_at_Paro_Airport.jpg',
+    title: 'Arrival in Paro',
+    eyebrow: 'PARO · THE GATEWAY TO BHUTAN',
+    story: 'การเดินทางเริ่มต้นที่พาโร เมืองในหุบเขาที่เป็นประตูทางอากาศของภูฏาน หลังผ่านพิธีการตรวจคนเข้าเมือง เราจะพบไกด์ท้องถิ่นและเริ่มทำความรู้จักประเทศนี้อย่างค่อยเป็นค่อยไป ก่อนเดินทางต่อสู่ทิมพู',
+    image: commons('Bhutan Airlines Airbus A319 (A5-BAC) at Paro Airport.jpg'),
   },
   {
     key: 'rinpung',
     title: 'Rinpung Dzong',
-    subtitle: 'ป้อมปราการแห่งพาโร',
-    story: 'ก่อนออกจากพาโร เราจะได้รู้จัก Rinpung Dzong ป้อม–อารามสำคัญที่ยืนอยู่ริมแม่น้ำพาโร สถาปัตยกรรมขนาดใหญ่และลานภายในทำให้เห็นว่าศาสนา การปกครอง และวิถีชีวิตของภูฏานเชื่อมโยงกันอย่างไร',
-    image: 'https://cdn1.tripoto.com/media/filter/nxxl/img/271519/TripDocument/1554273918_batch_paro_dzong.jpg.webp',
+    eyebrow: 'PARO · FORTRESS & MONASTERY',
+    story: 'Rinpung Dzong คือหนึ่งในสัญลักษณ์สำคัญของพาโร ป้อม–อารามขนาดใหญ่ที่สะท้อนความสัมพันธ์ระหว่างศาสนา การบริหาร และสถาปัตยกรรมดั้งเดิมของภูฏานได้ชัดเจน',
+    image: commons('Rinpung Dzong, Paro, Bhutan.jpg'),
   },
   {
-    key: 'thimphu',
-    title: 'ทิมพู',
-    subtitle: 'THIMPHU · THE CAPITAL',
-    story: 'จากพาโร เราจะเดินทางสู่ทิมพู เมืองหลวงปัจจุบันของภูฏาน เมืองนี้มีทั้งความร่วมสมัยและวัฒนธรรมดั้งเดิมอยู่ด้วยกัน เราจะได้เห็นชีวิตประจำวันของชาวภูฏานควบคู่ไปกับสถานที่สำคัญของประเทศ',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/Tashichho_Dzong_2012-11-19.jpg/1920px-Tashichho_Dzong_2012-11-19.jpg',
+    key: 'national-museum',
+    title: 'National Museum',
+    eyebrow: 'PARO · TA DZONG',
+    story: 'Ta Dzong ซึ่งเคยทำหน้าที่เป็นหอเฝ้าระวัง ปัจจุบันเป็นพิพิธภัณฑสถานแห่งชาติ จุดนี้ช่วยให้เราเห็นภาพรวมของประวัติศาสตร์ ศิลปะ และวิถีชีวิต ก่อนออกเดินทางไปยังเมืองถัดไป',
+    image: commons('National Museum of Bhutan 01.jpg'),
   },
   {
     key: 'buddha',
     title: 'Buddha Dordenma',
-    subtitle: 'พระใหญ่เหนือหุบเขาทิมพู',
-    story: 'บนเนินเขาเหนือเมืองทิมพูคือ Buddha Dordenma พระพุทธรูปขนาดใหญ่ที่มองเห็นได้จากหลายมุมของเมือง ที่นี่ไม่ใช่เพียงจุดถ่ายภาพ แต่ยังเป็นจุดที่ทำให้เราได้มองย้อนกลับไปเห็นทั้งเมืองและหุบเขาทิมพูในภาพเดียว',
-    image: 'https://foto.soiono.com/fotos_de_viaje/viaje_a_Butan/butan-gran-buda-thimphu.jpg',
+    eyebrow: 'THIMPHU · ABOVE THE CAPITAL',
+    story: 'พระพุทธรูปขนาดใหญ่เหนือหุบเขาทิมพูเป็นหนึ่งในจุดชมวิวที่ทำให้เห็นเมืองหลวงในภาพกว้าง พร้อมสัมผัสบรรยากาศของศรัทธาที่อยู่คู่กับชีวิตร่วมสมัยของเมือง',
+    image: commons('Thimphu-Buddha Dordenma-02-2015-gje.jpg'),
+  },
+  {
+    key: 'takin',
+    title: 'Motithang Takin Preserve',
+    eyebrow: 'THIMPHU · NATIONAL ANIMAL',
+    story: 'ก่อนออกจากทิมพู เราจะได้พบ “ทาคิน” สัตว์ประจำชาติของภูฏาน อีกหนึ่งรายละเอียดเล็ก ๆ ที่ทำให้การเดินทางไม่ได้มีเพียงวัดและภูเขา แต่ยังเชื่อมโยงกับธรรมชาติของประเทศด้วย',
+    image: commons('Takins at Motithang Takin Preserve, Bhutan.jpg'),
   },
   {
     key: 'dochula',
     title: 'Dochula Pass',
-    subtitle: '108 เจดีย์บนเส้นทางสู่พูนาคา',
-    story: 'ออกจากทิมพู เราจะค่อย ๆ ไต่ระดับขึ้นสู่ Dochula Pass จุดพักสำคัญบนเส้นทางไปพูนาคา ที่นี่มีเจดีย์ Druk Wangyal 108 องค์เรียงตัวอยู่บนสันเขา และในวันที่อากาศเปิดสามารถมองเห็นแนวเทือกเขาหิมาลัยทอดยาวอยู่เบื้องหน้า',
-    image: 'https://www.odysseyexplore.com/tours/images/big/big-bhutan-1.jpg',
+    eyebrow: 'BETWEEN THIMPHU & PUNAKHA',
+    story: 'เส้นทางจากทิมพูสู่พูนาคาค่อย ๆ ไต่ระดับขึ้นสู่ Dochula Pass ที่มีเจดีย์ Druk Wangyal 108 องค์เรียงตัวบนสันเขา และในวันที่อากาศเปิดสามารถมองเห็นแนวเทือกเขาหิมาลัยได้จากจุดนี้',
+    image: commons('Some of 108 chortens, Dochula pass.jpg'),
   },
   {
     key: 'chimi',
     title: 'Chimi Lhakhang',
-    subtitle: 'วัดแห่งเรื่องเล่าของ Divine Madman',
-    story: 'ก่อนเข้าสู่ใจกลางพูนาคา เราจะแวะ Chimi Lhakhang วัดเล็กกลางหุบเขาที่มีเรื่องเล่าเฉพาะตัวเกี่ยวกับ Drukpa Kunley หรือ Divine Madman เป็นอีกหนึ่งสถานที่ที่สะท้อนว่าศรัทธาและอารมณ์ขันสามารถอยู่ร่วมกันในวัฒนธรรมภูฏานได้อย่างน่าสนใจ',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Punakha_dzong.jpg/1920px-Punakha_dzong.jpg',
+    eyebrow: 'PUNAKHA · LOCAL FAITH & STORIES',
+    story: 'Chimi Lhakhang เป็นวัดเล็กกลางหุบเขาที่มีเรื่องเล่าเฉพาะตัวเกี่ยวกับ Drukpa Kunley หรือ Divine Madman ทำให้ช่วงนี้ของทริปมีทั้งมิติทางศาสนา เรื่องเล่า และวิถีชุมชน',
+    image: commons('Chimi Lhakhang, Bhutan 01.jpg'),
   },
   {
-    key: 'punakha',
-    title: 'พูนาคา',
-    subtitle: 'PUNAKHA · THE OLD CAPITAL',
-    story: 'จากนั้นเราจะเข้าสู่พูนาคา อดีตเมืองหลวงของภูฏาน เมืองนี้มีอากาศอบอุ่นกว่าเมืองบนที่สูง และมี Punakha Dzong ตั้งเด่นอยู่ตรงจุดบรรจบของแม่น้ำ Pho Chhu และ Mo Chhu ป้อมแห่งนี้เป็นหนึ่งในสถานที่สำคัญที่สุดในประวัติศาสตร์ของประเทศ',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Punakha_dzong.jpg/1920px-Punakha_dzong.jpg',
+    key: 'punakha-dzong',
+    title: 'Punakha Dzong',
+    eyebrow: 'PUNAKHA · THE OLD CAPITAL',
+    story: 'พูนาคาเคยเป็นเมืองหลวงของภูฏาน และ Punakha Dzong คือหัวใจของเรื่องราวนั้น ป้อมขนาดใหญ่ตั้งอยู่ตรงจุดบรรจบของแม่น้ำ Pho Chhu และ Mo Chhu และยังคงเป็นหนึ่งในสถานที่สำคัญที่สุดของประเทศ',
+    image: commons('Punakha dzong.jpg'),
   },
   {
-    key: 'bridge',
+    key: 'punakha-bridge',
     title: 'Punakha Suspension Bridge',
-    subtitle: 'สะพานแขวนเหนือสายน้ำ',
-    story: 'หลังชม Punakha Dzong เราจะออกไปสัมผัสบรรยากาศของหุบเขาที่สะพานแขวนพูนาคา สะพานยาวเหนือสายน้ำที่เต็มไปด้วยธงมนต์ เป็นช่วงเวลาที่จังหวะการเดินทางช้าลงและได้เห็นภูฏานในมุมของธรรมชาติและชุมชน',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Punakha_dzong.jpg/1920px-Punakha_dzong.jpg',
-  },
-  {
-    key: 'gangtey',
-    title: 'กังเต / โฟบจิกา',
-    subtitle: 'GANGTEY · THE QUIET VALLEY',
-    story: 'หากทริปพาเราไปไกลขึ้น เราจะเข้าสู่กังเตและหุบเขาโฟบจิกา พื้นที่ที่ต่างจากเมืองหลักอย่างชัดเจน ทั้งทุ่งหญ้า ป่าสน และหมู่บ้านเล็ก ๆ ทำให้วันนี้เป็นวันที่เงียบและใกล้ธรรมชาติที่สุดของการเดินทาง',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Phobjikha_valley.jpg/1920px-Phobjikha_valley.jpg',
+    eyebrow: 'PUNAKHA · ACROSS THE RIVER',
+    story: 'หลังชมซอง เราจะเปลี่ยนจังหวะมาเดินบนสะพานแขวนเหนือสายน้ำ ท่ามกลางธงมนต์และทิวทัศน์หุบเขา เป็นช่วงที่ได้สัมผัสภูฏานในมุมที่เบาและเป็นธรรมชาติมากขึ้น',
+    image: commons('Punakha 3-69, suspension bridge.jpg'),
   },
   {
     key: 'simtokha',
     title: 'Simtokha Dzong',
-    subtitle: 'ซองเก่าแก่บนเส้นทางกลับ',
-    story: 'ระหว่างทางกลับสู่พาโร เราจะแวะ Simtokha Dzong หนึ่งในซองเก่าแก่ของภูฏาน จุดนี้ทำหน้าที่เหมือนบทเชื่อมจากเมืองหลวงกลับสู่หุบเขาพาโร ก่อนที่เราจะเข้าสู่ช่วงท้ายของทริป',
-    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/Tashichho_Dzong_2012-11-19.jpg/1920px-Tashichho_Dzong_2012-11-19.jpg',
+    eyebrow: 'RETURNING WEST · HISTORIC DZONG',
+    story: 'ระหว่างเดินทางกลับจากฝั่งพูนาคา เราจะแวะ Simtokha Dzong หนึ่งในซองเก่าแก่ของภูฏาน เป็นจุดเชื่อมจากเมืองหลวงกลับสู่หุบเขาพาโร ก่อนเข้าสู่ช่วงท้ายของทริป',
+    image: commons('Simtokha Dzong, Bhutan 01.jpg'),
+  },
+  {
+    key: 'paro-valley',
+    title: 'Back to Paro Valley',
+    eyebrow: 'PARO · THE FINAL CHAPTER',
+    story: 'เมื่อกลับเข้าสู่พาโร บรรยากาศของทริปจะเริ่มช้าลงอีกครั้ง เมืองในหุบเขาแห่งนี้ถูกวางไว้เป็นฐานของคืนสุดท้าย เพื่อให้วันสำคัญก่อนกลับและการเดินทางสู่สนามบินเป็นไปอย่างสบายที่สุด',
+    image: commons('The view of PARO Valley, Bhutan from above (34225469743).jpg'),
   },
   {
     key: 'taktsang',
     title: 'Taktsang · Tiger’s Nest',
-    subtitle: 'ไฮไลต์ของการเดินทาง',
-    story: 'วันก่อนเดินทางกลับถูกเก็บไว้สำหรับ Taktsang หรือ Tiger’s Nest วัดที่เกาะอยู่บนหน้าผาเหนือหุบเขาพาโร เราจะค่อย ๆ เดินขึ้นตามเส้นทาง ผ่านป่าสน จุดพัก และ Taktsang Cafeteria ก่อนถึงวัด ไฮไลต์วันนี้ไม่ใช่แค่ปลายทาง แต่คือประสบการณ์ตลอดเส้นทางขึ้นและลง',
-    image: '/images/tiger-nest-paro-real.png',
+    eyebrow: 'PARO · THE ICONIC HIGHLIGHT',
+    story: 'วันก่อนเดินทางกลับถูกเก็บไว้สำหรับ Taktsang หรือ Tiger’s Nest วัดที่เกาะอยู่บนหน้าผาเหนือหุบเขาพาโร เราจะใช้เวลาวันนี้กับเส้นทางเดินเขาอย่างเต็มที่ ไม่เร่ง และกลับมาพักที่พาโรในช่วงเย็น',
+    image: commons('Bhutan-Paro-116-Taktshang-Tigernest-gje.jpg'),
   },
   {
-    key: 'haa',
-    title: 'Haa Valley',
-    subtitle: 'ทางเลือกสำหรับวันก่อนกลับ',
-    story: 'หากไม่ขึ้นทักซัง เราสามารถเปลี่ยนวันก่อนกลับเป็นเส้นทาง Haa Valley ผ่าน Chele La สู่หุบเขาฮาที่เงียบสงบกว่าเมืองหลัก ช่วงเย็นเราจะเดินทางกลับมาพักที่พาโร เพื่อเตรียมตัวเดินทางสู่สนามบินในวันรุ่งขึ้น',
-    image: 'https://www.ampersandtravel.com/media/845774/haa-valley-bhutan-3.jpg?height=534&mode=crop&quality=95&width=820',
+    key: 'taktsang-trail',
+    title: 'The Trail to Tiger’s Nest',
+    eyebrow: 'TAKTSANG · THE JOURNEY IS PART OF THE STORY',
+    story: 'เสน่ห์ของวันนี้ไม่ได้อยู่เฉพาะปลายทาง ระหว่างทางเราจะเดินผ่านป่าสน จุดพัก และ Taktsang Cafeteria ก่อนค่อย ๆ เข้าใกล้วัดบนหน้าผา ประสบการณ์ตลอดเส้นทางคือส่วนสำคัญของความทรงจำวันนี้',
+    image: commons('On the way to Paro Taktsang - The Tiger Nest (14).jpg'),
   },
   {
     key: 'kyichu',
     title: 'Kyichu Lhakhang',
-    subtitle: 'ปิดท้ายด้วยความสงบที่พาโร',
-    story: 'ก่อนอำลาภูฏาน เราจะแวะ Kyichu Lhakhang วัดเก่าแก่ในหุบเขาพาโร บรรยากาศของวัดสงบและเรียบง่าย เหมาะสำหรับเป็นช่วงสุดท้ายของทริปก่อนเดินทางไปสนามบิน',
-    image: 'https://assets.atlasobscura.com/media/W1siZiIsInVwbG9hZHMvcGxhY2VfaW1hZ2VzLzNhNmUyMmM1LTg0MTEtNDI5Ni1hM2YyLWNmOGJiODk4NjQ1MjI2OTA1YzQ1MzgwOTlkOWMzY19iaHV0YW4gdGVtcGxlLmpwZyJdLFsicCIsInRodW1iIiwiMTIwMHg-Il0sWyJwIiwiY29udmVydCIsIi1xdWFsaXR5IDgxIC1hdXRvLW9yaWVudCJdXQ/bhutan%20temple.jpg',
+    eyebrow: 'PARO · A QUIET FAREWELL',
+    story: 'เช้าวันสุดท้ายเริ่มด้วยความสงบที่ Kyichu Lhakhang วัดเก่าแก่ในหุบเขาพาโร ก่อนใช้เวลาที่เหลืออย่างสบาย ๆ และเดินทางสู่สนามบินนานาชาติพาโรเพื่อกลับกรุงเทพฯ',
+    image: commons('Bouthan-Paro-temple kyichu lhakhang.JPG'),
+  },
+  {
+    key: 'paro-town',
+    title: 'A Final Glimpse of Paro',
+    eyebrow: 'PARO · BEFORE DEPARTURE',
+    story: 'ช่วงสุดท้ายของทริปเป็นเวลาสำหรับเก็บบรรยากาศเมืองพาโรและเลือกซื้อของที่ระลึกตามอัธยาศัย ก่อนปิดการเดินทางด้วยเส้นทางสั้น ๆ สู่สนามบิน',
+    image: commons('View of Paro from Tenchen Gonpa.jpg'),
+  },
+  {
+    key: 'gangtey-monastery',
+    title: 'Gangtey Monastery',
+    eyebrow: 'GANGTEY · ABOVE PHOBJIKHA',
+    story: 'Gangtey Monastery ตั้งอยู่เหนือหุบเขาโฟบจิกาและเป็นศูนย์กลางทางศาสนาที่สำคัญของพื้นที่ จากบริเวณอารามเราจะเริ่มเห็นภูมิประเทศเปิดกว้างที่ทำให้กังเตแตกต่างจากเมืองหลักอย่างชัดเจน',
+    image: commons('Gangtey Gompa Bhutan.jpg'),
+  },
+  {
+    key: 'phobjikha',
+    title: 'Phobjikha Valley',
+    eyebrow: 'PHOBJIKHA · THE QUIET VALLEY',
+    story: 'หุบเขาโฟบจิกาให้จังหวะการเดินทางที่ช้าลง ทั้งทุ่งหญ้า ป่าสน และพื้นที่ชุ่มน้ำกว้าง ทำให้วันนี้เป็นช่วงที่ใกล้ธรรมชาติและเงียบสงบที่สุดของทริป',
+    image: commons('Phobjikha valley.jpg'),
+  },
+  {
+    key: 'haa',
+    title: 'Haa Valley',
+    eyebrow: 'HAA · A QUIETER ALTERNATIVE',
+    story: 'หากเลือก Haa แทนการขึ้นทักซัง เราจะออกจากพาโรสู่หุบเขาที่เงียบกว่า ใช้เวลาอยู่กับภูมิประเทศและวิถีท้องถิ่น ก่อนเดินทางกลับมาพักที่พาโรในคืนสุดท้ายเช่นเดิม',
+    image: commons('Haa valley, Ha - during LGFC - Bhutan 2019 (1).jpg'),
+  },
+  {
+    key: 'haa-detail',
+    title: 'Across Haa Valley',
+    eyebrow: 'HAA · LANDSCAPE & LOCAL LIFE',
+    story: 'เส้นทาง Haa ให้ภาพภูฏานอีกแบบหนึ่ง—พื้นที่เปิดกว้าง หมู่บ้านเล็ก และภูเขาที่โอบล้อมหุบเขา เหมาะสำหรับผู้ที่อยากใช้วันสุดท้ายก่อนกลับในจังหวะที่สงบกว่า',
+    image: commons('HaaValley.jpg'),
   },
 ];
 
-const containsAny = (haystack: string, terms: string[]) => terms.some((term) => haystack.includes(term));
+const PLACE_BY_KEY = Object.fromEntries(STORY_PLACES.map((place) => [place.key, place])) as Record<string, StoryPlace>;
 
-export function storyPlacesForDay(day: TourProgramDay): StoryPlace[] {
-  const haystack = (day.title + ' ' + day.city + ' ' + day.activities.join(' ')).toLowerCase();
+const normalizedTitle = (day: TourProgramDay) => day.title.toLowerCase().replace(/[–—]/g, '-');
+const activityText = (day: TourProgramDay) => day.activities.join(' ').toLowerCase();
+
+function plannedKeysForDay(day: TourProgramDay): string[] {
+  const title = normalizedTitle(day);
+  const activities = activityText(day);
+
+  if (title.includes('taktsang') || activities.includes('tiger')) return ['taktsang', 'taktsang-trail'];
+  if (title.includes('haa') || activities.includes('haa valley')) return ['haa', 'haa-detail'];
+
+  const isArrival = title.includes('bangkok') && title.indexOf('bangkok') < title.indexOf('paro');
+  if (isArrival) {
+    const keys = ['paro-airport', 'rinpung'];
+    if (activities.includes('national museum')) keys.push('national-museum');
+    if (activities.includes('buddha dordenma')) keys.push('buddha');
+    return keys;
+  }
+
+  const isDeparture = title.includes('bangkok') && title.indexOf('paro') < title.indexOf('bangkok');
+  if (isDeparture) return ['kyichu', 'paro-town'];
+
+  if (title.includes('gangtey') || title.includes('phobjikha') || activities.includes('phobjikha')) {
+    return ['gangtey-monastery', 'phobjikha'];
+  }
+
+  const thimphuToPunakha = title.includes('thimphu') && title.includes('punakha') && title.indexOf('thimphu') < title.indexOf('punakha');
+  if (thimphuToPunakha) {
+    const keys = ['dochula'];
+    if (activities.includes('chimi')) keys.push('chimi');
+    if (activities.includes('punakha dzong')) keys.push('punakha-dzong');
+    if (activities.includes('suspension bridge')) keys.push('punakha-bridge');
+    return keys;
+  }
+
+  const returningToParo = title.includes('paro') && (title.includes('punakha') || title.includes('thimphu'));
+  if (returningToParo) return ['simtokha', 'paro-valley'];
+
   const keys: string[] = [];
+  if (activities.includes('takin')) keys.push('takin');
+  if (activities.includes('dochula')) keys.push('dochula');
+  if (activities.includes('punakha dzong')) keys.push('punakha-dzong');
+  if (activities.includes('simtokha')) keys.push('simtokha');
+  if (activities.includes('kyichu')) keys.push('kyichu');
+  return keys.length ? keys : ['paro-valley'];
+}
 
-  if (containsAny(haystack, ['airport', 'สนามบิน', 'bangkok – paro', 'bangkok - paro'])) keys.push('paro-airport');
-  if (containsAny(haystack, ['rinpung'])) keys.push('rinpung');
-  if (containsAny(haystack, ['thimphu', 'ทิมพู'])) keys.push('thimphu');
-  if (containsAny(haystack, ['buddha dordenma'])) keys.push('buddha');
-  if (containsAny(haystack, ['dochula'])) keys.push('dochula');
-  if (containsAny(haystack, ['chimi'])) keys.push('chimi');
-  if (containsAny(haystack, ['punakha', 'พูนาคา'])) keys.push('punakha');
-  if (containsAny(haystack, ['suspension bridge'])) keys.push('bridge');
-  if (containsAny(haystack, ['gangtey', 'phobjikha', 'กังเต'])) keys.push('gangtey');
-  if (containsAny(haystack, ['simtokha'])) keys.push('simtokha');
-  if (containsAny(haystack, ['taktsang', 'tiger'])) keys.push('taktsang');
-  if (containsAny(haystack, ['haa', 'chele la', 'ฮา'])) keys.push('haa');
-  if (containsAny(haystack, ['kyichu'])) keys.push('kyichu');
+export function storyPlacesForProgram(days: TourProgramDay[]): StoryPlace[][] {
+  const used = new Set<string>();
 
-  const unique = Array.from(new Set(keys))
-    .map((key) => STORY_PLACES.find((item) => item.key === key))
-    .filter((item): item is StoryPlace => Boolean(item));
+  return days.map((day) => {
+    const planned = plannedKeysForDay(day);
+    const selected: StoryPlace[] = [];
 
-  if (unique.length >= 2) return unique.slice(0, 3);
+    for (const key of planned) {
+      if (used.has(key) || !PLACE_BY_KEY[key]) continue;
+      selected.push(PLACE_BY_KEY[key]);
+      used.add(key);
+      if (selected.length === 3) break;
+    }
 
-  const fallbackKey =
-    day.city === 'Punakha' ? 'punakha' :
-    day.city === 'Thimphu' ? 'thimphu' :
-    day.city === 'Gangtey' ? 'gangtey' :
-    day.city === 'Haa' ? 'haa' :
-    'rinpung';
-
-  const fallback = STORY_PLACES.find((item) => item.key === fallbackKey);
-  return fallback ? Array.from(new Set([...unique, fallback])).slice(0, 3) : unique;
+    return selected;
+  });
 }
 
 export function dayJourneyLead(day: TourProgramDay) {
-  const title = day.title.toLowerCase();
-  if (title.includes('bangkok') && title.includes('thimphu')) {
-    return 'เริ่มต้นการเดินทางด้วยการบินเข้าสู่หุบเขาพาโร ก่อนทำความรู้จักภูฏานผ่านเมืองพาโร แล้วค่อยเดินทางต่อสู่ทิมพู เมืองหลวงที่เป็นหัวใจของประเทศในปัจจุบัน';
-  }
-  if (title.includes('thimphu') && title.includes('punakha')) {
-    return 'วันนี้เราจะออกจากเมืองหลวง มุ่งหน้าสู่พูนาคา ระหว่างทางเส้นทางจะค่อย ๆ ไต่ขึ้นสู่ Dochula Pass ก่อนลดระดับลงสู่หุบเขาที่อากาศอบอุ่นกว่า และเข้าสู่อดีตเมืองหลวงของภูฏาน';
-  }
-  if (title.includes('punakha') && title.includes('paro')) {
-    return 'หลังใช้เวลาอยู่ในหุบเขาพูนาคา เราจะเริ่มเดินทางย้อนกลับทางตะวันตก ผ่านทิมพูและจุดสำคัญระหว่างทาง ก่อนกลับเข้าสู่พาโร เพื่อเตรียมเข้าสู่ช่วงไฮไลต์สุดท้ายของทริป';
-  }
-  if (title.includes('gangtey')) {
-    return 'เส้นทางวันนี้พาเราออกจากเมืองหลักเข้าสู่หุบเขาที่เงียบกว่าเดิม ธรรมชาติของกังเตและโฟบจิกาจะเปลี่ยนอารมณ์ของทริปให้ช้าลง ก่อนที่เราจะค่อย ๆ เดินทางกลับสู่เส้นทางหลัก';
-  }
+  const title = normalizedTitle(day);
+
   if (title.includes('taktsang')) {
-    return 'วันนี้คือวันที่เราเก็บไว้ให้กับหนึ่งในภาพจำสำคัญที่สุดของภูฏาน เราจะใช้เวลาอย่างเต็มที่กับเส้นทางเดินขึ้นวัดทักซัง และกลับมาพักที่พาโรในคืนสุดท้ายก่อนเดินทางกลับ';
+    return 'วันนี้คือไฮไลต์สำคัญของการเดินทาง เราจะใช้เวลาอย่างเต็มที่กับเส้นทางเดินขึ้น Taktsang หรือ Tiger’s Nest โดยไม่เร่งรีบ และกลับมาพักที่พาโรในคืนสุดท้ายก่อนเดินทางกลับ';
   }
   if (title.includes('haa')) {
-    return 'วันนี้เราเลือกเส้นทางที่สงบกว่าแทนการขึ้นทักซัง เดินทางจากพาโรผ่าน Chele La สู่ Haa Valley แล้ววกกลับมาพักที่พาโรในช่วงเย็น เพื่อเตรียมตัวเดินทางกลับในวันถัดไป';
+    return 'วันนี้เราเลือกเส้นทางที่สงบกว่าแทนการขึ้นทักซัง เดินทางจากพาโรสู่ Haa Valley ใช้เวลากับภูมิประเทศและวิถีท้องถิ่น ก่อนกลับมาพักที่พาโรในช่วงเย็น';
   }
-  if (title.includes('bangkok')) {
-    return 'เช้าวันสุดท้ายยังมีเวลาให้เราเก็บบรรยากาศของพาโรอีกเล็กน้อย ก่อนปิดการเดินทางที่สนามบินนานาชาติพาโรและบินกลับกรุงเทพฯ';
+
+  const isArrival = title.includes('bangkok') && title.indexOf('bangkok') < title.indexOf('paro');
+  if (isArrival) {
+    return 'เริ่มต้นที่สนามบินนานาชาติพาโร ทำความรู้จักหุบเขาพาโรผ่านสถานที่สำคัญ แล้วค่อยเดินทางต่อสู่ทิมพู เมืองหลวงปัจจุบันของภูฏาน เพื่อพักค้างคืนและเริ่มเข้าสู่จังหวะของประเทศอย่างแท้จริง';
   }
-  return 'วันนี้เราจะเดินทางต่ออย่างค่อยเป็นค่อยไป ใช้เวลาอยู่กับสถานที่สำคัญของเส้นทาง และเก็บเรื่องราวของแต่ละเมืองให้มากกว่าการแวะถ่ายภาพแล้วผ่านไป';
+
+  const isDeparture = title.includes('bangkok') && title.indexOf('paro') < title.indexOf('bangkok');
+  if (isDeparture) {
+    return 'เช้าวันสุดท้ายยังมีเวลาให้เราเก็บบรรยากาศของพาโรอีกเล็กน้อย ก่อนเดินทางสู่สนามบินนานาชาติพาโรและบินกลับกรุงเทพฯ โดยปิดทริปอย่างสบาย ไม่เร่งรีบ';
+  }
+
+  const thimphuToPunakha = title.includes('thimphu') && title.includes('punakha') && title.indexOf('thimphu') < title.indexOf('punakha');
+  if (thimphuToPunakha) {
+    return 'ออกจากทิมพูมุ่งหน้าสู่พูนาคา เส้นทางวันนี้ค่อย ๆ ไต่ขึ้นสู่ Dochula Pass ก่อนลดระดับลงสู่หุบเขาที่อบอุ่นกว่า และเข้าสู่อดีตเมืองหลวงซึ่งมี Punakha Dzong เป็นหัวใจสำคัญของเมือง';
+  }
+
+  if (title.includes('punakha') && title.includes('paro')) {
+    return 'หลังใช้เวลาอยู่ในพูนาคา เราจะเริ่มเดินทางกลับทางตะวันตก ผ่านทิมพูและจุดสำคัญระหว่างทาง ก่อนกลับเข้าสู่หุบเขาพาโร เพื่อพักค้างคืนและเตรียมเข้าสู่ช่วงท้ายของการเดินทาง';
+  }
+
+  if (title.includes('gangtey') || title.includes('phobjikha')) {
+    return 'เส้นทางวันนี้พาเราออกจากเมืองหลักเข้าสู่กังเตและหุบเขาโฟบจิกา พื้นที่ที่เงียบกว่า เปิดกว้างกว่า และทำให้จังหวะของทริปช้าลงอย่างชัดเจน';
+  }
+
+  return 'วันนี้เราเดินทางต่อโดยจัดลำดับสถานที่ให้สอดคล้องกับระยะทางและเวลา เพื่อให้ได้สัมผัสแต่ละพื้นที่อย่างเต็มที่โดยไม่ต้องเร่งจากจุดหนึ่งไปอีกจุดหนึ่ง';
 }

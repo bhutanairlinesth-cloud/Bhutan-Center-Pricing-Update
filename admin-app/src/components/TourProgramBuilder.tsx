@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, FileText, MapPinned, Plus, Printer, Save, Sparkles, Trash2 } from 'lucide-react';
 import { CustomerTracking, HotelCategory, TourProgram, TourProgramDay, User } from '../types';
 import { diffTourDays, generateTourProgramDays, getPenultimateProgram, programNameFor, STANDARD_CITIES } from '../lib/tourProgramRules';
-import { dayJourneyLead, storyPlacesForDay } from '../lib/tourProgramStory';
+import { dayJourneyLead, storyPlacesForProgram } from '../lib/tourProgramStory';
 
 type Props = {
   currentUser: User;
@@ -102,6 +102,7 @@ function activityParagraph(item: string) {
 
 
 
+
 const COVER_IMAGE = '/images/hero-bhutan.png';
 
 function fullProgramHtml(program: TourProgram) {
@@ -118,90 +119,82 @@ function fullProgramHtml(program: TourProgram) {
 
   const flightOut = (program.outboundFlight.flightNo || '-') + '  ' + (program.outboundFlight.departureTime || '-') + ' – ' + (program.outboundFlight.arrivalTime || '-');
   const flightBack = (program.inboundFlight.flightNo || '-') + '  ' + (program.inboundFlight.departureTime || '-') + ' – ' + (program.inboundFlight.arrivalTime || '-');
+  const dayStories = storyPlacesForProgram(program.days);
 
-  const overviewStops = program.days.map((day, index) => {
-    const places = storyPlacesForDay(day);
-    const primary = places[0];
-    return '<div class="overview-stop ' + (index % 2 === 0 ? 'left' : 'right') + '">' +
-      '<div class="overview-copy">' +
-        '<small>DAY ' + day.dayNumber + ' · ' + escapeHtml(formatTravelDate(day.date)) + '</small>' +
-        '<h3>' + escapeHtml(day.title) + '</h3>' +
-        '<p>' + escapeHtml(dayJourneyLead(day)) + '</p>' +
-      '</div>' +
-      '<div class="overview-image"><img src="' + escapeHtml(primary?.image || COVER_IMAGE) + '" alt="' + escapeHtml(primary?.title || day.title) + '"></div>' +
-      '<div class="overview-node">' + (index + 1) + '</div>' +
-    '</div>';
-  }).join('');
+  const overviewRows = program.days.map((day, index) =>
+    '<div class="route-row">' +
+      '<div class="route-no">0' + (index + 1) + '</div>' +
+      '<div class="route-date">' + escapeHtml(formatTravelDate(day.date)) + '</div>' +
+      '<div class="route-copy"><h3>' + escapeHtml(day.title) + '</h3><p>' + escapeHtml(dayJourneyLead(day)) + '</p></div>' +
+    '</div>'
+  ).join('');
 
   const journeyOverview =
-    '<section class="page story-overview">' +
-      '<div class="paper-grain"></div>' +
-      '<header class="editorial-header">' +
-        '<div><img src="/images/bhutan-center-logo.png" alt="Bhutan Center"><span><b>BHUTAN CENTER</b><small>OMG EXPERIENCE</small></span></div>' +
-        '<em>A STORY OF THE JOURNEY</em>' +
+    '<section class="page overview-page">' +
+      '<header class="sheet-header">' +
+        '<div class="brand-lockup"><img src="/images/bhutan-center-logo.png" alt="Bhutan Center"><span><b>BHUTAN CENTER</b><small>OMG EXPERIENCE</small></span></div>' +
+        '<span class="edition">PRIVATE JOURNEY · ' + escapeHtml(duration) + '</span>' +
       '</header>' +
-      '<div class="overview-intro">' +
-        '<span>เส้นทางของเรา</span>' +
-        '<h2>' + escapeHtml(programTitle) + '</h2>' +
-        '<p>การเดินทางครั้งนี้ไม่ได้ถูกออกแบบให้เป็นเพียงรายการสถานที่ แต่เป็นเรื่องราวที่ค่อย ๆ เปิดออกจากพาโร สู่เมืองหลวง หุบเขาเก่าแก่ และไฮไลต์สุดท้ายก่อนกลับกรุงเทพฯ</p>' +
+      '<div class="overview-title">' +
+        '<small>YOUR JOURNEY THROUGH BHUTAN</small>' +
+        '<h2>เส้นทางที่ค่อย ๆ พาเรา<br>รู้จักภูฏานทีละเมือง</h2>' +
+        '<p>เราเรียงลำดับการเดินทางตามเวลาเที่ยวบิน ระยะทางจริง และจังหวะของแต่ละเมือง เพื่อให้ทุกวันมีเรื่องราวต่อเนื่องกัน โดยไม่เร่งจนเสียบรรยากาศของภูฏาน</p>' +
       '</div>' +
-      '<div class="overview-route">' + overviewStops + '<div class="overview-line"></div></div>' +
+      '<div class="route-table">' + overviewRows + '</div>' +
+      '<div class="overview-note"><b>TRAVEL PHILOSOPHY</b><span>เที่ยวให้ครบ ไม่จำเป็นต้องเที่ยวให้รีบ — คืนสุดท้ายกลับมาพักที่พาโรเสมอ เพื่อให้วันเดินทางกลับเป็นไปอย่างสบายที่สุด</span></div>' +
       '<footer><span>BHUTAN CENTER</span><span>www.bhutancenter.com</span><span>LICENSE 11/07261</span></footer>' +
     '</section>';
 
   const dayPages = program.days.map((day, dayIndex) => {
-    const places = storyPlacesForDay(day);
+    const places = dayStories[dayIndex] || [];
     const hero = places[0];
-    const secondary = places[1] || places[0];
-    const tertiary = places[2] || places[1] || places[0];
+    const supporting = places.slice(1, 3);
 
-    const storyCards = places.map((place, index) => {
-      const alignment = index % 2 === 0 ? 'story-row normal' : 'story-row reverse';
-      return '<div class="' + alignment + '">' +
-        '<div class="story-photo-wrap">' +
-          '<img src="' + escapeHtml(place.image) + '" alt="' + escapeHtml(place.title) + '">' +
-          '<span class="photo-index">0' + (index + 1) + '</span>' +
-        '</div>' +
-        '<div class="story-copy">' +
-          '<small>' + escapeHtml(place.subtitle) + '</small>' +
-          '<h3>' + escapeHtml(place.title) + '</h3>' +
-          '<p>' + escapeHtml(place.story) + '</p>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-
-    const activityTags = day.activities.slice(0, 6).map((item) =>
-      '<span>' + escapeHtml(item) + '</span>'
+    const activityRows = day.activities.slice(0, 7).map((item, index) =>
+      '<div class="activity-row"><span>0' + (index + 1) + '</span><p>' + escapeHtml(activityParagraph(item)) + '</p></div>'
     ).join('');
 
-    const mealTags =
-      (day.meals.breakfast ? '<b>เช้า</b>' : '') +
-      (day.meals.lunch ? '<b>กลางวัน</b>' : '') +
-      (day.meals.dinner ? '<b>เย็น</b>' : '');
+    const supportingHtml = supporting.length
+      ? '<div class="feature-grid ' + (supporting.length === 1 ? 'single' : '') + '">' +
+          supporting.map((place) =>
+            '<article class="feature-card">' +
+              '<div class="feature-image"><img src="' + escapeHtml(place.image) + '" alt="' + escapeHtml(place.title) + '"></div>' +
+              '<div class="feature-copy"><small>' + escapeHtml(place.eyebrow) + '</small><h3>' + escapeHtml(place.title) + '</h3><p>' + escapeHtml(place.story) + '</p></div>' +
+            '</article>'
+          ).join('') +
+        '</div>'
+      : '';
 
-    return '<section class="page journey-day">' +
-      '<div class="paper-grain"></div>' +
-      '<div class="day-hero-editorial">' +
-        '<img src="' + escapeHtml(hero?.image || COVER_IMAGE) + '" alt="' + escapeHtml(day.title) + '">' +
-        '<div class="day-hero-overlay"></div>' +
-        '<div class="day-hero-brand">BHUTAN CENTER</div>' +
-        '<div class="day-hero-number">DAY <b>' + day.dayNumber + '</b></div>' +
-        '<div class="day-hero-copy">' +
+    const mealTags =
+      (day.meals.breakfast ? '<span>Breakfast</span>' : '') +
+      (day.meals.lunch ? '<span>Lunch</span>' : '') +
+      (day.meals.dinner ? '<span>Dinner</span>' : '');
+
+    return '<section class="page day-page">' +
+      '<div class="day-hero">' +
+        '<img src="' + escapeHtml(hero?.image || COVER_IMAGE) + '" alt="' + escapeHtml(hero?.title || day.title) + '">' +
+        '<div class="day-hero-shade"></div>' +
+        '<div class="day-topline"><span>BHUTAN CENTER</span><span>DAY ' + day.dayNumber + '</span></div>' +
+        '<div class="day-heading">' +
           '<small>' + escapeHtml(formatTravelDate(day.date)) + '</small>' +
           '<h2>' + escapeHtml(day.title) + '</h2>' +
           '<p>' + escapeHtml(dayJourneyLead(day)) + '</p>' +
         '</div>' +
       '</div>' +
-      '<div class="day-story-body">' +
-        '<div class="journey-thread"><span></span><i></i><span></span></div>' +
-        storyCards +
-        '<div class="day-summary-band">' +
-          '<div><small>วันนี้เราจะพบ</small><div class="activity-tags">' + activityTags + '</div></div>' +
-          '<div class="summary-meta">' +
-            '<div><small>พักค้างคืน</small><strong>' + escapeHtml(day.hotel || 'Bangkok') + '</strong></div>' +
-            '<div><small>อาหาร</small><span class="meal-inline">' + mealTags + '</span></div>' +
-            '<div><small>ปลายทางวันนี้</small><strong>' + escapeHtml(day.city) + '</strong></div>' +
-          '</div>' +
+      '<div class="day-content">' +
+        '<section class="day-intro">' +
+          '<div class="intro-label">THE STORY OF TODAY</div>' +
+          '<div><small>' + escapeHtml(hero?.eyebrow || 'BHUTAN') + '</small><h3>' + escapeHtml(hero?.title || day.city) + '</h3><p>' + escapeHtml(hero?.story || dayJourneyLead(day)) + '</p></div>' +
+        '</section>' +
+        supportingHtml +
+        '<section class="itinerary-block">' +
+          '<div class="itinerary-title"><small>ITINERARY</small><h3>วันนี้เราจะเดินทางอย่างไร</h3></div>' +
+          '<div class="activity-list">' + activityRows + '</div>' +
+        '</section>' +
+        '<div class="day-meta">' +
+          '<div><small>OVERNIGHT</small><strong>' + escapeHtml(day.hotel || 'Bangkok') + '</strong></div>' +
+          '<div><small>MEALS</small><div class="meal-list">' + mealTags + '</div></div>' +
+          '<div><small>DESTINATION</small><strong>' + escapeHtml(day.city) + '</strong></div>' +
         '</div>' +
         (day.note ? '<div class="travel-note"><b>TRAVEL NOTE</b><span>' + escapeHtml(day.note) + '</span></div>' : '') +
       '</div>' +
@@ -214,25 +207,26 @@ function fullProgramHtml(program: TourProgram) {
     '<style>' +
       '@page{size:A4;margin:0}' +
       '*{box-sizing:border-box}' +
-      'html,body{margin:0;padding:0;background:#d9d0c2;color:#3e3026;font-family:Tahoma,"Arial",sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      'html,body{margin:0;padding:0;background:#d9d9d9;color:#1e2d28;font-family:Tahoma,Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       'img{display:block;width:100%;height:100%;object-fit:cover}' +
-      '.toolbar{position:sticky;top:0;z-index:100;display:flex;gap:10px;justify-content:center;padding:12px;background:#3d3026;box-shadow:0 8px 24px rgba(0,0,0,.2)}' +
-      '.toolbar button{border:0;border-radius:999px;padding:11px 20px;font-size:13px;font-weight:800;cursor:pointer}.toolbar .primary{background:#d6a34e;color:#fff}.toolbar .secondary{background:#fff;color:#3d3026}' +
-      '.page{width:210mm;height:297mm;margin:14px auto;background:#f6f0e6;position:relative;overflow:hidden;page-break-after:always;box-shadow:0 12px 40px rgba(69,48,31,.18)}' +
-      '.paper-grain{position:absolute;inset:0;pointer-events:none;opacity:.16;background-image:radial-gradient(#8c765f .45px,transparent .45px);background-size:4px 4px;mix-blend-mode:multiply}' +
-      '.cover{background:#17392f;color:#fff}' +
-      '.cover-photo{position:absolute;inset:0 0 auto 0;height:184mm}.cover-photo img{position:absolute;inset:0}.cover-photo:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(22,31,27,.08),rgba(24,47,39,.38) 55%,#17392f 100%)}' +
-      '.cover-top{position:absolute;z-index:3;top:15mm;left:15mm;right:15mm;display:flex;justify-content:space-between;align-items:center}.cover-logo{display:flex;gap:9px;align-items:center}.cover-logo img{width:18mm;height:18mm;border-radius:50%;background:#fff;padding:2mm;object-fit:contain}.cover-logo b{display:block;font-size:17px;letter-spacing:.06em}.cover-logo span{display:block;font-size:9px;opacity:.75;margin-top:2px}.cover-badge{padding:7px 12px;border:1px solid rgba(255,255,255,.5);border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.08em}' +
-      '.cover-title{position:absolute;z-index:3;left:16mm;right:16mm;top:104mm}.cover-title .eyebrow{font-size:10px;letter-spacing:.28em;font-weight:900;color:#f3cf87}.cover-title h1{font-family:Georgia,serif;font-size:37px;line-height:1.02;margin:7px 0 4px;text-transform:uppercase}.cover-title h2{font-size:24px;margin:0;color:#f0c87e}.cover-title .route{font-size:14px;margin-top:9px;font-weight:700;letter-spacing:.02em}' +
-      '.cover-info{position:absolute;z-index:3;left:15mm;right:15mm;bottom:15mm;background:#fff;color:#3c3128;border-radius:6mm;padding:8mm;display:grid;grid-template-columns:1.15fr .85fr;gap:9mm;box-shadow:0 12px 32px rgba(0,0,0,.2)}.cover-info h3{font-size:15px;margin:0 0 7px;color:#183b31}.info-list{display:grid;gap:5px;font-size:11px}.info-row{display:grid;grid-template-columns:35mm 1fr;gap:5px}.info-row b{color:#8f6f40}.flight-box{display:grid;gap:7px;border-left:1px solid #e5d8c6;padding-left:7mm}.flight{background:#f5eee2;border-radius:4mm;padding:5mm}.flight small{font-size:8px;letter-spacing:.13em;color:#a07736;font-weight:900}.flight strong{display:block;font-size:12px;margin-top:4px}.flight span{display:block;font-size:9px;color:#7d746a;margin-top:2px}' +
-      '.editorial-header{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:12mm 15mm 0}.editorial-header>div{display:flex;align-items:center;gap:8px}.editorial-header img{width:13mm;height:13mm;object-fit:contain}.editorial-header b{display:block;font-size:14px;color:#4b3525}.editorial-header small{display:block;font-size:8px;color:#947b63}.editorial-header em{font-family:Georgia,serif;font-size:11px;letter-spacing:.18em;color:#a57c3e}' +
-      '.overview-intro{position:relative;z-index:2;padding:9mm 15mm 5mm}.overview-intro>span{font-family:Georgia,serif;font-style:italic;font-size:22px;color:#b17c30}.overview-intro h2{font-family:Georgia,serif;font-size:31px;line-height:1.05;margin:2px 0 5px;color:#493423}.overview-intro p{max-width:150mm;margin:0;font-size:12px;line-height:1.7;color:#6c5b4c}' +
-      '.overview-route{position:relative;z-index:2;padding:2mm 15mm 15mm;height:226mm}.overview-line{position:absolute;left:50%;top:12mm;bottom:12mm;border-left:1.5px dashed #9f6f43;opacity:.65}.overview-stop{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:10mm;align-items:center;min-height:42mm;margin:2.5mm 0}.overview-stop.left .overview-copy{order:1;text-align:right;padding-right:8mm}.overview-stop.left .overview-image{order:2}.overview-stop.right .overview-copy{order:2;text-align:left;padding-left:8mm}.overview-stop.right .overview-image{order:1}.overview-image{height:34mm;border-radius:45% 55% 50% 50%/52% 45% 55% 48%;overflow:hidden;box-shadow:0 7px 18px rgba(72,49,32,.15)}.overview-copy small{font-size:7.5px;letter-spacing:.11em;font-weight:900;color:#a67534}.overview-copy h3{font-family:Georgia,serif;font-size:15px;margin:2px 0 3px;color:#4a3424}.overview-copy p{font-size:8.5px;line-height:1.45;color:#6c5b4e;margin:0}.overview-node{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:7mm;height:7mm;border-radius:50%;background:#a34b2f;color:#fff;border:1.5mm solid #f6f0e6;display:grid;place-items:center;font-size:7px;font-weight:900;z-index:3}' +
-      '.day-hero-editorial{height:90mm;position:relative;background:#473a2e}.day-hero-editorial>img{position:absolute;inset:0}.day-hero-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(27,21,17,.07),rgba(27,21,17,.18) 50%,rgba(35,25,19,.82) 100%)}.day-hero-brand{position:absolute;top:10mm;left:15mm;color:#fff;font-size:10px;font-weight:900;letter-spacing:.12em}.day-hero-number{position:absolute;top:9mm;right:15mm;padding:6px 10px;border:1px solid rgba(255,255,255,.55);border-radius:999px;color:#fff;font-size:9px;letter-spacing:.08em}.day-hero-number b{font-size:13px}.day-hero-copy{position:absolute;left:15mm;right:15mm;bottom:9mm;color:#fff}.day-hero-copy small{font-size:9px;letter-spacing:.13em;font-weight:900;color:#f1ca83}.day-hero-copy h2{font-family:Georgia,serif;font-size:27px;line-height:1.05;margin:3px 0 5px}.day-hero-copy p{max-width:148mm;font-size:11.5px;line-height:1.55;margin:0;color:#f7f2eb}' +
-      '.day-story-body{position:relative;padding:9mm 14mm 14mm;height:201mm}.journey-thread{position:absolute;left:50%;top:10mm;bottom:43mm;width:1px;border-left:1.5px dashed #a06042;opacity:.6}.journey-thread span,.journey-thread i{position:absolute;left:50%;transform:translateX(-50%);width:5mm;height:5mm;border-radius:50%;background:#a2482f;border:1.2mm solid #f6f0e6}.journey-thread span:first-child{top:3mm}.journey-thread i{top:50%}.journey-thread span:last-child{bottom:2mm}' +
-      '.story-row{position:relative;display:grid;grid-template-columns:1.05fr .95fr;gap:11mm;align-items:center;min-height:42mm;margin-bottom:4mm;z-index:2}.story-row.reverse .story-photo-wrap{order:2}.story-row.reverse .story-copy{order:1;text-align:right}.story-photo-wrap{height:39mm;position:relative;border-radius:48% 52% 46% 54%/58% 44% 56% 42%;overflow:hidden;box-shadow:0 8px 20px rgba(76,49,29,.16)}.photo-index{position:absolute;bottom:3mm;right:4mm;font-family:Georgia,serif;font-size:26px;font-style:italic;color:rgba(255,255,255,.85);text-shadow:0 2px 9px rgba(0,0,0,.35)}.story-copy small{font-size:7.5px;letter-spacing:.11em;font-weight:900;color:#a46f2f}.story-copy h3{font-family:Georgia,serif;font-size:17px;margin:2px 0 4px;color:#513725}.story-copy p{font-size:9.5px;line-height:1.52;color:#66564a;margin:0}' +
-      '.day-summary-band{position:absolute;left:14mm;right:14mm;bottom:16mm;display:grid;grid-template-columns:1.25fr .75fr;gap:7mm;background:rgba(255,252,247,.94);border-top:1px solid #d9c6ae;padding-top:5mm}.day-summary-band>div>small,.summary-meta small{display:block;font-size:7.5px;letter-spacing:.12em;font-weight:900;color:#aa7434}.activity-tags{display:flex;flex-wrap:wrap;gap:2mm;margin-top:2mm}.activity-tags span{font-size:7.5px;border:1px solid #d8c4a8;border-radius:999px;padding:1.4mm 2.3mm;background:#fff;color:#6d5949}.summary-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm}.summary-meta strong{display:block;font-size:9px;color:#4c3728;margin-top:2px}.meal-inline{display:flex;gap:1mm;flex-wrap:wrap;margin-top:2px}.meal-inline b{font-size:7px;background:#21493d;color:#fff;border-radius:999px;padding:1mm 1.8mm}.travel-note{position:absolute;left:14mm;bottom:8mm;font-size:8px;color:#766455}.travel-note b{color:#a26b2e;margin-right:5px}' +
-      'footer{position:absolute;left:14mm;right:14mm;bottom:5mm;display:flex;justify-content:space-between;gap:8px;border-top:1px solid #d9cdbd;padding-top:2.5mm;color:#847466;font-size:7px}.cover footer{color:rgba(255,255,255,.72);border-color:rgba(255,255,255,.25)}' +
+      '.toolbar{position:sticky;top:0;z-index:100;display:flex;gap:10px;justify-content:center;padding:12px;background:#163b31;box-shadow:0 8px 24px rgba(0,0,0,.18)}' +
+      '.toolbar button{border:0;border-radius:999px;padding:11px 20px;font-size:13px;font-weight:800;cursor:pointer}.toolbar .primary{background:#c89a4b;color:#fff}.toolbar .secondary{background:#fff;color:#163b31}' +
+      '.page{width:210mm;height:297mm;margin:14px auto;background:#fff;position:relative;overflow:hidden;page-break-after:always;box-shadow:0 12px 40px rgba(0,0,0,.14)}' +
+      '.cover{background:#12382f;color:#fff}' +
+      '.cover-photo{position:absolute;inset:0;height:205mm}.cover-photo img{position:absolute;inset:0}.cover-photo:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,30,25,.05),rgba(10,30,25,.12) 44%,rgba(18,56,47,.9) 82%,#12382f 100%)}' +
+      '.cover-top{position:absolute;z-index:3;top:14mm;left:15mm;right:15mm;display:flex;justify-content:space-between;align-items:center}.cover-logo{display:flex;gap:9px;align-items:center}.cover-logo img{width:17mm;height:17mm;border-radius:50%;background:#fff;padding:2mm;object-fit:contain}.cover-logo b{display:block;font-size:16px;letter-spacing:.06em}.cover-logo span{display:block;font-size:8px;opacity:.72;margin-top:2px}.cover-badge{font-size:9px;letter-spacing:.16em;font-weight:800;border-bottom:1px solid rgba(255,255,255,.55);padding-bottom:3px}' +
+      '.cover-title{position:absolute;z-index:3;left:15mm;right:15mm;top:111mm;max-width:155mm}.cover-title .eyebrow{font-size:9px;letter-spacing:.24em;font-weight:800;color:#e8c47c}.cover-title h1{font-family:Georgia,serif;font-size:38px;line-height:1;margin:7px 0 5px}.cover-title h2{font-size:22px;margin:0;color:#edcc8d}.cover-title .route{font-size:13px;margin-top:8px;font-weight:700}' +
+      '.cover-info{position:absolute;z-index:3;left:15mm;right:15mm;bottom:15mm;background:#fff;color:#26352f;padding:8mm 9mm;display:grid;grid-template-columns:1.15fr .85fr;gap:10mm}.cover-info h3{font-size:13px;margin:0 0 6px;color:#183d32;letter-spacing:.05em}.info-list{display:grid;gap:4px;font-size:10px}.info-row{display:grid;grid-template-columns:34mm 1fr;gap:5px}.info-row b{color:#9a743d}.flight-box{display:grid;gap:6px;border-left:1px solid #ddd5c8;padding-left:8mm}.flight{padding:3mm 0}.flight+ .flight{border-top:1px solid #e7e1d8}.flight small{font-size:7px;letter-spacing:.14em;color:#a47936;font-weight:900}.flight strong{display:block;font-size:12px;margin-top:3px}.flight span{display:block;font-size:8px;color:#7b817e;margin-top:2px}' +
+      '.sheet-header{display:flex;align-items:center;justify-content:space-between;padding:12mm 15mm 0}.brand-lockup{display:flex;gap:8px;align-items:center}.brand-lockup img{width:13mm;height:13mm;object-fit:contain}.brand-lockup b{display:block;font-size:13px;color:#193c32}.brand-lockup small{display:block;font-size:7px;color:#8b8d89}.edition{font-size:8px;letter-spacing:.16em;color:#9b7a48;font-weight:800}' +
+      '.overview-title{padding:14mm 15mm 7mm;max-width:175mm}.overview-title>small{font-size:8px;letter-spacing:.17em;color:#a77735;font-weight:900}.overview-title h2{font-family:Georgia,serif;font-size:31px;line-height:1.1;margin:4px 0 6px;color:#1b3d33}.overview-title p{font-size:11.5px;line-height:1.75;color:#5d6863;margin:0;max-width:155mm}' +
+      '.route-table{margin:4mm 15mm 0;border-top:2px solid #1a4035}.route-row{display:grid;grid-template-columns:14mm 28mm 1fr;gap:5mm;padding:6mm 0;border-bottom:1px solid #d9ddd9;align-items:start}.route-no{font-family:Georgia,serif;font-size:19px;color:#b17d35}.route-date{font-size:8px;letter-spacing:.08em;color:#8b928e;padding-top:2px}.route-copy h3{font-family:Georgia,serif;font-size:18px;margin:0 0 3px;color:#223a32}.route-copy p{font-size:9.5px;line-height:1.55;color:#68716d;margin:0;max-width:125mm}' +
+      '.overview-note{position:absolute;left:15mm;right:15mm;bottom:16mm;border-top:1px solid #c9b48f;padding-top:4mm;display:grid;grid-template-columns:37mm 1fr;gap:5mm;font-size:9.5px;line-height:1.5;color:#666e6a}.overview-note b{font-size:8px;letter-spacing:.12em;color:#a67534}' +
+      '.day-hero{height:105mm;position:relative;background:#183a31}.day-hero>img{position:absolute;inset:0}.day-hero-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(12,23,19,.06),rgba(12,23,19,.12) 42%,rgba(12,28,23,.78) 100%)}.day-topline{position:absolute;left:15mm;right:15mm;top:10mm;display:flex;justify-content:space-between;color:#fff;font-size:8px;letter-spacing:.14em;font-weight:800}.day-heading{position:absolute;left:15mm;right:15mm;bottom:10mm;color:#fff;max-width:165mm}.day-heading small{font-size:8px;letter-spacing:.15em;font-weight:900;color:#efcf8e}.day-heading h2{font-family:Georgia,serif;font-size:30px;line-height:1.02;margin:4px 0 5px}.day-heading p{font-size:11px;line-height:1.55;margin:0;max-width:150mm;color:#f1f3f1}' +
+      '.day-content{height:181mm;padding:8mm 15mm 14mm;position:relative}.day-intro{display:grid;grid-template-columns:36mm 1fr;gap:8mm;padding-bottom:5mm;border-bottom:1px solid #d9dedb}.intro-label{font-size:8px;letter-spacing:.15em;color:#aa7835;font-weight:900;padding-top:2px}.day-intro small,.feature-copy small,.itinerary-title small,.day-meta small{font-size:7.5px;letter-spacing:.13em;color:#9b753e;font-weight:900}.day-intro h3{font-family:Georgia,serif;font-size:22px;margin:3px 0 4px;color:#1d3d33}.day-intro p{font-size:10.2px;line-height:1.6;color:#5f6864;margin:0}' +
+      '.feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:5mm;margin-top:5mm}.feature-grid.single{grid-template-columns:1fr}.feature-card{display:grid;grid-template-rows:37mm auto;min-height:72mm;border:1px solid #dfe2df;background:#fff}.feature-grid.single .feature-card{grid-template-columns:72mm 1fr;grid-template-rows:none;min-height:50mm}.feature-image{min-height:0}.feature-copy{padding:4mm 4.5mm}.feature-copy h3{font-family:Georgia,serif;font-size:16px;margin:2px 0 3px;color:#213b32}.feature-copy p{font-size:8.8px;line-height:1.5;color:#626b67;margin:0}' +
+      '.itinerary-block{display:grid;grid-template-columns:50mm 1fr;gap:8mm;margin-top:6mm;padding-top:5mm;border-top:1px solid #1f4438}.itinerary-title h3{font-family:Georgia,serif;font-size:17px;margin:2px 0;color:#203b32}.activity-list{display:grid}.activity-row{display:grid;grid-template-columns:8mm 1fr;gap:3mm;padding:2.2mm 0;border-bottom:1px solid #e6e8e6}.activity-row span{font-family:Georgia,serif;font-size:9px;color:#b07c35}.activity-row p{font-size:8.5px;line-height:1.45;color:#515d58;margin:0}' +
+      '.day-meta{position:absolute;left:15mm;right:15mm;bottom:12mm;display:grid;grid-template-columns:1fr 1fr 1fr;gap:7mm;border-top:1px solid #d8ddd9;padding-top:4mm}.day-meta strong{display:block;font-size:10px;color:#203d33;margin-top:2px}.meal-list{display:flex;gap:2mm;flex-wrap:wrap;margin-top:2px}.meal-list span{font-size:7px;color:#fff;background:#20483b;padding:1.3mm 2mm;border-radius:999px}.travel-note{position:absolute;left:15mm;right:15mm;bottom:5.5mm;font-size:7.5px;color:#737c77}.travel-note b{color:#a77735;margin-right:5px}' +
+      'footer{position:absolute;left:15mm;right:15mm;bottom:4mm;display:flex;justify-content:space-between;border-top:1px solid #dfe2df;padding-top:2mm;color:#898f8b;font-size:6.8px}.cover footer{color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25)}' +
       '@media print{html,body{background:#fff}.toolbar{display:none}.page{margin:0;box-shadow:none;page-break-after:always}.page:last-child{page-break-after:auto}}' +
     '</style></head><body>' +
       '<div class="toolbar"><button class="primary" onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button><button class="secondary" onclick="window.close()">ปิด</button></div>' +

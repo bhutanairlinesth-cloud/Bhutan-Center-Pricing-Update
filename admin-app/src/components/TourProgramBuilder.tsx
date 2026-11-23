@@ -293,6 +293,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, attractio
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [catalogCity, setCatalogCity] = useState('Paro');
   const [newAttraction, setNewAttraction] = useState({ name: '', category: 'Other', durationMinutes: 90, description: '', isFestivalVenue: false });
+  const [editingAttractionId, setEditingAttractionId] = useState('');
   const linkedTracking = useMemo(() => trackings.find((x) => x.id === editing.trackingId), [trackings, editing.trackingId]);
   const canFinalize = Boolean(linkedTracking?.bookingConfirmedAt && (linkedTracking?.visaReceivedAt || linkedTracking?.visaSentAt));
   const totalDays = Math.max(1, diffTourDays(editing.startDate, editing.endDate));
@@ -348,25 +349,44 @@ export function TourProgramBuilder({ currentUser, trackings, programs, attractio
     });
   };
 
-  async function addAttraction() {
+  async function saveAttractionForm() {
     if (!newAttraction.name.trim()) return window.alert('กรุณาระบุชื่อสถานที่');
     const now = new Date().toISOString();
+    const existing = attractions.find((item) => item.id === editingAttractionId);
     const item: TourAttraction = {
-      id: uid('attraction'),
+      id: existing?.id || uid('attraction'),
       city: catalogCity,
       name: newAttraction.name.trim(),
       category: newAttraction.category || 'Other',
       durationMinutes: Math.max(15, Number(newAttraction.durationMinutes || 90)),
       description: newAttraction.description.trim(),
-      imageUrl: '',
-      isActive: true,
+      imageUrl: existing?.imageUrl || '',
+      isActive: existing?.isActive ?? true,
       isFestivalVenue: Boolean(newAttraction.isFestivalVenue),
-      sortOrder: attractions.filter((x) => x.city === catalogCity).length * 10 + 10,
-      createdById: currentUser.id,
-      createdAt: now,
+      sortOrder: existing?.sortOrder ?? (attractions.filter((x) => x.city === catalogCity).length * 10 + 10),
+      createdById: existing?.createdById || currentUser.id,
+      createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
     await onSaveAttraction(item);
+    setEditingAttractionId('');
+    setNewAttraction({ name: '', category: 'Other', durationMinutes: 90, description: '', isFestivalVenue: false });
+  }
+
+  function startEditAttraction(item: TourAttraction) {
+    setCatalogCity(item.city);
+    setEditingAttractionId(item.id);
+    setNewAttraction({
+      name: item.name,
+      category: item.category || 'Other',
+      durationMinutes: item.durationMinutes || 90,
+      description: item.description || '',
+      isFestivalVenue: Boolean(item.isFestivalVenue),
+    });
+  }
+
+  function cancelEditAttraction() {
+    setEditingAttractionId('');
     setNewAttraction({ name: '', category: 'Other', durationMinutes: 90, description: '', isFestivalVenue: false });
   }
 
@@ -478,12 +498,14 @@ export function TourProgramBuilder({ currentUser, trackings, programs, attractio
           <label className="field"><span>เวลาเที่ยวโดยประมาณ</span><input type="number" min="15" step="15" value={newAttraction.durationMinutes} onChange={(e) => setNewAttraction((prev) => ({ ...prev, durationMinutes: Number(e.target.value) }))}/></label>
           <label className="field"><span>รายละเอียดสั้น ๆ</span><input value={newAttraction.description} onChange={(e) => setNewAttraction((prev) => ({ ...prev, description: e.target.value }))}/></label>
           <label className="tour-toggle compact"><input type="checkbox" checked={newAttraction.isFestivalVenue} onChange={(e) => setNewAttraction((prev) => ({ ...prev, isFestivalVenue: e.target.checked }))}/><span><b>ใช้เป็นสถานที่จัดเทศกาลได้</b></span></label>
-          <button type="button" className="primary-button" onClick={addAttraction}><Plus/>เพิ่มสถานที่ใน {catalogCity}</button>
+          <button type="button" className="primary-button" onClick={saveAttractionForm}><Plus/>{editingAttractionId ? 'บันทึกการแก้ไข' : 'เพิ่มสถานที่ใน ' + catalogCity}</button>
+          {editingAttractionId && <button type="button" className="ghost-button" onClick={cancelEditAttraction}>ยกเลิกแก้ไข</button>}
         </div>
         <div className="tour-catalog-list">
           {attractions.filter((item) => item.city === catalogCity).map((item) => <div className="tour-catalog-row" key={item.id}>
             <div><b>{item.name}</b><small>{item.category} · ประมาณ {item.durationMinutes} นาที{item.isFestivalVenue ? ' · รองรับเทศกาล' : ''}</small><span>{item.description}</span></div>
             <div>
+              <button type="button" className="ghost-button small" onClick={() => startEditAttraction(item)}>แก้ไข</button>
               {item.isFestivalVenue && <button type="button" className="ghost-button small" onClick={() => addFestivalFromAttraction(item)}>+ ผูกเทศกาล</button>}
               <button type="button" className="icon-button danger" onClick={() => onDeleteAttraction(item.id)} aria-label="ลบสถานที่"><Trash2/></button>
             </div>

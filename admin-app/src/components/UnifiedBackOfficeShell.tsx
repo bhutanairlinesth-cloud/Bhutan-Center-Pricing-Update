@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import {
-  BarChart3, Building2, Calculator, ChevronRight, ClipboardList, Globe2,
+  BarChart3, Building2, Calculator, CalendarRange, ChevronRight, ClipboardList, Globe2,
   LayoutDashboard, LineChart, LogOut, Megaphone, Menu, PackageOpen, Radio, Search,
   Settings2, Tags, Target, Users, X,
 } from 'lucide-react';
 import { GlobalSettings, User } from '../types';
 import { Brand } from './Brand';
 
-export type Workspace = 'dashboard' | 'front' | 'tracking' | 'growth' | 'admin';
+export type Workspace = 'dashboard' | 'front' | 'tracking' | 'tourProgram' | 'growth' | 'admin';
 
 interface Props {
   currentUser: User;
@@ -52,6 +52,7 @@ export function UnifiedBackOfficeShell({ currentUser, settings, workspace, curre
         { workspace: 'admin', path: '/admin/settings/pricing', label: 'ศูนย์ตั้งราคา', detail: 'Flight · LAND · Visa · Margin', icon: Settings2, adminOnly: true },
         { workspace: 'admin', path: '/admin/settings/packages', label: 'โปรแกรมทัวร์', detail: 'Package · LAND Rate', icon: PackageOpen, adminOnly: true },
         { workspace: 'tracking', path: '/admin/customers', label: 'ติดตามลูกค้า', detail: 'CRM · Invoice · Payment', icon: ClipboardList },
+        { workspace: 'tourProgram', path: '/admin/tour-programs', label: 'จัดโปรแกรมทัวร์', detail: 'Itinerary · Flight · Festival', icon: CalendarRange },
         { workspace: 'admin', path: '/admin/settings', label: 'รายงานยอดขาย', detail: 'Sales · Cost · Profit', icon: BarChart3, adminOnly: true },
       ],
     },

@@ -99,67 +99,162 @@ function activityParagraph(item: string) {
   return item;
 }
 
+
+const TOUR_IMAGES = {
+  cover: '/images/hero-bhutan.png',
+  paro: '/images/hero-bhutan.png',
+  taktsang: '/images/tiger-nest-paro-real.png',
+  thimphu: 'https://a.storyblok.com/f/171618/1430x956/6bdf4170d9/0.jpg/m/1800x0',
+  punakha: 'https://a.storyblok.com/f/171618/1120x1400/96296acc21/_sch7068_phunaka_dzong.jpg/m/1200x0',
+  gangtey: 'https://a.storyblok.com/f/171618/3000x2400/0090d19186/_sch9167.jpg/m/1800x0',
+};
+
+function tourDayImage(day: TourProgramDay) {
+  const haystack = (day.city + ' ' + day.title + ' ' + day.activities.join(' ')).toLowerCase();
+  if (haystack.includes('taktsang') || haystack.includes('tiger')) return TOUR_IMAGES.taktsang;
+  if (haystack.includes('punakha')) return TOUR_IMAGES.punakha;
+  if (haystack.includes('gangtey') || haystack.includes('phobjikha')) return TOUR_IMAGES.gangtey;
+  if (haystack.includes('thimphu') || haystack.includes('buddha dordenma')) return TOUR_IMAGES.thimphu;
+  return TOUR_IMAGES.paro;
+}
+
 function fullProgramHtml(program: TourProgram) {
   const total = Math.max(1, diffTourDays(program.startDate, program.endDate));
   const programTitle = programNameFor(total, program.cities);
   const duration = total + ' วัน ' + Math.max(0, total - 1) + ' คืน';
   const route = programTitle === 'THE ULTIMATE BHUTAN'
-    ? 'พาโร – ทิมพู – พูนาคา – กังเต – ทักซัง'
+    ? 'พาโร - ทิมพู - พูนาคา - กังเต - ทักซัง'
     : programTitle === 'Custom to Bhutan'
-      ? (program.cities.join(' – ') + ' – พาโร – ทักซัง')
-      : 'พาโร – ทิมพู – พูนาคา – ทักซัง';
+      ? (program.cities.join(' - ') + ' - พาโร - ทักซัง')
+      : 'พาโร - ทิมพู - พูนาคา - ทักซัง';
 
-  const flightOut = (program.outboundFlight.flightNo || '-') + ' ' + (program.outboundFlight.departureTime || '-') + ' – ' + (program.outboundFlight.arrivalTime || '-');
-  const flightBack = (program.inboundFlight.flightNo || '-') + ' ' + (program.inboundFlight.departureTime || '-') + ' – ' + (program.inboundFlight.arrivalTime || '-');
+  const flightOut = (program.outboundFlight.flightNo || '-') + '  ' + (program.outboundFlight.departureTime || '-') + ' - ' + (program.outboundFlight.arrivalTime || '-');
+  const flightBack = (program.inboundFlight.flightNo || '-') + '  ' + (program.inboundFlight.departureTime || '-') + ' - ' + (program.inboundFlight.arrivalTime || '-');
 
-  const whyPage = '<section class="page why-page">' +
-      '<div class="brand"><strong>BHUTAN CENTER</strong><span>บริการท่องเที่ยวภูฏานที่ใส่ใจทุกความต้องการของคุณ</span></div>' +
-      '<div class="why-title"><span>WHY?</span><h2>BHUTAN CENTER</h2></div>' +
-      '<div class="why-copy"><p>ภูฏานเซ็นเตอร์มีความชำนาญด้านเส้นทางท่องเที่ยวภูฏาน และออกแบบโปรแกรมให้สอดคล้องกับวันเดินทาง เวลาเที่ยวบิน เมืองที่ลูกค้าต้องการ และช่วงเวลาของเทศกาลสำคัญ โดยสามารถปรับรายละเอียดของแต่ละวันให้เหมาะกับคณะเดินทางได้</p>' +
-      '<p>การเดินทางในภูฏานมีข้อจำกัดด้านระยะทางและภูมิประเทศ โปรแกรมจึงจัดลำดับเมืองให้เดินทางต่อเนื่อง และกำหนดให้คืนสุดท้ายก่อนวันเดินทางกลับพักที่เมืองพาโรเสมอ เพื่อให้เหมาะกับการเดินทางสู่สนามบินนานาชาติพาโรในวันถัดไป</p>' +
-      '<p>วัดทักซัง หรือ Tiger’s Nest เป็นสถานที่สำคัญของทุกโปรแกรม และถูกจัดไว้ในวันก่อนเดินทางกลับ 1 วัน โดยพักค้างคืนที่พาโรหลังจบกิจกรรม</p></div>' +
-      '<footer>52/38 11th Floor, Soi Saladaeng 2, Silom, Bangrak, Bangkok 10500 · info@bhutancenter.com · www.bhutancenter.com · LICENSE NUMBER: 11/07261</footer></section>';
+  const whyPage =
+    '<section class="page why-page">' +
+      '<div class="photo-grid">' +
+        '<div class="photo-main"><img src="' + TOUR_IMAGES.taktsang + '" alt="Taktsang Monastery"></div>' +
+        '<div class="photo-side"><img src="' + TOUR_IMAGES.punakha + '" alt="Punakha Dzong"><img src="' + TOUR_IMAGES.thimphu + '" alt="Thimphu"></div>' +
+      '</div>' +
+      '<div class="why-content">' +
+        '<div class="section-kicker">WHY BHUTAN CENTER</div>' +
+        '<h2>เที่ยวภูฏานแบบที่ทุกวันมีความหมาย</h2>' +
+        '<p class="lead">เราออกแบบเส้นทางจากวันเดินทางจริง เวลาเที่ยวบิน เมืองที่ต้องการ และจังหวะการเดินทางของภูฏาน เพื่อให้เที่ยวได้เต็มที่โดยไม่เร่งจนเกินไป</p>' +
+        '<div class="why-cards">' +
+          '<div><b>เส้นทางเหมาะกับเวลา</b><span>จัดเมืองและสถานที่ให้สัมพันธ์กับเวลาเครื่องและระยะทางจริง</span></div>' +
+          '<div><b>คืนสุดท้ายที่พาโร</b><span>คืนก่อนเดินทางกลับพักพาโรเสมอ เพื่อพร้อมสำหรับสนามบินในวันถัดไป</span></div>' +
+          '<div><b>Taktsang เป็นไฮไลต์</b><span>วาง Tiger’s Nest ไว้ก่อนวันกลับ 1 วัน ให้มีเวลาเดินขึ้นและพักอย่างเหมาะสม</span></div>' +
+        '</div>' +
+        '<div class="quote">“A journey through Bhutan should feel calm, beautiful and unforgettable - not rushed.”</div>' +
+      '</div>' +
+      '<footer><span>BHUTAN CENTER</span><span>www.bhutancenter.com</span><span>LICENSE 11/07261</span></footer>' +
+    '</section>';
 
   const dayPages = program.days.map((day) => {
-    const rows = day.activities.map((item) => '<p>• ' + escapeHtml(activityParagraph(item)) + '</p>').join('');
+    const rows = day.activities.map((item, index) =>
+      '<div class="timeline-item">' +
+        '<div class="timeline-dot">' + (index + 1) + '</div>' +
+        '<div class="timeline-copy">' + escapeHtml(activityParagraph(item)) + '</div>' +
+      '</div>'
+    ).join('');
+
+    const mealTags =
+      '<div class="meal-tags">' +
+      (day.meals.breakfast ? '<span>BREAKFAST</span>' : '') +
+      (day.meals.lunch ? '<span>LUNCH</span>' : '') +
+      (day.meals.dinner ? '<span>DINNER</span>' : '') +
+      '</div>';
+
     return '<section class="page day-page">' +
-      '<div class="brand"><strong>BHUTAN CENTER</strong><span>บริการท่องเที่ยวภูฏานที่ใส่ใจทุกความต้องการของคุณ</span></div>' +
-      '<div class="day-head"><div>DAY ' + day.dayNumber + '</div><div><h2>' + escapeHtml(day.title) + '</h2><span>' + escapeHtml(formatTravelDate(day.date)) + '</span></div></div>' +
-      '<div class="day-copy">' + rows +
-      (day.note ? '<p>• ' + escapeHtml(day.note) + '</p>' : '') +
-      (day.meals.breakfast ? '<p>• เช้า รับประทานอาหารเช้า ณ ห้องอาหารของโรงแรม</p>' : '') +
-      (day.meals.lunch ? '<p>• เที่ยง รับประทานอาหารกลางวัน ณ ภัตตาคารท้องถิ่น</p>' : '') +
-      (day.meals.dinner ? '<p>• ค่ำ รับประทานอาหารค่ำ และพักผ่อนตามอัธยาศัย</p>' : '') +
+      '<div class="day-photo">' +
+        '<img src="' + tourDayImage(day) + '" alt="' + escapeHtml(day.title) + '">' +
+        '<div class="day-photo-shade"></div>' +
+        '<div class="day-brand">BHUTAN CENTER</div>' +
+        '<div class="day-number">DAY <strong>' + day.dayNumber + '</strong></div>' +
+        '<div class="day-title"><span>' + escapeHtml(formatTravelDate(day.date)) + '</span><h2>' + escapeHtml(day.title) + '</h2></div>' +
       '</div>' +
-      '<div class="overnight">' + (day.hotel ? '<b>พักค้างคืน:</b> ' + escapeHtml(day.hotel) : '<b>เดินทางกลับกรุงเทพฯ</b>') + '</div>' +
-      '<footer>52/38 11th Floor, Soi Saladaeng 2, Silom, Bangrak, Bangkok 10500 · info@bhutancenter.com · LICENSE NUMBER: 11/07261</footer>' +
-      '</section>';
+      '<div class="day-body">' +
+        '<div class="day-main">' +
+          '<div class="section-kicker">TODAY IN BHUTAN</div>' +
+          '<div class="timeline">' + rows + '</div>' +
+          (day.note ? '<div class="note-card"><b>TRAVEL NOTE</b><span>' + escapeHtml(day.note) + '</span></div>' : '') +
+        '</div>' +
+        '<aside class="day-aside">' +
+          '<div class="aside-card">' +
+            '<small>OVERNIGHT</small>' +
+            '<strong>' + escapeHtml(day.hotel || 'Bangkok') + '</strong>' +
+            '<span>' + (day.hotel ? 'พักผ่อนหลังจบโปรแกรมประจำวัน' : 'เดินทางกลับโดยสวัสดิภาพ') + '</span>' +
+          '</div>' +
+          '<div class="aside-card meals"><small>MEALS</small>' + mealTags + '</div>' +
+          '<div class="aside-card route-card"><small>ROUTE</small><strong>' + escapeHtml(day.city) + '</strong><span>Bhutan</span></div>' +
+        '</aside>' +
+      '</div>' +
+      '<footer><span>BHUTAN CENTER</span><span>info@bhutancenter.com</span><span>52/38 Soi Saladaeng 2, Silom, Bangkok</span></footer>' +
+    '</section>';
   }).join('');
 
   return '<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>' + escapeHtml(programTitle) + '</title>' +
     '<style>' +
-    '@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#e8e4dd;color:#2b2926;font-family:Tahoma,Arial,sans-serif}' +
-    '.toolbar{position:sticky;top:0;z-index:3;display:flex;gap:10px;justify-content:center;padding:12px;background:#173d32}.toolbar button{border:0;border-radius:9px;padding:10px 18px;font-weight:700;cursor:pointer}.toolbar .primary{background:#c99b50;color:white}.toolbar .secondary{background:white;color:#173d32}' +
-    '.page{width:210mm;min-height:297mm;margin:14px auto;padding:18mm 17mm 14mm;background:#fff;box-shadow:0 8px 28px rgba(0,0,0,.12);position:relative;page-break-after:always}.cover{display:flex;flex-direction:column;text-align:center}.cover .brand{margin-bottom:34mm}.brand{display:flex;flex-direction:column;gap:3px;color:#173d32}.brand strong{font-size:22px;letter-spacing:.05em}.brand span{font-size:12px;color:#6d675f}' +
-    '.cover h1{font-size:30px;margin:12px 0 4px;color:#173d32}.cover h2{font-size:24px;margin:0;color:#b2823c}.route{font-size:18px;font-weight:700;margin:16px 0}.summary{margin:24mm auto 0;width:100%;max-width:150mm;text-align:left;border-top:2px solid #173d32;padding-top:14px;display:grid;gap:8px;font-size:14px}.why-title{margin:30mm 0 12mm}.why-title span{display:block;font-size:42px;font-weight:900;color:#c99b50}.why-title h2{margin:0;font-size:30px;color:#173d32}.why-copy{display:grid;gap:15px}.why-copy p{font-size:16px;line-height:1.9;margin:0}' +
-    '.day-head{display:grid;grid-template-columns:32mm 1fr;gap:14px;align-items:center;margin:18mm 0 12mm;border-bottom:2px solid #173d32;padding-bottom:10px}.day-head>div:first-child{font-size:26px;font-weight:900;color:#b2823c}.day-head h2{margin:0;color:#173d32;font-size:22px}.day-head span{font-size:12px;color:#7b746c}.day-copy p{font-size:15px;line-height:1.75;margin:0 0 9px}.overnight{margin-top:18px;padding:13px 15px;border-left:4px solid #c99b50;background:#f7f2e9;font-size:14px}' +
-    'footer{position:absolute;left:17mm;right:17mm;bottom:9mm;padding-top:7px;border-top:1px solid #d8d1c7;font-size:9px;color:#7c756d;text-align:center}@media print{body{background:white}.toolbar{display:none}.page{margin:0;box-shadow:none;page-break-after:always}.page:last-child{page-break-after:auto}}' +
+      '@page{size:A4;margin:0}' +
+      '*{box-sizing:border-box}' +
+      'html,body{margin:0;padding:0;background:#dcd8d1;color:#27332f;font-family:"Tahoma","Arial",sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      'img{display:block;width:100%;height:100%;object-fit:cover}' +
+      '.toolbar{position:sticky;top:0;z-index:50;display:flex;gap:10px;justify-content:center;padding:12px;background:#163d32;box-shadow:0 8px 24px rgba(0,0,0,.18)}' +
+      '.toolbar button{border:0;border-radius:999px;padding:11px 19px;font-weight:800;cursor:pointer}.toolbar .primary{background:#d3a451;color:#fff}.toolbar .secondary{background:#fff;color:#163d32}' +
+      '.page{width:210mm;height:297mm;margin:14px auto;background:#fff;position:relative;overflow:hidden;page-break-after:always;box-shadow:0 12px 38px rgba(25,39,34,.16)}' +
+      '.cover{background:#0f332a;color:#fff}' +
+      '.cover-photo{position:absolute;inset:0 0 auto 0;height:178mm}' +
+      '.cover-photo:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,32,27,.08) 15%,rgba(10,32,27,.30) 52%,#0f332a 100%)}' +
+      '.cover-photo img{position:absolute;inset:0}' +
+      '.cover-top{position:absolute;top:15mm;left:16mm;right:16mm;z-index:2;display:flex;justify-content:space-between;align-items:flex-start}' +
+      '.cover-logo{display:flex;align-items:center;gap:10px}.cover-logo img{width:18mm;height:18mm;object-fit:contain;background:rgba(255,255,255,.94);border-radius:50%;padding:2.5mm}.cover-logo b{font-size:16px;letter-spacing:.08em}.cover-logo span{display:block;font-size:9px;opacity:.78;margin-top:2px}' +
+      '.cover-badge{padding:7px 11px;border:1px solid rgba(255,255,255,.42);border-radius:999px;font-size:10px;font-weight:700;background:rgba(12,42,34,.28);backdrop-filter:blur(4px)}' +
+      '.cover-title{position:absolute;z-index:2;left:17mm;right:17mm;top:104mm}.cover-title .eyebrow{font-size:11px;letter-spacing:.22em;font-weight:800;color:#f1cd8e}.cover-title h1{font-size:35px;line-height:1.04;margin:7px 0 6px;letter-spacing:.01em}.cover-title h2{font-size:23px;margin:0;color:#f2cf91}.cover-title .route{font-size:14px;margin-top:9px;font-weight:700;opacity:.94}' +
+      '.cover-info{position:absolute;left:16mm;right:16mm;bottom:16mm;background:#fff;color:#24312d;border-radius:7mm;padding:9mm 9mm 8mm;display:grid;grid-template-columns:1.15fr .85fr;gap:10mm;box-shadow:0 12px 28px rgba(0,0,0,.18)}' +
+      '.cover-info h3{margin:0 0 6px;font-size:14px;color:#163d32}.info-list{display:grid;gap:5px;font-size:10.5px}.info-row{display:grid;grid-template-columns:34mm 1fr;gap:6px}.info-row b{color:#74634d}.flight-box{border-left:1px solid #e8e0d3;padding-left:8mm;display:grid;gap:7px}.flight{background:#f6f2ea;border-radius:4mm;padding:5mm}.flight small{display:block;font-size:8px;letter-spacing:.12em;color:#907646;font-weight:800}.flight strong{display:block;font-size:12px;margin-top:3px}.flight span{display:block;font-size:9px;color:#6e756f;margin-top:2px}' +
+      '.photo-grid{height:120mm;display:grid;grid-template-columns:1.35fr .65fr;gap:2.5mm;padding:0}.photo-main,.photo-side{min-width:0;min-height:0}.photo-side{display:grid;grid-template-rows:1fr 1fr;gap:2.5mm}' +
+      '.why-content{padding:13mm 16mm 18mm}.section-kicker{font-size:9px;letter-spacing:.18em;font-weight:900;color:#b98a40}.why-content h2{font-size:27px;line-height:1.15;margin:4px 0 6px;color:#153d32}.lead{font-size:13px;line-height:1.7;margin:0 0 8mm;color:#59625e}.why-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm}.why-cards div{border:1px solid #e8e0d4;border-radius:4mm;padding:5mm;background:#fbfaf7}.why-cards b{display:block;font-size:11px;color:#173e33;margin-bottom:3px}.why-cards span{font-size:9.5px;line-height:1.5;color:#69716d}.quote{margin-top:7mm;padding:5mm 7mm;background:#163d32;color:#fff;border-radius:4mm;font-size:12px;line-height:1.6;text-align:center}' +
+      '.day-photo{height:82mm;position:relative;background:#19382f}.day-photo img{position:absolute;inset:0}.day-photo-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,28,24,.05),rgba(8,28,24,.15) 45%,rgba(8,28,24,.82) 100%)}' +
+      '.day-brand{position:absolute;top:10mm;left:14mm;color:#fff;font-size:10px;font-weight:900;letter-spacing:.12em}.day-number{position:absolute;top:9mm;right:14mm;color:#fff;font-size:10px;letter-spacing:.12em;border:1px solid rgba(255,255,255,.55);border-radius:999px;padding:6px 9px;background:rgba(11,44,35,.28)}.day-number strong{font-size:13px;margin-left:2px}' +
+      '.day-title{position:absolute;left:14mm;right:14mm;bottom:10mm;color:#fff}.day-title span{font-size:9px;letter-spacing:.12em;font-weight:800;color:#f1d398}.day-title h2{font-size:25px;line-height:1.15;margin:4px 0 0;text-shadow:0 2px 12px rgba(0,0,0,.28)}' +
+      '.day-body{height:198mm;padding:10mm 14mm 13mm;display:grid;grid-template-columns:minmax(0,1fr) 48mm;gap:8mm}.day-main{min-width:0}.timeline{margin-top:5mm;display:grid;gap:3.2mm}.timeline-item{display:grid;grid-template-columns:7mm 1fr;gap:3.5mm;align-items:start}.timeline-dot{width:6mm;height:6mm;border-radius:50%;background:#d3a451;color:#fff;font-size:8px;font-weight:900;display:grid;place-items:center;margin-top:1px}.timeline-copy{font-size:10.5px;line-height:1.55;color:#38443f;border-bottom:1px solid #eee8df;padding-bottom:3mm}.timeline-item:last-child .timeline-copy{border-bottom:0}' +
+      '.note-card{margin-top:5mm;border-left:3px solid #d3a451;background:#f8f3e9;border-radius:0 3mm 3mm 0;padding:4mm 5mm}.note-card b{display:block;font-size:8px;letter-spacing:.12em;color:#a4742d;margin-bottom:2px}.note-card span{font-size:9.5px;line-height:1.5;color:#5d655f}' +
+      '.day-aside{display:grid;align-content:start;gap:4mm}.aside-card{border-radius:4mm;padding:5mm;background:#f6f3ed;border:1px solid #ebe3d7}.aside-card small{display:block;font-size:7.5px;letter-spacing:.14em;font-weight:900;color:#a37c42;margin-bottom:3px}.aside-card strong{display:block;font-size:12px;line-height:1.25;color:#173d32}.aside-card>span{display:block;font-size:8.5px;line-height:1.45;color:#68706b;margin-top:3px}.meal-tags{display:flex;flex-wrap:wrap;gap:2mm;margin-top:2mm}.meal-tags span{font-size:7.5px;font-weight:800;color:#fff;background:#173d32;border-radius:999px;padding:2mm 2.5mm}.route-card{background:#173d32;color:#fff}.route-card small{color:#edca8a}.route-card strong{color:#fff;font-size:16px}.route-card>span{color:rgba(255,255,255,.7)}' +
+      'footer{position:absolute;left:14mm;right:14mm;bottom:6mm;display:flex;justify-content:space-between;gap:8px;border-top:1px solid #e6ded3;padding-top:3mm;color:#817a70;font-size:7.5px}.cover footer{color:rgba(255,255,255,.75);border-color:rgba(255,255,255,.25)}' +
+      '@media print{html,body{background:#fff}.toolbar{display:none}.page{margin:0;box-shadow:none;page-break-after:always}.page:last-child{page-break-after:auto}}' +
     '</style></head><body>' +
-    '<div class="toolbar"><button class="primary" onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button><button class="secondary" onclick="window.close()">ปิด</button></div>' +
-    '<section class="page cover"><div class="brand"><strong>BHUTAN CENTER</strong><span>บริการท่องเที่ยวภูฏานที่ใส่ใจทุกความต้องการของคุณ</span></div>' +
-    '<div><h1>' + escapeHtml(programTitle) + '</h1><h2>' + escapeHtml(duration) + '</h2><div class="route">' + escapeHtml(route) + '</div></div>' +
-    '<div class="summary">' +
-    '<div><b>Travel itinerary:</b> ' + escapeHtml(program.trackingId || '-') + '</div>' +
-    '<div><b>Customer:</b> ' + escapeHtml(program.customerName || '-') + '</div>' +
-    '<div><b>Guide Name:</b> ' + escapeHtml(program.guideName || '-') + '</div>' +
-    '<div><b>Contact Guide:</b> ' + escapeHtml(program.guideContact || '-') + '</div>' +
-    '<div><b>Room Type:</b> ' + escapeHtml(program.roomType || '-') + '</div>' +
-    '<div><b>Date of Travel:</b> ' + escapeHtml(formatTravelDate(program.startDate)) + ' – ' + escapeHtml(formatTravelDate(program.endDate)) + '</div>' +
-    '<div><b>Outbound BKK → PBH:</b> ' + escapeHtml(flightOut) + '</div>' +
-    '<div><b>Inbound PBH → BKK:</b> ' + escapeHtml(flightBack) + '</div>' +
-    '</div><footer>52/38 11th Floor, Soi Saladaeng 2, Silom, Bangrak, Bangkok 10500 · info@bhutancenter.com · www.bhutancenter.com · LICENSE NUMBER: 11/07261</footer></section>' +
-    whyPage + dayPages + '</body></html>';
+      '<div class="toolbar"><button class="primary" onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button><button class="secondary" onclick="window.close()">ปิด</button></div>' +
+      '<section class="page cover">' +
+        '<div class="cover-photo"><img src="' + TOUR_IMAGES.cover + '" alt="Bhutan landscape"></div>' +
+        '<div class="cover-top">' +
+          '<div class="cover-logo"><img src="/images/bhutan-center-logo.png" alt="Bhutan Center"><div><b>BHUTAN CENTER</b><span>OMG EXPERIENCE</span></div></div>' +
+          '<div class="cover-badge">PRIVATE JOURNEY</div>' +
+        '</div>' +
+        '<div class="cover-title">' +
+          '<div class="eyebrow">DISCOVER THE KINGDOM OF HAPPINESS</div>' +
+          '<h1>' + escapeHtml(programTitle) + '</h1>' +
+          '<h2>' + escapeHtml(duration) + '</h2>' +
+          '<div class="route">' + escapeHtml(route) + '</div>' +
+        '</div>' +
+        '<div class="cover-info">' +
+          '<div><h3>TRAVEL INFORMATION</h3><div class="info-list">' +
+            '<div class="info-row"><b>Customer</b><span>' + escapeHtml(program.customerName || '-') + '</span></div>' +
+            '<div class="info-row"><b>Date of Travel</b><span>' + escapeHtml(formatTravelDate(program.startDate)) + ' - ' + escapeHtml(formatTravelDate(program.endDate)) + '</span></div>' +
+            '<div class="info-row"><b>Guide</b><span>' + escapeHtml(program.guideName || '-') + '</span></div>' +
+            '<div class="info-row"><b>Guide Contact</b><span>' + escapeHtml(program.guideContact || '-') + '</span></div>' +
+            '<div class="info-row"><b>Room Type</b><span>' + escapeHtml(program.roomType || '-') + '</span></div>' +
+          '</div></div>' +
+          '<div class="flight-box">' +
+            '<div class="flight"><small>OUTBOUND · BKK → PBH</small><strong>' + escapeHtml(flightOut) + '</strong><span>Bangkok to Paro</span></div>' +
+            '<div class="flight"><small>INBOUND · PBH → BKK</small><strong>' + escapeHtml(flightBack) + '</strong><span>Paro to Bangkok</span></div>' +
+          '</div>' +
+        '</div>' +
+        '<footer><span>BHUTAN CENTER</span><span>www.bhutancenter.com</span><span>LICENSE 11/07261</span></footer>' +
+      '</section>' +
+      whyPage + dayPages +
+    '</body></html>';
 }
 
 function openFullProgram(program: TourProgram, autoPrint = false) {
@@ -172,7 +267,13 @@ function openFullProgram(program: TourProgram, autoPrint = false) {
   docWindow.document.write(fullProgramHtml(program));
   docWindow.document.close();
   docWindow.focus();
-  if (autoPrint) window.setTimeout(() => docWindow.print(), 350);
+  if (autoPrint) {
+    const images = Array.from(docWindow.document.images);
+    Promise.all(images.map((img) => img.complete ? Promise.resolve() : new Promise<void>((resolve) => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+    }))).then(() => window.setTimeout(() => docWindow.print(), 250));
+  }
 }
 
 export function TourProgramBuilder({ currentUser, trackings, programs, onSave, onDelete }: Props) {

@@ -1,4 +1,4 @@
-import { TourProgram, TourProgramDay } from '../types';
+import { TourAttraction, TourFestival, TourProgram, TourProgramDay } from '../types';
 
 export const STANDARD_CITIES: Record<number, string[]> = {
   4: ['Paro', 'Thimphu', 'Punakha'],
@@ -7,7 +7,7 @@ export const STANDARD_CITIES: Record<number, string[]> = {
 };
 
 type MainCity = 'Paro' | 'Thimphu' | 'Punakha' | 'Gangtey';
-type ProgramInput = Pick<TourProgram, 'startDate' | 'endDate' | 'cities' | 'outboundFlight' | 'inboundFlight' | 'options'>;
+type ProgramInput = Pick<TourProgram, 'startDate' | 'endDate' | 'cities' | 'outboundFlight' | 'inboundFlight' | 'options' | 'selectedFestivalIds'>;
 export type PenultimateProgram = 'taktsang' | 'haa';
 type DaySeed = { city: string; title: string; activities: string[]; overnight: string; note?: string };
 
@@ -245,14 +245,19 @@ function transitActivities(from: MainCity, to: MainCity, used: Set<string>) {
   return result;
 }
 
-function smartCustomSeeds(program: ProgramInput, totalDays: number, penultimateProgram: PenultimateProgram): DaySeed[] {
+function smartCustomSeeds(program: ProgramInput, totalDays: number, penultimateProgram: PenultimateProgram, catalog: TourAttraction[] = [], festivals: TourFestival[] = []): DaySeed[] {
   if (totalDays <= 1) return [{ city: 'Paro', title: 'Paro – Bangkok', overnight: '', activities: ['เดินทางสู่สนามบินพาโรเพื่อเดินทางกลับกรุงเทพฯ'] }];
 
-  const selected = selectedMainCities(program.cities);
+  const requiredIds = Array.isArray(program.options?.requiredAttractionIds) ? program.options.requiredAttractionIds.map(String) : [];
+  const requiredAttractions = catalog.filter((item) => requiredIds.includes(item.id) && item.isActive !== false);
+  const requiredCities = requiredAttractions.map((item) => item.city);
+  const selected = selectedMainCities([...program.cities, ...requiredCities]);
   const includeFestival = Boolean(program.options?.includeFestival);
+  const selectedFestival = festivals.find((item) => program.selectedFestivalIds?.includes(item.id)) || null;
   const festivalDate = includeFestival ? String(program.options?.festivalDate || '') : '';
-  const festivalName = includeFestival ? String(program.options?.festivalName || '').trim() : '';
-  const festivalCity = getFestivalCity(program.options);
+  const festivalName = includeFestival ? String(selectedFestival?.name || program.options?.festivalName || '').trim() : '';
+  const festivalCity = toMainCity(String(selectedFestival?.city || '')) || getFestivalCity(program.options);
+  const festivalVenue = selectedFestival?.venueAttractionId ? catalog.find((item) => item.id === selectedFestival.venueAttractionId) : null;
   const arrivalHour = hourFromTime(program.outboundFlight.arrivalTime);
 
   let specialIndex = totalDays - 2;
@@ -275,6 +280,19 @@ function smartCustomSeeds(program: ProgramInput, totalDays: number, penultimateP
   cityByDay.set(departureIndex, 'Paro');
 
   const used = new Set<string>();
+  const requiredRemaining = new Map<string, TourAttraction[]>();
+  for (const item of requiredAttractions) {
+    const list = requiredRemaining.get(item.city) || [];
+    list.push(item);
+    requiredRemaining.set(item.city, list);
+  }
+  const catalogByCity = new Map<string, TourAttraction[]>();
+  for (const item of catalog.filter((x) => x.isActive !== false)) {
+    const list = catalogByCity.get(item.city) || [];
+    list.push(item);
+    catalogByCity.set(item.city, list);
+  }
+  for (const list of catalogByCity.values()) list.sort((a,b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
   const seeds: DaySeed[] = [];
   let currentCity: MainCity = 'Paro';
 
@@ -339,18 +357,39 @@ function smartCustomSeeds(program: ProgramInput, totalDays: number, penultimateP
     if (isFestival) {
       activities.push('เทศกาล: ' + festivalName);
       used.add('เทศกาล: ' + festivalName);
+      if (festivalVenue && !used.has(festivalVenue.name)) {
+        activities.push(festivalVenue.name);
+        used.add(festivalVenue.name);
+      }
     }
 
     activities.push(...transitActivities(currentCity, target, used));
 
-    let sightseeingSlots = isFestival ? 1 : travel >= 4 ? 1 : travel >= 2.5 ? 2 : 3;
+    const requiredHere = requiredRemaining.get(target) || [];
+    for (const item of requiredHere) {
+      if (!used.has(item.name)) {
+        activities.push(item.name);
+        used.add(item.name);
+      }
+    }
+    requiredRemaining.delete(target);
+
+    let sightseeingSlots = isFestival ? 0 : travel >= 4 ? 1 : travel >= 2.5 ? 2 : 3;
     if (isFirst && arrivalHour !== null) {
       if (arrivalHour >= 14) sightseeingSlots = 0;
       else if (arrivalHour >= 11) sightseeingSlots = Math.min(sightseeingSlots, 1);
       else sightseeingSlots = Math.min(sightseeingSlots, 2);
     }
 
-    activities.push(...takeUnused(target, used, sightseeingSlots));
+    if (catalogByCity.size > 0) {
+      const available = (catalogByCity.get(target) || []).filter((item) => !used.has(item.name));
+      for (const item of available.slice(0, Math.max(0, sightseeingSlots))) {
+        activities.push(item.name);
+        used.add(item.name);
+      }
+    } else {
+      activities.push(...takeUnused(target, used, sightseeingSlots));
+    }
 
     if (currentCity !== target) {
       const travelText = 'เดินทางต่อสู่ ' + target;
@@ -383,15 +422,15 @@ function smartCustomSeeds(program: ProgramInput, totalDays: number, penultimateP
   return seeds;
 }
 
-export function generateTourProgramDays(program: ProgramInput): TourProgramDay[] {
+export function generateTourProgramDays(program: ProgramInput, catalog: TourAttraction[] = [], festivals: TourFestival[] = []): TourProgramDay[] {
   const total = Math.max(1, diffTourDays(program.startDate, program.endDate));
   const standard = STANDARD_CITIES[total];
   const penultimateProgram = getPenultimateProgram(program.options);
-  const hasFestival = Boolean(program.options?.includeFestival && program.options?.festivalDate && program.options?.festivalName);
+  const hasFestival = Boolean(program.options?.includeFestival && program.options?.festivalDate && (program.options?.festivalName || program.selectedFestivalIds?.length));
   const isStandard = !hasFestival && Boolean(standard && sameCities(program.cities, standard));
   const seeds = isStandard
     ? (standardSeeds(total, penultimateProgram) || [])
-    : smartCustomSeeds(program, total, penultimateProgram);
+    : smartCustomSeeds(program, total, penultimateProgram, catalog, festivals);
 
   const arrivalHour = hourFromTime(program.outboundFlight.arrivalTime);
   const departureHour = hourFromTime(program.inboundFlight.departureTime);

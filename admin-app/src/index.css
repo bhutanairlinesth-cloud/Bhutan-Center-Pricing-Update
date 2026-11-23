@@ -5043,3 +5043,37 @@ textarea{min-height:74px}
 .tour-planner-note b { color: var(--green-950); font-size: 13px; }
 .tour-planner-note span { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .field-error { color: #b3261e !important; font-weight: 700; }
+
+.tour-required-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:12px}
+.tour-required-city{border:1px solid var(--line);border-radius:16px;padding:14px;background:var(--surface-soft)}
+.tour-required-city>b{display:block;margin-bottom:8px;color:var(--green-950)}
+.tour-required-city>div{display:grid;gap:8px}
+.tour-required-city label{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid transparent;border-radius:12px;background:var(--surface);cursor:pointer}
+.tour-required-city label.selected{border-color:#b7924e;background:#fffaf0}
+.tour-required-city label span{display:grid;gap:2px;font-size:13px;font-weight:700}
+.tour-required-city label small{font-size:11px;font-weight:500;color:var(--muted)}
+.tour-catalog-card .panel-heading p{margin:4px 0 0;color:var(--muted);font-size:12px}
+.tour-catalog-body{display:grid;gap:16px;padding:0 20px 20px}
+.tour-catalog-add{display:grid;grid-template-columns:1.3fr .8fr .7fr 1.4fr;gap:12px;align-items:end}
+.tour-catalog-add .tour-toggle.compact{grid-column:1/3;margin:0}
+.tour-catalog-add .primary-button{grid-column:3/5;justify-content:center}
+.tour-catalog-list{display:grid;gap:8px}
+.tour-catalog-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.tour-catalog-row>div:first-child{display:grid;gap:3px}
+.tour-catalog-row b{font-size:13px;color:var(--green-950)}
+.tour-catalog-row small,.tour-catalog-row span{font-size:11px;color:var(--muted)}
+.tour-catalog-row>div:last-child{display:flex;gap:8px;align-items:center}
+.ghost-button.small{padding:7px 10px;font-size:11px}
+.tour-festival-library{display:grid;gap:8px;padding-top:4px}
+.tour-festival-library>b{font-size:13px;color:var(--green-950)}
+.tour-festival-library>div{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:center;padding:10px 12px;background:#fffaf0;border:1px solid #ead8b5;border-radius:12px}
+.tour-festival-library span{font-weight:700;font-size:12px}
+.tour-festival-library small{font-size:11px;color:var(--muted)}
+@media(max-width:900px){
+ .tour-required-grid{grid-template-columns:1fr}
+ .tour-catalog-add{grid-template-columns:1fr}
+ .tour-catalog-add .tour-toggle.compact,.tour-catalog-add .primary-button{grid-column:auto}
+ .tour-catalog-row{align-items:flex-start;flex-direction:column}
+ .tour-festival-library>div{grid-template-columns:1fr auto}
+ .tour-festival-library>div small{grid-column:1/2}
+}

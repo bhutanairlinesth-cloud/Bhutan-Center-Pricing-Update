@@ -38,7 +38,7 @@ function createProgram(currentUser: User): TourProgram {
     hotelCategory: '3 Stars',
     outboundFlight: { flightNo: '', departureAirport: 'BKK', arrivalAirport: 'PBH', departureTime: '', arrivalTime: '' },
     inboundFlight: { flightNo: '', departureAirport: 'PBH', arrivalAirport: 'BKK', departureTime: '', arrivalTime: '' },
-    options: { includeFestival: false, festivalName: '', festivalDate: '', penultimateProgram: 'taktsang' },
+    options: { includeFestival: false, festivalName: '', festivalDate: '', festivalCity: 'Paro', penultimateProgram: 'taktsang' },
     selectedFestivalIds: [],
     days: [],
     guideName: '',

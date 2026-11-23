@@ -441,7 +441,8 @@ export function generateTourProgramDays(program: ProgramInput, catalog: TourAttr
   const standard = STANDARD_CITIES[total];
   const penultimateProgram = getPenultimateProgram(program.options);
   const hasFestival = Boolean(program.options?.includeFestival && program.options?.festivalDate && (program.options?.festivalName || program.selectedFestivalIds?.length));
-  const isStandard = !hasFestival && Boolean(standard && sameCities(program.cities, standard));
+  const hasRequiredAttractions = Array.isArray(program.options?.requiredAttractionIds) && program.options.requiredAttractionIds.length > 0;
+  const isStandard = !hasFestival && !hasRequiredAttractions && Boolean(standard && sameCities(program.cities, standard));
   const seeds = isStandard
     ? (standardSeeds(total, penultimateProgram) || [])
     : smartCustomSeeds(program, total, penultimateProgram, catalog, festivals);

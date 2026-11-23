@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, FileText, MapPinned, Plus, Printer, Save, Sparkles, Trash2 } from 'lucide-react';
 import { CustomerTracking, HotelCategory, TourProgram, TourProgramDay, User } from '../types';
+import { diffTourDays, generateTourProgramDays, programNameFor, STANDARD_CITIES } from '../lib/tourProgramRules';
 
 type Props = {
   currentUser: User;
@@ -11,84 +12,6 @@ type Props = {
 };
 
 const CITY_OPTIONS = ['Paro', 'Thimphu', 'Punakha', 'Haa', 'Gangtey'];
-const ATTRACTIONS: Record<string, string[]> = {
-  Paro: ['Rinpung Dzong', 'National Museum of Bhutan', 'Kyichu Lhakhang', 'Tiger’s Nest Monastery'],
-  Thimphu: ['Buddha Dordenma', 'Memorial Chorten', 'National Library', 'Centenary Farmers Market', 'National Post Office'],
-  Punakha: ['Dochula Pass', 'Chimi Lhakhang', 'Punakha Dzong', 'Punakha Suspension Bridge'],
-  Haa: ['Haa Valley', 'Lhakhang Karpo', 'Chele La Pass'],
-  Gangtey: ['Gangtey Monastery', 'Phobjikha Valley', 'Black-necked Crane Centre'],
-};
-
-const uid = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-const isoDate = (date: Date) => date.toISOString().slice(0, 10);
-const addDays = (date: string, offset: number) => {
-  if (!date) return '';
-  const d = new Date(`${date}T12:00:00`);
-  d.setDate(d.getDate() + offset);
-  return isoDate(d);
-};
-const diffDays = (start: string, end: string) => {
-  if (!start || !end) return 0;
-  return Math.max(1, Math.round((new Date(`${end}T12:00:00`).getTime() - new Date(`${start}T12:00:00`).getTime()) / 86400000) + 1);
-};
-const hourFromTime = (value?: string) => {
-  if (!value) return null;
-  const match = value.match(/(\d{1,2}):(\d{2})/);
-  return match ? Number(match[1]) : null;
-};
-
-function distributeCities(totalDays: number, cities: string[]) {
-  const route = cities.length ? cities : ['Paro', 'Thimphu', 'Punakha'];
-  return Array.from({ length: totalDays }, (_, index) => {
-    if (index === 0) return route[0];
-    if (index === totalDays - 1) return route[route.length - 1];
-    const progress = index / Math.max(1, totalDays - 1);
-    return route[Math.min(route.length - 1, Math.floor(progress * route.length))];
-  });
-}
-
-function generateDays(program: Pick<TourProgram, 'startDate' | 'endDate' | 'cities' | 'outboundFlight' | 'inboundFlight' | 'options'>): TourProgramDay[] {
-  const total = Math.max(1, diffDays(program.startDate, program.endDate));
-  const route = distributeCities(total, program.cities);
-  const arrivalHour = hourFromTime(program.outboundFlight.arrivalTime);
-  const departureHour = hourFromTime(program.inboundFlight.departureTime);
-  const festivalDate = String(program.options?.festivalDate || '');
-  const festivalName = String(program.options?.festivalName || '');
-
-  return route.map((city, index) => {
-    const date = addDays(program.startDate, index);
-    const nextCity = route[index + 1] || city;
-    const isFirst = index === 0;
-    const isLast = index === total - 1;
-    let capacity = 3;
-    if (isFirst && arrivalHour !== null) capacity = arrivalHour >= 14 ? 1 : arrivalHour >= 11 ? 2 : 3;
-    if (isLast && departureHour !== null) capacity = departureHour <= 10 ? 0 : departureHour <= 14 ? 1 : 2;
-
-    const activities = (ATTRACTIONS[city] || []).slice(0, capacity);
-    if (festivalDate && date === festivalDate && festivalName) activities.unshift(`เทศกาล: ${festivalName}`);
-    if (isFirst) activities.unshift('เดินทางถึงสนามบินพาโร ผ่านพิธีการตรวจคนเข้าเมือง และพบไกด์ท้องถิ่น');
-    if (isLast) activities.push('เดินทางสู่สนามบินพาโรเพื่อเดินทางกลับกรุงเทพฯ');
-
-    const transfer = !isLast && nextCity !== city ? `หลังจบการเที่ยว เดินทางต่อไปยัง ${nextCity}` : '';
-    const title = isFirst ? `Arrival in Bhutan – ${city}`
-      : isLast ? `${city} – Departure`
-      : nextCity !== city ? `${city} – ${nextCity}`
-      : city;
-
-    return {
-      id: uid('day'),
-      dayNumber: index + 1,
-      date,
-      city,
-      title,
-      activities,
-      meals: { breakfast: !isFirst, lunch: !(isLast && departureHour !== null && departureHour <= 12), dinner: !isLast },
-      hotel: isLast ? '' : `${city} Hotel`,
-      note: transfer,
-    };
-  });
-}
-
 function createProgram(currentUser: User): TourProgram {
   const start = isoDate(new Date());
   const end = addDays(start, 4);
@@ -96,7 +19,7 @@ function createProgram(currentUser: User): TourProgram {
     id: uid('tp'),
     trackingId: '',
     customerName: '',
-    title: 'Bhutan Private Journey',
+    title: 'WONDERS OF BHUTAN',
     status: 'draft',
     startDate: start,
     endDate: end,
@@ -117,27 +40,142 @@ function createProgram(currentUser: User): TourProgram {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  seed.days = generateDays(seed);
+  seed.days = generateTourProgramDays(seed);
   return seed;
+}
+
+
+const escapeHtml = (value: unknown) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
+
+const formatTravelDate = (value: string) => {
+  if (!value) return '-';
+  const d = new Date(value + 'T12:00:00');
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+};
+
+const ACTIVITY_COPY: Record<string, string> = {
+  'Rinpung Dzong': 'เยี่ยมชมพาโรรินปุงซอง ป้อมปราการสำคัญของเมืองพาโร และชมสถาปัตยกรรมซองอันเป็นเอกลักษณ์ของภูฏาน',
+  'National Museum of Bhutan': 'ชมพิพิธภัณฑสถานแห่งชาติภูฏาน เรียนรู้ประวัติศาสตร์ ศิลปวัฒนธรรม และวิถีชีวิตของชาวภูฏาน',
+  'Kyichu Lhakhang': 'สักการะวัดคิชูลาคัง หนึ่งในวัดเก่าแก่และศักดิ์สิทธิ์ที่สุดของภูฏาน',
+  'Buddha Dordenma': 'สักการะองค์พระใหญ่ Buddha Dordenma พร้อมชมทัศนียภาพเมืองทิมพูจากมุมสูง',
+  'Takin Zoo': 'ชมทาคิน สัตว์ประจำชาติของภูฏาน ณ เขตอนุรักษ์ทาคินเมืองทิมพู',
+  'National Library': 'เยี่ยมชมหอสมุดแห่งชาติ แหล่งรวบรวมคัมภีร์และเอกสารสำคัญของภูฏาน',
+  'National Post Office': 'เยี่ยมชมที่ทำการไปรษณีย์แห่งชาติ ซึ่งมีชื่อเสียงด้านตราไปรษณียากรของภูฏาน',
+  'Memorial Chorten': 'เยี่ยมชม National Memorial Chorten อนุสรณ์สถานสำคัญใจกลางเมืองทิมพู',
+  'Tashichho Dzong': 'ชมตาชิโชซอง ศูนย์กลางการบริหารราชการและศาสนาที่สำคัญของเมืองทิมพู',
+  'Simtokha Dzong': 'แวะชมซิมโตกาซอง หนึ่งในซองเก่าแก่บนเส้นทางจากทิมพู',
+  'Dochula Pass': 'เดินทางผ่านโดชูลาพาส ชมสถูปแห่งชัยชนะ 108 องค์ และทิวทัศน์เทือกเขาหิมาลัยเมื่อท้องฟ้าเปิด',
+  'Chimi Lhakhang': 'เยี่ยมชมวัดชิมิลาคัง วัดสำคัญกลางหุบเขาพูนาคา',
+  'Punakha Dzong': 'ชมพูนาคาซอง ป้อมปราการที่ตั้งอยู่บริเวณจุดบรรจบของแม่น้ำ Pho Chhu และ Mo Chhu',
+  'Punakha Suspension Bridge': 'เดินชมสะพานแขวนพูนาคา สัมผัสบรรยากาศของหุบเขาและสายน้ำ',
+  'Sangaygang View Point': 'ชมวิวเมืองทิมพูจากจุดชมวิวซังเกกัง',
+  'Chuzom Bridge': 'แวะบริเวณชูซอม จุดบรรจบของเส้นทางสำคัญก่อนเข้าสู่เมืองพาโร',
+  'Gangtey Monastery': 'เยี่ยมชมวัดกังเต วัดสำคัญของหุบเขากังเต',
+  'Phobjikha Valley': 'ชมธรรมชาติของหุบเขาผอบจิกะ หนึ่งในหุบเขาที่งดงามและสงบของภูฏาน',
+  'Taktsang Monastery or Tiger’s Nest': 'เดินขึ้นสู่วัดทักซัง หรือ Tiger’s Nest วัดสำคัญระดับโลกที่ตั้งอยู่บนหน้าผาเหนือหุบเขาพาโร',
+  'Lunch at Taktsang Cafeteria': 'รับประทานอาหารกลางวัน ณ Taktsang Cafeteria ระหว่างการเดินขึ้นวัดทักซัง',
+  'Paro Street Shopping (City Center)': 'เดินเล่นย่านใจกลางเมืองพาโรและเลือกซื้อของที่ระลึกตามอัธยาศัย',
+};
+
+function activityParagraph(item: string) {
+  if (ACTIVITY_COPY[item]) return ACTIVITY_COPY[item];
+  if (item.startsWith('เทศกาล:')) return 'ร่วมชม' + item.replace('เทศกาล:', '').trim() + ' ตามวันและเวลาจัดงานจริง';
+  if (item.includes('สนามบินพาโร')) return 'เดินทางสู่สนามบินนานาชาติพาโร เพื่อเช็กอินและเดินทางกลับกรุงเทพฯ';
+  return item;
+}
+
+function fullProgramHtml(program: TourProgram) {
+  const total = Math.max(1, diffTourDays(program.startDate, program.endDate));
+  const programTitle = programNameFor(total, program.cities);
+  const duration = total + ' วัน ' + Math.max(0, total - 1) + ' คืน';
+  const route = programTitle === 'THE ULTIMATE BHUTAN'
+    ? 'พาโร – ทิมพู – พูนาคา – กังเต – ทักซัง'
+    : programTitle === 'CUSTOM TO BHUTAN'
+      ? (program.cities.join(' – ') + ' – พาโร – ทักซัง')
+      : 'พาโร – ทิมพู – พูนาคา – ทักซัง';
+
+  const flightOut = (program.outboundFlight.flightNo || '-') + ' ' + (program.outboundFlight.departureTime || '-') + ' – ' + (program.outboundFlight.arrivalTime || '-');
+  const flightBack = (program.inboundFlight.flightNo || '-') + ' ' + (program.inboundFlight.departureTime || '-') + ' – ' + (program.inboundFlight.arrivalTime || '-');
+
+  const dayPages = program.days.map((day) => {
+    const rows = day.activities.map((item) => '<p>• ' + escapeHtml(activityParagraph(item)) + '</p>').join('');
+    return '<section class="page day-page">' +
+      '<div class="brand"><strong>BHUTAN CENTER</strong><span>บริการท่องเที่ยวภูฏานที่ใส่ใจทุกความต้องการของคุณ</span></div>' +
+      '<div class="day-head"><div>DAY ' + day.dayNumber + '</div><div><h2>' + escapeHtml(day.title) + '</h2><span>' + escapeHtml(formatTravelDate(day.date)) + '</span></div></div>' +
+      '<div class="day-copy">' + rows +
+      (day.note ? '<p>• ' + escapeHtml(day.note) + '</p>' : '') +
+      (day.meals.breakfast ? '<p>• เช้า รับประทานอาหารเช้า ณ ห้องอาหารของโรงแรม</p>' : '') +
+      (day.meals.lunch ? '<p>• เที่ยง รับประทานอาหารกลางวัน ณ ภัตตาคารท้องถิ่น</p>' : '') +
+      (day.meals.dinner ? '<p>• ค่ำ รับประทานอาหารค่ำ และพักผ่อนตามอัธยาศัย</p>' : '') +
+      '</div>' +
+      '<div class="overnight">' + (day.hotel ? '<b>พักค้างคืน:</b> ' + escapeHtml(day.hotel) : '<b>เดินทางกลับกรุงเทพฯ</b>') + '</div>' +
+      '<footer>52/38 11th Floor, Soi Saladaeng 2, Silom, Bangrak, Bangkok 10500 · info@bhutancenter.com · LICENSE NUMBER: 11/07261</footer>' +
+      '</section>';
+  }).join('');
+
+  return '<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>' + escapeHtml(programTitle) + '</title>' +
+    '<style>' +
+    '@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#e8e4dd;color:#2b2926;font-family:Tahoma,Arial,sans-serif}' +
+    '.toolbar{position:sticky;top:0;z-index:3;display:flex;gap:10px;justify-content:center;padding:12px;background:#173d32}.toolbar button{border:0;border-radius:9px;padding:10px 18px;font-weight:700;cursor:pointer}.toolbar .primary{background:#c99b50;color:white}.toolbar .secondary{background:white;color:#173d32}' +
+    '.page{width:210mm;min-height:297mm;margin:14px auto;padding:18mm 17mm 14mm;background:#fff;box-shadow:0 8px 28px rgba(0,0,0,.12);position:relative;page-break-after:always}.cover{display:flex;flex-direction:column;text-align:center}.cover .brand{margin-bottom:34mm}.brand{display:flex;flex-direction:column;gap:3px;color:#173d32}.brand strong{font-size:22px;letter-spacing:.05em}.brand span{font-size:12px;color:#6d675f}' +
+    '.cover h1{font-size:30px;margin:12px 0 4px;color:#173d32}.cover h2{font-size:24px;margin:0;color:#b2823c}.route{font-size:18px;font-weight:700;margin:16px 0}.summary{margin:24mm auto 0;width:100%;max-width:150mm;text-align:left;border-top:2px solid #173d32;padding-top:14px;display:grid;gap:8px;font-size:14px}' +
+    '.day-head{display:grid;grid-template-columns:32mm 1fr;gap:14px;align-items:center;margin:18mm 0 12mm;border-bottom:2px solid #173d32;padding-bottom:10px}.day-head>div:first-child{font-size:26px;font-weight:900;color:#b2823c}.day-head h2{margin:0;color:#173d32;font-size:22px}.day-head span{font-size:12px;color:#7b746c}.day-copy p{font-size:15px;line-height:1.75;margin:0 0 9px}.overnight{margin-top:18px;padding:13px 15px;border-left:4px solid #c99b50;background:#f7f2e9;font-size:14px}' +
+    'footer{position:absolute;left:17mm;right:17mm;bottom:9mm;padding-top:7px;border-top:1px solid #d8d1c7;font-size:9px;color:#7c756d;text-align:center}@media print{body{background:white}.toolbar{display:none}.page{margin:0;box-shadow:none;page-break-after:always}.page:last-child{page-break-after:auto}}' +
+    '</style></head><body>' +
+    '<div class="toolbar"><button class="primary" onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button><button class="secondary" onclick="window.close()">ปิด</button></div>' +
+    '<section class="page cover"><div class="brand"><strong>BHUTAN CENTER</strong><span>บริการท่องเที่ยวภูฏานที่ใส่ใจทุกความต้องการของคุณ</span></div>' +
+    '<div><h1>' + escapeHtml(programTitle) + '</h1><h2>' + escapeHtml(duration) + '</h2><div class="route">' + escapeHtml(route) + '</div></div>' +
+    '<div class="summary">' +
+    '<div><b>Travel itinerary:</b> ' + escapeHtml(program.trackingId || '-') + '</div>' +
+    '<div><b>Customer:</b> ' + escapeHtml(program.customerName || '-') + '</div>' +
+    '<div><b>Guide Name:</b> ' + escapeHtml(program.guideName || '-') + '</div>' +
+    '<div><b>Contact Guide:</b> ' + escapeHtml(program.guideContact || '-') + '</div>' +
+    '<div><b>Room Type:</b> ' + escapeHtml(program.roomType || '-') + '</div>' +
+    '<div><b>Date of Travel:</b> ' + escapeHtml(formatTravelDate(program.startDate)) + ' – ' + escapeHtml(formatTravelDate(program.endDate)) + '</div>' +
+    '<div><b>Outbound BKK → PBH:</b> ' + escapeHtml(flightOut) + '</div>' +
+    '<div><b>Inbound PBH → BKK:</b> ' + escapeHtml(flightBack) + '</div>' +
+    '</div><footer>52/38 11th Floor, Soi Saladaeng 2, Silom, Bangrak, Bangkok 10500 · info@bhutancenter.com · www.bhutancenter.com · LICENSE NUMBER: 11/07261</footer></section>' +
+    dayPages + '</body></html>';
+}
+
+function openFullProgram(program: TourProgram, autoPrint = false) {
+  const docWindow = window.open('', '_blank');
+  if (!docWindow) {
+    window.alert('เบราว์เซอร์บล็อกหน้าต่างเอกสาร กรุณาอนุญาต Pop-up สำหรับเว็บไซต์นี้');
+    return;
+  }
+  docWindow.document.open();
+  docWindow.document.write(fullProgramHtml(program));
+  docWindow.document.close();
+  docWindow.focus();
+  if (autoPrint) window.setTimeout(() => docWindow.print(), 350);
 }
 
 export function TourProgramBuilder({ currentUser, trackings, programs, onSave, onDelete }: Props) {
   const [editing, setEditing] = useState<TourProgram>(() => programs[0] || createProgram(currentUser));
   const linkedTracking = useMemo(() => trackings.find((x) => x.id === editing.trackingId), [trackings, editing.trackingId]);
   const canFinalize = Boolean(linkedTracking?.bookingConfirmedAt && (linkedTracking?.visaReceivedAt || linkedTracking?.visaSentAt));
-  const totalDays = Math.max(1, diffDays(editing.startDate, editing.endDate));
+  const totalDays = Math.max(1, diffTourDays(editing.startDate, editing.endDate));
 
   const set = <K extends keyof TourProgram>(key: K, value: TourProgram[K]) => setEditing((prev) => ({ ...prev, [key]: value, updatedAt: new Date().toISOString() }));
   const rebuild = (patch?: Partial<TourProgram>) => {
     setEditing((prev) => {
       const next = { ...prev, ...patch, updatedAt: new Date().toISOString() };
-      return { ...next, days: generateDays(next) };
+      const total = Math.max(1, diffTourDays(next.startDate, next.endDate));
+      const titled = { ...next, title: programNameFor(total, next.cities) };
+      return { ...titled, days: generateTourProgramDays(titled) };
     });
   };
 
   const setDuration = (days: number) => {
     if (!editing.startDate) return;
-    rebuild({ endDate: addDays(editing.startDate, days - 1) });
+    rebuild({ endDate: addDays(editing.startDate, days - 1), cities: STANDARD_CITIES[days] || editing.cities });
   };
 
   async function save(status: 'draft' | 'final') {
@@ -168,7 +206,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
       </div>
       <div className="tour-program-actions">
         <button className="ghost-button" onClick={() => setEditing(createProgram(currentUser))}><Plus/>สร้างใหม่</button>
-        <button className="ghost-button" onClick={() => window.print()}><Printer/>พิมพ์ / PDF</button>
+        <button className="ghost-button" onClick={() => openFullProgram(editing, false)}><FileText/>ดูโปรแกรมฉบับเต็ม</button>\n        <button className="ghost-button" onClick={() => openFullProgram(editing, true)}><Printer/>พิมพ์ / PDF</button>
         <button className="primary-button" onClick={() => save('draft')}><Save/>บันทึก Draft</button>
       </div>
     </section>
@@ -190,7 +228,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
 
         <div className="form-grid">
           <label className="field"><span>ชื่อลูกค้า</span><input value={editing.customerName} onChange={(e) => set('customerName', e.target.value)}/></label>
-          <label className="field"><span>ชื่อโปรแกรม</span><input value={editing.title} onChange={(e) => set('title', e.target.value)}/></label>
+          <label className="field"><span>ชื่อโปรแกรม</span><input value={editing.title} readOnly/><small>4D3N = JOURNEY TO BHUTAN · 5D4N = WONDERS OF BHUTAN · 6D5N = THE ULTIMATE BHUTAN · ปรับเส้นทาง/จำนวนวัน = CUSTOM TO BHUTAN</small></label>
           <label className="field"><span>วันเดินทางไป</span><input type="date" value={editing.startDate} onChange={(e) => rebuild({ startDate: e.target.value })}/></label>
           <label className="field"><span>วันเดินทางกลับ</span><input type="date" value={editing.endDate} onChange={(e) => rebuild({ endDate: e.target.value })}/></label>
         </div>
@@ -204,7 +242,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
         </div>
 
         <label className="field"><span>ระดับโรงแรม</span><select value={editing.hotelCategory} onChange={(e) => set('hotelCategory', e.target.value as HotelCategory)}><option>3 Stars</option><option>4 Stars</option><option>5 Stars</option></select></label>
-        <div className="field"><span>เมืองที่ต้องการในทริป</span><div className="tour-city-picker">{CITY_OPTIONS.map((city) => <button key={city} type="button" className={editing.cities.includes(city) ? 'active' : ''} onClick={() => toggleCity(city)}>{city}</button>)}</div></div>
+        <div className="field"><span>เมืองที่ต้องการในทริป</span><div className="tour-city-picker">{CITY_OPTIONS.map((city) => <button key={city} type="button" className={editing.cities.includes(city) ? 'active' : ''} onClick={() => toggleCity(city)}>{city}</button>)}</div><small>กฎเส้นทาง: วันก่อนเดินทางกลับต้องเป็น Paro – Taktsang และพักคืนสุดท้ายที่ Paro เสมอ เพราะสนามบินระหว่างประเทศอยู่ที่ Paro</small></div>
       </div>
     </section>
 

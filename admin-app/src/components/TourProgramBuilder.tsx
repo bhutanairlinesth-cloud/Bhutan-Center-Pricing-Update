@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, FileText, MapPinned, Plus, Printer, Save, Sparkles, Trash2 } from 'lucide-react';
 import { CustomerTracking, HotelCategory, TourProgram, TourProgramDay, User } from '../types';
-import { diffTourDays, generateTourProgramDays, programNameFor, STANDARD_CITIES } from '../lib/tourProgramRules';
+import { diffTourDays, generateTourProgramDays, getPenultimateProgram, programNameFor, STANDARD_CITIES } from '../lib/tourProgramRules';
 
 type Props = {
   currentUser: User;
@@ -11,7 +11,7 @@ type Props = {
   onDelete: (id: string) => Promise<void>;
 };
 
-const CITY_OPTIONS = ['Paro', 'Thimphu', 'Punakha', 'Haa', 'Gangtey'];
+const CITY_OPTIONS = ['Paro', 'Thimphu', 'Punakha', 'Gangtey'];
 
 const uid = (prefix: string) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
@@ -37,7 +37,7 @@ function createProgram(currentUser: User): TourProgram {
     hotelCategory: '3 Stars',
     outboundFlight: { flightNo: '', departureAirport: 'BKK', arrivalAirport: 'PBH', departureTime: '', arrivalTime: '' },
     inboundFlight: { flightNo: '', departureAirport: 'PBH', arrivalAirport: 'BKK', departureTime: '', arrivalTime: '' },
-    options: { includeFestival: false, festivalName: '', festivalDate: '' },
+    options: { includeFestival: false, festivalName: '', festivalDate: '', penultimateProgram: 'taktsang' },
     selectedFestivalIds: [],
     days: [],
     guideName: '',
@@ -120,13 +120,15 @@ function tourDayImage(day: TourProgramDay) {
 
 function fullProgramHtml(program: TourProgram) {
   const total = Math.max(1, diffTourDays(program.startDate, program.endDate));
-  const programTitle = programNameFor(total, program.cities);
+  const programTitle = programNameFor(total, program.cities, program.options);
   const duration = total + ' วัน ' + Math.max(0, total - 1) + ' คืน';
+  const penultimateProgram = getPenultimateProgram(program.options);
+  const finalHighlight = penultimateProgram === 'haa' ? 'ฮา' : 'ทักซัง';
   const route = programTitle === 'THE ULTIMATE BHUTAN'
-    ? 'พาโร - ทิมพู - พูนาคา - กังเต - ทักซัง'
+    ? 'พาโร - ทิมพู - พูนาคา - กังเต - ' + finalHighlight
     : programTitle === 'Custom to Bhutan'
-      ? (program.cities.join(' - ') + ' - พาโร - ทักซัง')
-      : 'พาโร - ทิมพู - พูนาคา - ทักซัง';
+      ? (program.cities.join(' - ') + ' - พาโร - ' + finalHighlight)
+      : 'พาโร - ทิมพู - พูนาคา - ' + finalHighlight;
 
   const flightOut = (program.outboundFlight.flightNo || '-') + '  ' + (program.outboundFlight.departureTime || '-') + ' - ' + (program.outboundFlight.arrivalTime || '-');
   const flightBack = (program.inboundFlight.flightNo || '-') + '  ' + (program.inboundFlight.departureTime || '-') + ' - ' + (program.inboundFlight.arrivalTime || '-');
@@ -287,7 +289,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
     setEditing((prev) => {
       const next = { ...prev, ...patch, updatedAt: new Date().toISOString() };
       const total = Math.max(1, diffTourDays(next.startDate, next.endDate));
-      const titled = { ...next, title: programNameFor(total, next.cities) };
+      const titled = { ...next, title: programNameFor(total, next.cities, next.options) };
       return { ...titled, days: generateTourProgramDays(titled) };
     });
   };
@@ -347,7 +349,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
 
         <div className="form-grid">
           <label className="field"><span>ชื่อลูกค้า</span><input value={editing.customerName} onChange={(e) => set('customerName', e.target.value)}/></label>
-          <label className="field"><span>ชื่อโปรแกรม</span><input value={editing.title} readOnly/><small>4D3N = JOURNEY TO BHUTAN · 5D4N = WONDERS OF BHUTAN · 6D5N = THE ULTIMATE BHUTAN · มากกว่า 6 วันหรือปรับเส้นทาง = Custom to Bhutan</small></label>
+          <label className="field"><span>ชื่อโปรแกรม</span><input value={editing.title} readOnly/><small>4D3N = JOURNEY TO BHUTAN · 5D4N = WONDERS OF BHUTAN · 6D5N = THE ULTIMATE BHUTAN · หากเปลี่ยนวันก่อนกลับเป็น Haa หรือปรับเส้นทาง = Custom to Bhutan</small></label>
           <label className="field"><span>วันเดินทางไป</span><input type="date" value={editing.startDate} onChange={(e) => rebuild({ startDate: e.target.value })}/></label>
           <label className="field"><span>วันเดินทางกลับ</span><input type="date" value={editing.endDate} onChange={(e) => rebuild({ endDate: e.target.value })}/></label>
         </div>
@@ -361,7 +363,19 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
         </div>
 
         <label className="field"><span>ระดับโรงแรม</span><select value={editing.hotelCategory} onChange={(e) => set('hotelCategory', e.target.value as HotelCategory)}><option>3 Stars</option><option>4 Stars</option><option>5 Stars</option></select></label>
-        <div className="field"><span>เมืองที่ต้องการในทริป</span><div className="tour-city-picker">{CITY_OPTIONS.map((city) => <button key={city} type="button" className={editing.cities.includes(city) ? 'active' : ''} onClick={() => toggleCity(city)}>{city}</button>)}</div><small>กฎเส้นทาง: วันก่อนเดินทางกลับต้องเป็น Paro – Taktsang และพักคืนสุดท้ายที่ Paro เสมอ เพราะสนามบินระหว่างประเทศอยู่ที่ Paro</small></div>
+        <div className="field">
+  <span>เมืองหลักในทริป</span>
+  <div className="tour-city-picker">{CITY_OPTIONS.map((city) => <button key={city} type="button" className={editing.cities.includes(city) ? 'active' : ''} onClick={() => toggleCity(city)}>{city}</button>)}</div>
+  <small>เลือกเมืองหลักที่ต้องการเดินทาง: Paro / Thimphu / Punakha / Gangtey</small>
+</div>
+<div className="field">
+  <span>โปรแกรมวันก่อนเดินทางกลับ</span>
+  <div className="tour-city-picker">
+    <button type="button" className={getPenultimateProgram(editing.options) === 'taktsang' ? 'active' : ''} onClick={() => rebuild({ options: { ...editing.options, penultimateProgram: 'taktsang' } })}>Taktsang / Tiger’s Nest</button>
+    <button type="button" className={getPenultimateProgram(editing.options) === 'haa' ? 'active' : ''} onClick={() => rebuild({ options: { ...editing.options, penultimateProgram: 'haa' } })}>Haa Valley</button>
+  </div>
+  <small>{getPenultimateProgram(editing.options) === 'haa' ? 'Day ก่อนกลับ: Paro → Haa → Paro และกลับมาพักคืนสุดท้ายที่ Paro' : 'Day ก่อนกลับ: Paro → Taktsang และพักคืนสุดท้ายที่ Paro'}</small>
+</div>
       </div>
     </section>
 

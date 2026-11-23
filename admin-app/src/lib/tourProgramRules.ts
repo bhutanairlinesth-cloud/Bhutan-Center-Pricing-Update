@@ -15,6 +15,7 @@ const ATTRACTIONS: Record<string, string[]> = {
 };
 
 type ProgramInput = Pick<TourProgram, 'startDate' | 'endDate' | 'cities' | 'outboundFlight' | 'inboundFlight' | 'options'>;
+export type PenultimateProgram = 'taktsang' | 'haa';
 type DaySeed = { city: string; title: string; activities: string[]; overnight: string; note?: string };
 
 const uid = (prefix: string) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
@@ -39,8 +40,13 @@ const hourFromTime = (value?: string) => {
 
 const sameCities = (a: string[], b: string[]) => a.length === b.length && b.every((city) => a.includes(city));
 
-export function programNameFor(totalDays: number, cities: string[]) {
+export function getPenultimateProgram(options?: Record<string, unknown>): PenultimateProgram {
+  return options?.penultimateProgram === 'haa' ? 'haa' : 'taktsang';
+}
+
+export function programNameFor(totalDays: number, cities: string[], options?: Record<string, unknown>) {
   const standard = STANDARD_CITIES[totalDays];
+  if (getPenultimateProgram(options) === 'haa') return 'Custom to Bhutan';
   if (!standard || !sameCities(cities, standard)) return 'Custom to Bhutan';
   if (totalDays === 4) return 'JOURNEY TO BHUTAN';
   if (totalDays === 5) return 'WONDERS OF BHUTAN';
@@ -48,35 +54,53 @@ export function programNameFor(totalDays: number, cities: string[]) {
   return 'Custom to Bhutan';
 }
 
-function standardSeeds(totalDays: number): DaySeed[] | null {
-  if (totalDays === 4) return [
-    { city: 'Thimphu', title: 'Bangkok – Paro – Thimphu', overnight: 'Thimphu', activities: ['เดินทางถึงสนามบินพาโร ผ่านพิธีการตรวจคนเข้าเมือง และพบไกด์ท้องถิ่น', 'Rinpung Dzong', 'National Museum of Bhutan', 'เดินทางต่อสู่ Thimphu', 'Buddha Dordenma', 'Takin Zoo', 'National Library', 'Memorial Chorten', 'Tashichho Dzong'] },
-    { city: 'Thimphu', title: 'Thimphu – Punakha – Thimphu', overnight: 'Thimphu', activities: ['Simtokha Dzong', 'Dochula Pass', 'Chimi Lhakhang', 'Punakha Dzong', 'Punakha Suspension Bridge', 'เดินทางกลับ Thimphu'] },
-    { city: 'Paro', title: 'Thimphu – Paro – Taktsang', overnight: 'Paro', activities: ['เดินทางกลับสู่ Paro', 'Taktsang Monastery or Tiger’s Nest', 'Lunch at Taktsang Cafeteria', 'Taktsang Monastery or Tiger’s Nest'] },
-    { city: 'Paro', title: 'Paro – Bangkok', overnight: '', activities: ['Kyichu Lhakhang', 'Paro Street Shopping (City Center)', 'เดินทางสู่สนามบินพาโรเพื่อเดินทางกลับกรุงเทพฯ'] },
-  ];
+function standardSeeds(totalDays: number, penultimateProgram: PenultimateProgram): DaySeed[] | null {
+  if (totalDays === 4) {
+    const seeds: DaySeed[] = [
+      { city: 'Thimphu', title: 'Bangkok – Paro – Thimphu', overnight: 'Thimphu', activities: ['เดินทางถึงสนามบินพาโร ผ่านพิธีการตรวจคนเข้าเมือง และพบไกด์ท้องถิ่น', 'Rinpung Dzong', 'National Museum of Bhutan', 'เดินทางต่อสู่ Thimphu', 'Buddha Dordenma', 'Takin Zoo', 'National Library', 'Memorial Chorten', 'Tashichho Dzong'] },
+      { city: 'Thimphu', title: 'Thimphu – Punakha – Thimphu', overnight: 'Thimphu', activities: ['Simtokha Dzong', 'Dochula Pass', 'Chimi Lhakhang', 'Punakha Dzong', 'Punakha Suspension Bridge', 'เดินทางกลับ Thimphu'] },
+      { city: 'Paro', title: 'Thimphu – Paro – Taktsang', overnight: 'Paro', activities: ['เดินทางกลับสู่ Paro', 'Taktsang Monastery or Tiger’s Nest', 'Lunch at Taktsang Cafeteria', 'Taktsang Monastery or Tiger’s Nest'] },
+      { city: 'Paro', title: 'Paro – Bangkok', overnight: '', activities: ['Kyichu Lhakhang', 'Paro Street Shopping (City Center)', 'เดินทางสู่สนามบินพาโรเพื่อเดินทางกลับกรุงเทพฯ'] },
+    ];
+    if (penultimateProgram === 'haa') {
+      seeds[2] = { city: 'Haa', title: 'Thimphu – Haa – Paro', overnight: 'Paro', activities: ['Chele La Pass', 'Haa Valley', 'Lhakhang Karpo', 'เดินทางกลับสู่ Paro'], note: 'เดินทางกลับมาพักที่ Paro ในคืนสุดท้ายก่อนวันเดินทางกลับ' };
+    }
+    return seeds;
+  }
 
-  if (totalDays === 5) return [
-    { city: 'Thimphu', title: 'Bangkok – Paro – Thimphu', overnight: 'Thimphu', activities: ['เดินทางถึงสนามบินพาโร ผ่านพิธีการตรวจคนเข้าเมือง และพบไกด์ท้องถิ่น', 'Rinpung Dzong', 'National Museum of Bhutan', 'เดินทางต่อสู่ Thimphu', 'Buddha Dordenma', 'National Library', 'National Post Office', 'Memorial Chorten'] },
-    { city: 'Punakha', title: 'Thimphu – Punakha', overnight: 'Punakha', activities: ['Sangaygang View Point', 'Takin Zoo', 'Dochula Pass', 'Chimi Lhakhang', 'Punakha Dzong', 'Punakha Suspension Bridge'] },
-    { city: 'Paro', title: 'Punakha – Thimphu – Paro', overnight: 'Paro', activities: ['เดินทางกลับผ่าน Thimphu', 'Simtokha Dzong', 'เดินทางต่อสู่ Paro', 'Chuzom Bridge'] },
-    { city: 'Paro', title: 'Paro – Taktsang', overnight: 'Paro', activities: ['Taktsang Monastery or Tiger’s Nest', 'Lunch at Taktsang Cafeteria', 'Taktsang Monastery or Tiger’s Nest'] },
-    { city: 'Paro', title: 'Paro – Bangkok', overnight: '', activities: ['Kyichu Lhakhang', 'Paro Street Shopping (City Center)', 'เดินทางสู่สนามบินพาโรเพื่อเดินทางกลับกรุงเทพฯ'] },
-  ];
+  if (totalDays === 5) {
+    const seeds: DaySeed[] = [
+      { city: 'Thimphu', title: 'Bangkok – Paro – Thimphu', overnight: 'Thimphu', activities: ['เดินทางถึงสนามบินพาโร ผ่านพิธีการตรวจคนเข้าเมือง และพบไกด์ท้องถิ่น', 'Rinpung Dzong', 'National Museum of Bhutan', 'เดินทางต่อสู่ Thimphu', 'Buddha Dordenma', 'National Library', 'National Post Office', 'Memorial Chorten'] },
+      { city: 'Punakha', title: 'Thimphu – Punakha', overnight: 'Punakha', activities: ['Sangaygang View Point', 'Takin Zoo', 'Dochula Pass', 'Chimi Lhakhang', 'Punakha Dzong', 'Punakha Suspension Bridge'] },
+      { city: 'Paro', title: 'Punakha – Thimphu – Paro', overnight: 'Paro', activities: ['เดินทางกลับผ่าน Thimphu', 'Simtokha Dzong', 'เดินทางต่อสู่ Paro', 'Chuzom Bridge'] },
+      { city: 'Paro', title: 'Paro – Taktsang', overnight: 'Paro', activities: ['Taktsang Monastery or Tiger’s Nest', 'Lunch at Taktsang Cafeteria', 'Taktsang Monastery or Tiger’s Nest'] },
+      { city: 'Paro', title: 'Paro – Bangkok', overnight: '', activities: ['Kyichu Lhakhang', 'Paro Street Shopping (City Center)', 'เดินทางสู่สนามบินพาโรเพื่อเดินทางกลับกรุงเทพฯ'] },
+    ];
+    if (penultimateProgram === 'haa') {
+      seeds[3] = { city: 'Haa', title: 'Paro – Haa – Paro', overnight: 'Paro', activities: ['Chele La Pass', 'Haa Valley', 'Lhakhang Karpo', 'เดินทางกลับสู่ Paro'], note: 'กลับมาพักที่ Paro ในคืนสุดท้ายก่อนวันเดินทางกลับ' };
+    }
+    return seeds;
+  }
 
-  if (totalDays === 6) return [
-    { city: 'Thimphu', title: 'Bangkok – Paro – Thimphu', overnight: 'Thimphu', activities: ['เดินทางถึงสนามบินพาโร ผ่านพิธีการตรวจคนเข้าเมือง และพบไกด์ท้องถิ่น', 'เดินทางต่อสู่ Thimphu', 'Tashichho Dzong', 'Memorial Chorten'] },
-    { city: 'Punakha', title: 'Thimphu – Punakha', overnight: 'Punakha', activities: ['Dochula Pass', 'Chimi Lhakhang', 'Punakha Dzong', 'Punakha Suspension Bridge'] },
-    { city: 'Gangtey', title: 'Punakha – Gangtey', overnight: 'Gangtey', activities: ['เดินทางสู่ Gangtey', 'Gangtey Monastery', 'Phobjikha Valley'] },
-    { city: 'Paro', title: 'Gangtey – Thimphu – Paro', overnight: 'Paro', activities: ['เดินทางกลับผ่าน Thimphu', 'Buddha Dordenma', 'Sangaygang View Point', 'Takin Zoo', 'National Post Office', 'เดินทางต่อสู่ Paro', 'Kyichu Lhakhang'] },
-    { city: 'Paro', title: 'Paro – Taktsang', overnight: 'Paro', activities: ['Taktsang Monastery or Tiger’s Nest', 'Lunch at Taktsang Cafeteria', 'Taktsang Monastery or Tiger’s Nest'] },
-    { city: 'Paro', title: 'Paro – Bangkok', overnight: '', activities: ['Rinpung Dzong', 'National Museum of Bhutan', 'Paro Street Shopping (City Center)', 'เดินทางสู่สนามบินพาโรเพื่อเดินทางกลับกรุงเทพฯ'] },
-  ];
+  if (totalDays === 6) {
+    const seeds: DaySeed[] = [
+      { city: 'Thimphu', title: 'Bangkok – Paro – Thimphu', overnight: 'Thimphu', activities: ['เดินทางถึงสนามบินพาโร ผ่านพิธีการตรวจคนเข้าเมือง และพบไกด์ท้องถิ่น', 'เดินทางต่อสู่ Thimphu', 'Tashichho Dzong', 'Memorial Chorten'] },
+      { city: 'Punakha', title: 'Thimphu – Punakha', overnight: 'Punakha', activities: ['Dochula Pass', 'Chimi Lhakhang', 'Punakha Dzong', 'Punakha Suspension Bridge'] },
+      { city: 'Gangtey', title: 'Punakha – Gangtey', overnight: 'Gangtey', activities: ['เดินทางสู่ Gangtey', 'Gangtey Monastery', 'Phobjikha Valley'] },
+      { city: 'Paro', title: 'Gangtey – Thimphu – Paro', overnight: 'Paro', activities: ['เดินทางกลับผ่าน Thimphu', 'Buddha Dordenma', 'Sangaygang View Point', 'Takin Zoo', 'National Post Office', 'เดินทางต่อสู่ Paro', 'Kyichu Lhakhang'] },
+      { city: 'Paro', title: 'Paro – Taktsang', overnight: 'Paro', activities: ['Taktsang Monastery or Tiger’s Nest', 'Lunch at Taktsang Cafeteria', 'Taktsang Monastery or Tiger’s Nest'] },
+      { city: 'Paro', title: 'Paro – Bangkok', overnight: '', activities: ['Rinpung Dzong', 'National Museum of Bhutan', 'Paro Street Shopping (City Center)', 'เดินทางสู่สนามบินพาโรเพื่อเดินทางกลับกรุงเทพฯ'] },
+    ];
+    if (penultimateProgram === 'haa') {
+      seeds[4] = { city: 'Haa', title: 'Paro – Haa – Paro', overnight: 'Paro', activities: ['Chele La Pass', 'Haa Valley', 'Lhakhang Karpo', 'เดินทางกลับสู่ Paro'], note: 'กลับมาพักที่ Paro ในคืนสุดท้ายก่อนวันเดินทางกลับ' };
+    }
+    return seeds;
+  }
 
   return null;
 }
 
-function customSeeds(totalDays: number, cities: string[]): DaySeed[] {
+function customSeeds(totalDays: number, cities: string[], penultimateProgram: PenultimateProgram): DaySeed[] {
   const selected = cities.length ? cities : ['Paro', 'Thimphu', 'Punakha'];
   if (totalDays <= 1) return [{ city: 'Paro', title: 'Paro – Bangkok', overnight: '', activities: ['เดินทางสู่สนามบินพาโรเพื่อเดินทางกลับกรุงเทพฯ'] }];
 
@@ -108,13 +132,22 @@ function customSeeds(totalDays: number, cities: string[]): DaySeed[] {
     });
   }
 
-  seeds.push({
-    city: 'Paro',
-    title: 'Paro – Taktsang',
-    overnight: 'Paro',
-    activities: ['Taktsang Monastery or Tiger’s Nest', 'Lunch at Taktsang Cafeteria', 'Taktsang Monastery or Tiger’s Nest'],
-    note: 'คืนสุดท้ายพักที่ Paro เพราะสนามบินระหว่างประเทศอยู่ที่ Paro',
-  });
+  seeds.push(penultimateProgram === 'haa'
+    ? {
+        city: 'Haa',
+        title: 'Paro – Haa – Paro',
+        overnight: 'Paro',
+        activities: ['Chele La Pass', 'Haa Valley', 'Lhakhang Karpo', 'เดินทางกลับสู่ Paro'],
+        note: 'กลับมาพักที่ Paro ในคืนสุดท้ายก่อนวันเดินทางกลับ',
+      }
+    : {
+        city: 'Paro',
+        title: 'Paro – Taktsang',
+        overnight: 'Paro',
+        activities: ['Taktsang Monastery or Tiger’s Nest', 'Lunch at Taktsang Cafeteria', 'Taktsang Monastery or Tiger’s Nest'],
+        note: 'คืนสุดท้ายพักที่ Paro เพราะสนามบินระหว่างประเทศอยู่ที่ Paro',
+      }
+  );
 
   seeds.push({
     city: 'Paro',
@@ -129,8 +162,9 @@ function customSeeds(totalDays: number, cities: string[]): DaySeed[] {
 export function generateTourProgramDays(program: ProgramInput): TourProgramDay[] {
   const total = Math.max(1, diffTourDays(program.startDate, program.endDate));
   const standard = STANDARD_CITIES[total];
+  const penultimateProgram = getPenultimateProgram(program.options);
   const isStandard = Boolean(standard && sameCities(program.cities, standard));
-  const seeds = isStandard ? (standardSeeds(total) || []) : customSeeds(total, program.cities);
+  const seeds = isStandard ? (standardSeeds(total, penultimateProgram) || []) : customSeeds(total, program.cities, penultimateProgram);
   const arrivalHour = hourFromTime(program.outboundFlight.arrivalTime);
   const departureHour = hourFromTime(program.inboundFlight.departureTime);
   const festivalDate = String(program.options?.festivalDate || '');
@@ -140,7 +174,9 @@ export function generateTourProgramDays(program: ProgramInput): TourProgramDay[]
     const date = addDays(program.startDate, index);
     const isFirst = index === 0;
     const isLast = index === total - 1;
-    const isTaktsangDay = index === total - 2;
+    const isPenultimateDay = index === total - 2;
+    const isTaktsangDay = isPenultimateDay && penultimateProgram === 'taktsang';
+    const isHaaDay = isPenultimateDay && penultimateProgram === 'haa';
     let activities = seed.activities.slice();
 
     if (isFirst && arrivalHour !== null && arrivalHour >= 14) {
@@ -157,6 +193,9 @@ export function generateTourProgramDays(program: ProgramInput): TourProgramDay[]
     if (isTaktsangDay) {
       activities = ['Taktsang Monastery or Tiger’s Nest', 'Lunch at Taktsang Cafeteria', 'Taktsang Monastery or Tiger’s Nest'];
     }
+    if (isHaaDay) {
+      activities = ['Chele La Pass', 'Haa Valley', 'Lhakhang Karpo', 'เดินทางกลับสู่ Paro'];
+    }
 
     if (festivalDate && date === festivalDate && festivalName) {
       activities.unshift('เทศกาล: ' + festivalName);
@@ -166,8 +205,8 @@ export function generateTourProgramDays(program: ProgramInput): TourProgramDay[]
       id: uid('day'),
       dayNumber: index + 1,
       date,
-      city: isLast || isTaktsangDay ? 'Paro' : seed.city,
-      title: isLast ? 'Paro – Bangkok' : (isTaktsangDay ? 'Paro – Taktsang' : seed.title),
+      city: isLast ? 'Paro' : (isHaaDay ? 'Haa' : (isTaktsangDay ? 'Paro' : seed.city)),
+      title: isLast ? 'Paro – Bangkok' : (isHaaDay ? seed.title : (isTaktsangDay ? 'Paro – Taktsang' : seed.title)),
       activities,
       meals: {
         breakfast: !isFirst,
@@ -175,8 +214,10 @@ export function generateTourProgramDays(program: ProgramInput): TourProgramDay[]
         dinner: !isLast,
       },
       hotel: isLast ? '' : (seed.overnight ? seed.overnight + ' Hotel' : ''),
-      note: isTaktsangDay
-        ? 'คืนสุดท้ายพักที่ Paro เพื่อเดินทางสู่สนามบินพาโรในวันถัดไป'
+      note: isPenultimateDay
+        ? (penultimateProgram === 'haa'
+            ? 'หลังเที่ยว Haa เดินทางกลับมาพักที่ Paro เพื่อเดินทางสู่สนามบินพาโรในวันถัดไป'
+            : 'คืนสุดท้ายพักที่ Paro เพื่อเดินทางสู่สนามบินพาโรในวันถัดไป')
         : (seed.note || ''),
     };
   });

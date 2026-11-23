@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, FileText, MapPinned, Plus, Printer, Save, Sparkles, Trash2 } from 'lucide-react';
 import { CustomerTracking, HotelCategory, TourProgram, TourProgramDay, User } from '../types';
 import { diffTourDays, generateTourProgramDays, getPenultimateProgram, programNameFor, STANDARD_CITIES } from '../lib/tourProgramRules';
+import { dayJourneyLead, storyPlacesForDay } from '../lib/tourProgramStory';
 
 type Props = {
   currentUser: User;
@@ -100,23 +101,8 @@ function activityParagraph(item: string) {
 }
 
 
-const TOUR_IMAGES = {
-  cover: '/images/hero-bhutan.png',
-  paro: '/images/hero-bhutan.png',
-  taktsang: '/images/tiger-nest-paro-real.png',
-  thimphu: 'https://a.storyblok.com/f/171618/1430x956/6bdf4170d9/0.jpg/m/1800x0',
-  punakha: 'https://a.storyblok.com/f/171618/1120x1400/96296acc21/_sch7068_phunaka_dzong.jpg/m/1200x0',
-  gangtey: 'https://a.storyblok.com/f/171618/3000x2400/0090d19186/_sch9167.jpg/m/1800x0',
-};
 
-function tourDayImage(day: TourProgramDay) {
-  const haystack = (day.city + ' ' + day.title + ' ' + day.activities.join(' ')).toLowerCase();
-  if (haystack.includes('taktsang') || haystack.includes('tiger')) return TOUR_IMAGES.taktsang;
-  if (haystack.includes('punakha')) return TOUR_IMAGES.punakha;
-  if (haystack.includes('gangtey') || haystack.includes('phobjikha')) return TOUR_IMAGES.gangtey;
-  if (haystack.includes('thimphu') || haystack.includes('buddha dordenma')) return TOUR_IMAGES.thimphu;
-  return TOUR_IMAGES.paro;
-}
+const COVER_IMAGE = '/images/hero-bhutan.png';
 
 function fullProgramHtml(program: TourProgram) {
   const total = Math.max(1, diffTourDays(program.startDate, program.endDate));
@@ -125,72 +111,99 @@ function fullProgramHtml(program: TourProgram) {
   const penultimateProgram = getPenultimateProgram(program.options);
   const finalHighlight = penultimateProgram === 'haa' ? 'ฮา' : 'ทักซัง';
   const route = programTitle === 'THE ULTIMATE BHUTAN'
-    ? 'พาโร - ทิมพู - พูนาคา - กังเต - ' + finalHighlight
+    ? 'พาโร · ทิมพู · พูนาคา · กังเต · ' + finalHighlight
     : programTitle === 'Custom to Bhutan'
-      ? (program.cities.join(' - ') + ' - พาโร - ' + finalHighlight)
-      : 'พาโร - ทิมพู - พูนาคา - ' + finalHighlight;
+      ? (program.cities.join(' · ') + ' · พาโร · ' + finalHighlight)
+      : 'พาโร · ทิมพู · พูนาคา · ' + finalHighlight;
 
-  const flightOut = (program.outboundFlight.flightNo || '-') + '  ' + (program.outboundFlight.departureTime || '-') + ' - ' + (program.outboundFlight.arrivalTime || '-');
-  const flightBack = (program.inboundFlight.flightNo || '-') + '  ' + (program.inboundFlight.departureTime || '-') + ' - ' + (program.inboundFlight.arrivalTime || '-');
+  const flightOut = (program.outboundFlight.flightNo || '-') + '  ' + (program.outboundFlight.departureTime || '-') + ' – ' + (program.outboundFlight.arrivalTime || '-');
+  const flightBack = (program.inboundFlight.flightNo || '-') + '  ' + (program.inboundFlight.departureTime || '-') + ' – ' + (program.inboundFlight.arrivalTime || '-');
 
-  const whyPage =
-    '<section class="page why-page">' +
-      '<div class="photo-grid">' +
-        '<div class="photo-main"><img src="' + TOUR_IMAGES.taktsang + '" alt="Taktsang Monastery"></div>' +
-        '<div class="photo-side"><img src="' + TOUR_IMAGES.punakha + '" alt="Punakha Dzong"><img src="' + TOUR_IMAGES.thimphu + '" alt="Thimphu"></div>' +
+  const overviewStops = program.days.map((day, index) => {
+    const places = storyPlacesForDay(day);
+    const primary = places[0];
+    return '<div class="overview-stop ' + (index % 2 === 0 ? 'left' : 'right') + '">' +
+      '<div class="overview-copy">' +
+        '<small>DAY ' + day.dayNumber + ' · ' + escapeHtml(formatTravelDate(day.date)) + '</small>' +
+        '<h3>' + escapeHtml(day.title) + '</h3>' +
+        '<p>' + escapeHtml(dayJourneyLead(day)) + '</p>' +
       '</div>' +
-      '<div class="why-content">' +
-        '<div class="section-kicker">WHY BHUTAN CENTER</div>' +
-        '<h2>เที่ยวภูฏานแบบที่ทุกวันมีความหมาย</h2>' +
-        '<p class="lead">เราออกแบบเส้นทางจากวันเดินทางจริง เวลาเที่ยวบิน เมืองที่ต้องการ และจังหวะการเดินทางของภูฏาน เพื่อให้เที่ยวได้เต็มที่โดยไม่เร่งจนเกินไป</p>' +
-        '<div class="why-cards">' +
-          '<div><b>เส้นทางเหมาะกับเวลา</b><span>จัดเมืองและสถานที่ให้สัมพันธ์กับเวลาเครื่องและระยะทางจริง</span></div>' +
-          '<div><b>คืนสุดท้ายที่พาโร</b><span>คืนก่อนเดินทางกลับพักพาโรเสมอ เพื่อพร้อมสำหรับสนามบินในวันถัดไป</span></div>' +
-          '<div><b>Taktsang เป็นไฮไลต์</b><span>วาง Tiger’s Nest ไว้ก่อนวันกลับ 1 วัน ให้มีเวลาเดินขึ้นและพักอย่างเหมาะสม</span></div>' +
-        '</div>' +
-        '<div class="quote">“A journey through Bhutan should feel calm, beautiful and unforgettable - not rushed.”</div>' +
+      '<div class="overview-image"><img src="' + escapeHtml(primary?.image || COVER_IMAGE) + '" alt="' + escapeHtml(primary?.title || day.title) + '"></div>' +
+      '<div class="overview-node">' + (index + 1) + '</div>' +
+    '</div>';
+  }).join('');
+
+  const journeyOverview =
+    '<section class="page story-overview">' +
+      '<div class="paper-grain"></div>' +
+      '<header class="editorial-header">' +
+        '<div><img src="/images/bhutan-center-logo.png" alt="Bhutan Center"><span><b>BHUTAN CENTER</b><small>OMG EXPERIENCE</small></span></div>' +
+        '<em>A STORY OF THE JOURNEY</em>' +
+      '</header>' +
+      '<div class="overview-intro">' +
+        '<span>เส้นทางของเรา</span>' +
+        '<h2>' + escapeHtml(programTitle) + '</h2>' +
+        '<p>การเดินทางครั้งนี้ไม่ได้ถูกออกแบบให้เป็นเพียงรายการสถานที่ แต่เป็นเรื่องราวที่ค่อย ๆ เปิดออกจากพาโร สู่เมืองหลวง หุบเขาเก่าแก่ และไฮไลต์สุดท้ายก่อนกลับกรุงเทพฯ</p>' +
       '</div>' +
+      '<div class="overview-route">' + overviewStops + '<div class="overview-line"></div></div>' +
       '<footer><span>BHUTAN CENTER</span><span>www.bhutancenter.com</span><span>LICENSE 11/07261</span></footer>' +
     '</section>';
 
-  const dayPages = program.days.map((day) => {
-    const rows = day.activities.map((item, index) =>
-      '<div class="timeline-item">' +
-        '<div class="timeline-dot">' + (index + 1) + '</div>' +
-        '<div class="timeline-copy">' + escapeHtml(activityParagraph(item)) + '</div>' +
-      '</div>'
+  const dayPages = program.days.map((day, dayIndex) => {
+    const places = storyPlacesForDay(day);
+    const hero = places[0];
+    const secondary = places[1] || places[0];
+    const tertiary = places[2] || places[1] || places[0];
+
+    const storyCards = places.map((place, index) => {
+      const alignment = index % 2 === 0 ? 'story-row normal' : 'story-row reverse';
+      return '<div class="' + alignment + '">' +
+        '<div class="story-photo-wrap">' +
+          '<img src="' + escapeHtml(place.image) + '" alt="' + escapeHtml(place.title) + '">' +
+          '<span class="photo-index">0' + (index + 1) + '</span>' +
+        '</div>' +
+        '<div class="story-copy">' +
+          '<small>' + escapeHtml(place.subtitle) + '</small>' +
+          '<h3>' + escapeHtml(place.title) + '</h3>' +
+          '<p>' + escapeHtml(place.story) + '</p>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    const activityTags = day.activities.slice(0, 6).map((item) =>
+      '<span>' + escapeHtml(item) + '</span>'
     ).join('');
 
     const mealTags =
-      '<div class="meal-tags">' +
-      (day.meals.breakfast ? '<span>BREAKFAST</span>' : '') +
-      (day.meals.lunch ? '<span>LUNCH</span>' : '') +
-      (day.meals.dinner ? '<span>DINNER</span>' : '') +
-      '</div>';
+      (day.meals.breakfast ? '<b>เช้า</b>' : '') +
+      (day.meals.lunch ? '<b>กลางวัน</b>' : '') +
+      (day.meals.dinner ? '<b>เย็น</b>' : '');
 
-    return '<section class="page day-page">' +
-      '<div class="day-photo">' +
-        '<img src="' + tourDayImage(day) + '" alt="' + escapeHtml(day.title) + '">' +
-        '<div class="day-photo-shade"></div>' +
-        '<div class="day-brand">BHUTAN CENTER</div>' +
-        '<div class="day-number">DAY <strong>' + day.dayNumber + '</strong></div>' +
-        '<div class="day-title"><span>' + escapeHtml(formatTravelDate(day.date)) + '</span><h2>' + escapeHtml(day.title) + '</h2></div>' +
-      '</div>' +
-      '<div class="day-body">' +
-        '<div class="day-main">' +
-          '<div class="section-kicker">TODAY IN BHUTAN</div>' +
-          '<div class="timeline">' + rows + '</div>' +
-          (day.note ? '<div class="note-card"><b>TRAVEL NOTE</b><span>' + escapeHtml(day.note) + '</span></div>' : '') +
+    return '<section class="page journey-day">' +
+      '<div class="paper-grain"></div>' +
+      '<div class="day-hero-editorial">' +
+        '<img src="' + escapeHtml(hero?.image || COVER_IMAGE) + '" alt="' + escapeHtml(day.title) + '">' +
+        '<div class="day-hero-overlay"></div>' +
+        '<div class="day-hero-brand">BHUTAN CENTER</div>' +
+        '<div class="day-hero-number">DAY <b>' + day.dayNumber + '</b></div>' +
+        '<div class="day-hero-copy">' +
+          '<small>' + escapeHtml(formatTravelDate(day.date)) + '</small>' +
+          '<h2>' + escapeHtml(day.title) + '</h2>' +
+          '<p>' + escapeHtml(dayJourneyLead(day)) + '</p>' +
         '</div>' +
-        '<aside class="day-aside">' +
-          '<div class="aside-card">' +
-            '<small>OVERNIGHT</small>' +
-            '<strong>' + escapeHtml(day.hotel || 'Bangkok') + '</strong>' +
-            '<span>' + (day.hotel ? 'พักผ่อนหลังจบโปรแกรมประจำวัน' : 'เดินทางกลับโดยสวัสดิภาพ') + '</span>' +
+      '</div>' +
+      '<div class="day-story-body">' +
+        '<div class="journey-thread"><span></span><i></i><span></span></div>' +
+        storyCards +
+        '<div class="day-summary-band">' +
+          '<div><small>วันนี้เราจะพบ</small><div class="activity-tags">' + activityTags + '</div></div>' +
+          '<div class="summary-meta">' +
+            '<div><small>พักค้างคืน</small><strong>' + escapeHtml(day.hotel || 'Bangkok') + '</strong></div>' +
+            '<div><small>อาหาร</small><span class="meal-inline">' + mealTags + '</span></div>' +
+            '<div><small>ปลายทางวันนี้</small><strong>' + escapeHtml(day.city) + '</strong></div>' +
           '</div>' +
-          '<div class="aside-card meals"><small>MEALS</small>' + mealTags + '</div>' +
-          '<div class="aside-card route-card"><small>ROUTE</small><strong>' + escapeHtml(day.city) + '</strong><span>Bhutan</span></div>' +
-        '</aside>' +
+        '</div>' +
+        (day.note ? '<div class="travel-note"><b>TRAVEL NOTE</b><span>' + escapeHtml(day.note) + '</span></div>' : '') +
       '</div>' +
       '<footer><span>BHUTAN CENTER</span><span>info@bhutancenter.com</span><span>52/38 Soi Saladaeng 2, Silom, Bangkok</span></footer>' +
     '</section>';
@@ -201,35 +214,30 @@ function fullProgramHtml(program: TourProgram) {
     '<style>' +
       '@page{size:A4;margin:0}' +
       '*{box-sizing:border-box}' +
-      'html,body{margin:0;padding:0;background:#dcd8d1;color:#27332f;font-family:"Tahoma","Arial",sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      'html,body{margin:0;padding:0;background:#d9d0c2;color:#3e3026;font-family:Tahoma,"Arial",sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
       'img{display:block;width:100%;height:100%;object-fit:cover}' +
-      '.toolbar{position:sticky;top:0;z-index:50;display:flex;gap:10px;justify-content:center;padding:12px;background:#163d32;box-shadow:0 8px 24px rgba(0,0,0,.18)}' +
-      '.toolbar button{border:0;border-radius:999px;padding:11px 19px;font-weight:800;cursor:pointer}.toolbar .primary{background:#d3a451;color:#fff}.toolbar .secondary{background:#fff;color:#163d32}' +
-      '.page{width:210mm;height:297mm;margin:14px auto;background:#fff;position:relative;overflow:hidden;page-break-after:always;box-shadow:0 12px 38px rgba(25,39,34,.16)}' +
-      '.cover{background:#0f332a;color:#fff}' +
-      '.cover-photo{position:absolute;inset:0 0 auto 0;height:178mm}' +
-      '.cover-photo:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,32,27,.08) 15%,rgba(10,32,27,.30) 52%,#0f332a 100%)}' +
-      '.cover-photo img{position:absolute;inset:0}' +
-      '.cover-top{position:absolute;top:15mm;left:16mm;right:16mm;z-index:2;display:flex;justify-content:space-between;align-items:flex-start}' +
-      '.cover-logo{display:flex;align-items:center;gap:10px}.cover-logo img{width:18mm;height:18mm;object-fit:contain;background:rgba(255,255,255,.94);border-radius:50%;padding:2.5mm}.cover-logo b{font-size:16px;letter-spacing:.08em}.cover-logo span{display:block;font-size:9px;opacity:.78;margin-top:2px}' +
-      '.cover-badge{padding:7px 11px;border:1px solid rgba(255,255,255,.42);border-radius:999px;font-size:10px;font-weight:700;background:rgba(12,42,34,.28);backdrop-filter:blur(4px)}' +
-      '.cover-title{position:absolute;z-index:2;left:17mm;right:17mm;top:104mm}.cover-title .eyebrow{font-size:11px;letter-spacing:.22em;font-weight:800;color:#f1cd8e}.cover-title h1{font-size:35px;line-height:1.04;margin:7px 0 6px;letter-spacing:.01em}.cover-title h2{font-size:23px;margin:0;color:#f2cf91}.cover-title .route{font-size:14px;margin-top:9px;font-weight:700;opacity:.94}' +
-      '.cover-info{position:absolute;left:16mm;right:16mm;bottom:16mm;background:#fff;color:#24312d;border-radius:7mm;padding:9mm 9mm 8mm;display:grid;grid-template-columns:1.15fr .85fr;gap:10mm;box-shadow:0 12px 28px rgba(0,0,0,.18)}' +
-      '.cover-info h3{margin:0 0 6px;font-size:14px;color:#163d32}.info-list{display:grid;gap:5px;font-size:10.5px}.info-row{display:grid;grid-template-columns:34mm 1fr;gap:6px}.info-row b{color:#74634d}.flight-box{border-left:1px solid #e8e0d3;padding-left:8mm;display:grid;gap:7px}.flight{background:#f6f2ea;border-radius:4mm;padding:5mm}.flight small{display:block;font-size:8px;letter-spacing:.12em;color:#907646;font-weight:800}.flight strong{display:block;font-size:12px;margin-top:3px}.flight span{display:block;font-size:9px;color:#6e756f;margin-top:2px}' +
-      '.photo-grid{height:120mm;display:grid;grid-template-columns:1.35fr .65fr;gap:2.5mm;padding:0}.photo-main,.photo-side{min-width:0;min-height:0}.photo-side{display:grid;grid-template-rows:1fr 1fr;gap:2.5mm}' +
-      '.why-content{padding:13mm 16mm 18mm}.section-kicker{font-size:9px;letter-spacing:.18em;font-weight:900;color:#b98a40}.why-content h2{font-size:27px;line-height:1.15;margin:4px 0 6px;color:#153d32}.lead{font-size:13px;line-height:1.7;margin:0 0 8mm;color:#59625e}.why-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm}.why-cards div{border:1px solid #e8e0d4;border-radius:4mm;padding:5mm;background:#fbfaf7}.why-cards b{display:block;font-size:11px;color:#173e33;margin-bottom:3px}.why-cards span{font-size:9.5px;line-height:1.5;color:#69716d}.quote{margin-top:7mm;padding:5mm 7mm;background:#163d32;color:#fff;border-radius:4mm;font-size:12px;line-height:1.6;text-align:center}' +
-      '.day-photo{height:82mm;position:relative;background:#19382f}.day-photo img{position:absolute;inset:0}.day-photo-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,28,24,.05),rgba(8,28,24,.15) 45%,rgba(8,28,24,.82) 100%)}' +
-      '.day-brand{position:absolute;top:10mm;left:14mm;color:#fff;font-size:10px;font-weight:900;letter-spacing:.12em}.day-number{position:absolute;top:9mm;right:14mm;color:#fff;font-size:10px;letter-spacing:.12em;border:1px solid rgba(255,255,255,.55);border-radius:999px;padding:6px 9px;background:rgba(11,44,35,.28)}.day-number strong{font-size:13px;margin-left:2px}' +
-      '.day-title{position:absolute;left:14mm;right:14mm;bottom:10mm;color:#fff}.day-title span{font-size:9px;letter-spacing:.12em;font-weight:800;color:#f1d398}.day-title h2{font-size:25px;line-height:1.15;margin:4px 0 0;text-shadow:0 2px 12px rgba(0,0,0,.28)}' +
-      '.day-body{height:198mm;padding:10mm 14mm 13mm;display:grid;grid-template-columns:minmax(0,1fr) 48mm;gap:8mm}.day-main{min-width:0}.timeline{margin-top:5mm;display:grid;gap:3.2mm}.timeline-item{display:grid;grid-template-columns:7mm 1fr;gap:3.5mm;align-items:start}.timeline-dot{width:6mm;height:6mm;border-radius:50%;background:#d3a451;color:#fff;font-size:8px;font-weight:900;display:grid;place-items:center;margin-top:1px}.timeline-copy{font-size:10.5px;line-height:1.55;color:#38443f;border-bottom:1px solid #eee8df;padding-bottom:3mm}.timeline-item:last-child .timeline-copy{border-bottom:0}' +
-      '.note-card{margin-top:5mm;border-left:3px solid #d3a451;background:#f8f3e9;border-radius:0 3mm 3mm 0;padding:4mm 5mm}.note-card b{display:block;font-size:8px;letter-spacing:.12em;color:#a4742d;margin-bottom:2px}.note-card span{font-size:9.5px;line-height:1.5;color:#5d655f}' +
-      '.day-aside{display:grid;align-content:start;gap:4mm}.aside-card{border-radius:4mm;padding:5mm;background:#f6f3ed;border:1px solid #ebe3d7}.aside-card small{display:block;font-size:7.5px;letter-spacing:.14em;font-weight:900;color:#a37c42;margin-bottom:3px}.aside-card strong{display:block;font-size:12px;line-height:1.25;color:#173d32}.aside-card>span{display:block;font-size:8.5px;line-height:1.45;color:#68706b;margin-top:3px}.meal-tags{display:flex;flex-wrap:wrap;gap:2mm;margin-top:2mm}.meal-tags span{font-size:7.5px;font-weight:800;color:#fff;background:#173d32;border-radius:999px;padding:2mm 2.5mm}.route-card{background:#173d32;color:#fff}.route-card small{color:#edca8a}.route-card strong{color:#fff;font-size:16px}.route-card>span{color:rgba(255,255,255,.7)}' +
-      'footer{position:absolute;left:14mm;right:14mm;bottom:6mm;display:flex;justify-content:space-between;gap:8px;border-top:1px solid #e6ded3;padding-top:3mm;color:#817a70;font-size:7.5px}.cover footer{color:rgba(255,255,255,.75);border-color:rgba(255,255,255,.25)}' +
+      '.toolbar{position:sticky;top:0;z-index:100;display:flex;gap:10px;justify-content:center;padding:12px;background:#3d3026;box-shadow:0 8px 24px rgba(0,0,0,.2)}' +
+      '.toolbar button{border:0;border-radius:999px;padding:11px 20px;font-size:13px;font-weight:800;cursor:pointer}.toolbar .primary{background:#d6a34e;color:#fff}.toolbar .secondary{background:#fff;color:#3d3026}' +
+      '.page{width:210mm;height:297mm;margin:14px auto;background:#f6f0e6;position:relative;overflow:hidden;page-break-after:always;box-shadow:0 12px 40px rgba(69,48,31,.18)}' +
+      '.paper-grain{position:absolute;inset:0;pointer-events:none;opacity:.16;background-image:radial-gradient(#8c765f .45px,transparent .45px);background-size:4px 4px;mix-blend-mode:multiply}' +
+      '.cover{background:#17392f;color:#fff}' +
+      '.cover-photo{position:absolute;inset:0 0 auto 0;height:184mm}.cover-photo img{position:absolute;inset:0}.cover-photo:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(22,31,27,.08),rgba(24,47,39,.38) 55%,#17392f 100%)}' +
+      '.cover-top{position:absolute;z-index:3;top:15mm;left:15mm;right:15mm;display:flex;justify-content:space-between;align-items:center}.cover-logo{display:flex;gap:9px;align-items:center}.cover-logo img{width:18mm;height:18mm;border-radius:50%;background:#fff;padding:2mm;object-fit:contain}.cover-logo b{display:block;font-size:17px;letter-spacing:.06em}.cover-logo span{display:block;font-size:9px;opacity:.75;margin-top:2px}.cover-badge{padding:7px 12px;border:1px solid rgba(255,255,255,.5);border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.08em}' +
+      '.cover-title{position:absolute;z-index:3;left:16mm;right:16mm;top:104mm}.cover-title .eyebrow{font-size:10px;letter-spacing:.28em;font-weight:900;color:#f3cf87}.cover-title h1{font-family:Georgia,serif;font-size:37px;line-height:1.02;margin:7px 0 4px;text-transform:uppercase}.cover-title h2{font-size:24px;margin:0;color:#f0c87e}.cover-title .route{font-size:14px;margin-top:9px;font-weight:700;letter-spacing:.02em}' +
+      '.cover-info{position:absolute;z-index:3;left:15mm;right:15mm;bottom:15mm;background:#fff;color:#3c3128;border-radius:6mm;padding:8mm;display:grid;grid-template-columns:1.15fr .85fr;gap:9mm;box-shadow:0 12px 32px rgba(0,0,0,.2)}.cover-info h3{font-size:15px;margin:0 0 7px;color:#183b31}.info-list{display:grid;gap:5px;font-size:11px}.info-row{display:grid;grid-template-columns:35mm 1fr;gap:5px}.info-row b{color:#8f6f40}.flight-box{display:grid;gap:7px;border-left:1px solid #e5d8c6;padding-left:7mm}.flight{background:#f5eee2;border-radius:4mm;padding:5mm}.flight small{font-size:8px;letter-spacing:.13em;color:#a07736;font-weight:900}.flight strong{display:block;font-size:12px;margin-top:4px}.flight span{display:block;font-size:9px;color:#7d746a;margin-top:2px}' +
+      '.editorial-header{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:12mm 15mm 0}.editorial-header>div{display:flex;align-items:center;gap:8px}.editorial-header img{width:13mm;height:13mm;object-fit:contain}.editorial-header b{display:block;font-size:14px;color:#4b3525}.editorial-header small{display:block;font-size:8px;color:#947b63}.editorial-header em{font-family:Georgia,serif;font-size:11px;letter-spacing:.18em;color:#a57c3e}' +
+      '.overview-intro{position:relative;z-index:2;padding:9mm 15mm 5mm}.overview-intro>span{font-family:Georgia,serif;font-style:italic;font-size:22px;color:#b17c30}.overview-intro h2{font-family:Georgia,serif;font-size:31px;line-height:1.05;margin:2px 0 5px;color:#493423}.overview-intro p{max-width:150mm;margin:0;font-size:12px;line-height:1.7;color:#6c5b4c}' +
+      '.overview-route{position:relative;z-index:2;padding:2mm 15mm 15mm;height:226mm}.overview-line{position:absolute;left:50%;top:12mm;bottom:12mm;border-left:1.5px dashed #9f6f43;opacity:.65}.overview-stop{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:10mm;align-items:center;min-height:42mm;margin:2.5mm 0}.overview-stop.left .overview-copy{order:1;text-align:right;padding-right:8mm}.overview-stop.left .overview-image{order:2}.overview-stop.right .overview-copy{order:2;text-align:left;padding-left:8mm}.overview-stop.right .overview-image{order:1}.overview-image{height:34mm;border-radius:45% 55% 50% 50%/52% 45% 55% 48%;overflow:hidden;box-shadow:0 7px 18px rgba(72,49,32,.15)}.overview-copy small{font-size:7.5px;letter-spacing:.11em;font-weight:900;color:#a67534}.overview-copy h3{font-family:Georgia,serif;font-size:15px;margin:2px 0 3px;color:#4a3424}.overview-copy p{font-size:8.5px;line-height:1.45;color:#6c5b4e;margin:0}.overview-node{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:7mm;height:7mm;border-radius:50%;background:#a34b2f;color:#fff;border:1.5mm solid #f6f0e6;display:grid;place-items:center;font-size:7px;font-weight:900;z-index:3}' +
+      '.day-hero-editorial{height:90mm;position:relative;background:#473a2e}.day-hero-editorial>img{position:absolute;inset:0}.day-hero-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(27,21,17,.07),rgba(27,21,17,.18) 50%,rgba(35,25,19,.82) 100%)}.day-hero-brand{position:absolute;top:10mm;left:15mm;color:#fff;font-size:10px;font-weight:900;letter-spacing:.12em}.day-hero-number{position:absolute;top:9mm;right:15mm;padding:6px 10px;border:1px solid rgba(255,255,255,.55);border-radius:999px;color:#fff;font-size:9px;letter-spacing:.08em}.day-hero-number b{font-size:13px}.day-hero-copy{position:absolute;left:15mm;right:15mm;bottom:9mm;color:#fff}.day-hero-copy small{font-size:9px;letter-spacing:.13em;font-weight:900;color:#f1ca83}.day-hero-copy h2{font-family:Georgia,serif;font-size:27px;line-height:1.05;margin:3px 0 5px}.day-hero-copy p{max-width:148mm;font-size:11.5px;line-height:1.55;margin:0;color:#f7f2eb}' +
+      '.day-story-body{position:relative;padding:9mm 14mm 14mm;height:201mm}.journey-thread{position:absolute;left:50%;top:10mm;bottom:43mm;width:1px;border-left:1.5px dashed #a06042;opacity:.6}.journey-thread span,.journey-thread i{position:absolute;left:50%;transform:translateX(-50%);width:5mm;height:5mm;border-radius:50%;background:#a2482f;border:1.2mm solid #f6f0e6}.journey-thread span:first-child{top:3mm}.journey-thread i{top:50%}.journey-thread span:last-child{bottom:2mm}' +
+      '.story-row{position:relative;display:grid;grid-template-columns:1.05fr .95fr;gap:11mm;align-items:center;min-height:42mm;margin-bottom:4mm;z-index:2}.story-row.reverse .story-photo-wrap{order:2}.story-row.reverse .story-copy{order:1;text-align:right}.story-photo-wrap{height:39mm;position:relative;border-radius:48% 52% 46% 54%/58% 44% 56% 42%;overflow:hidden;box-shadow:0 8px 20px rgba(76,49,29,.16)}.photo-index{position:absolute;bottom:3mm;right:4mm;font-family:Georgia,serif;font-size:26px;font-style:italic;color:rgba(255,255,255,.85);text-shadow:0 2px 9px rgba(0,0,0,.35)}.story-copy small{font-size:7.5px;letter-spacing:.11em;font-weight:900;color:#a46f2f}.story-copy h3{font-family:Georgia,serif;font-size:17px;margin:2px 0 4px;color:#513725}.story-copy p{font-size:9.5px;line-height:1.52;color:#66564a;margin:0}' +
+      '.day-summary-band{position:absolute;left:14mm;right:14mm;bottom:16mm;display:grid;grid-template-columns:1.25fr .75fr;gap:7mm;background:rgba(255,252,247,.94);border-top:1px solid #d9c6ae;padding-top:5mm}.day-summary-band>div>small,.summary-meta small{display:block;font-size:7.5px;letter-spacing:.12em;font-weight:900;color:#aa7434}.activity-tags{display:flex;flex-wrap:wrap;gap:2mm;margin-top:2mm}.activity-tags span{font-size:7.5px;border:1px solid #d8c4a8;border-radius:999px;padding:1.4mm 2.3mm;background:#fff;color:#6d5949}.summary-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm}.summary-meta strong{display:block;font-size:9px;color:#4c3728;margin-top:2px}.meal-inline{display:flex;gap:1mm;flex-wrap:wrap;margin-top:2px}.meal-inline b{font-size:7px;background:#21493d;color:#fff;border-radius:999px;padding:1mm 1.8mm}.travel-note{position:absolute;left:14mm;bottom:8mm;font-size:8px;color:#766455}.travel-note b{color:#a26b2e;margin-right:5px}' +
+      'footer{position:absolute;left:14mm;right:14mm;bottom:5mm;display:flex;justify-content:space-between;gap:8px;border-top:1px solid #d9cdbd;padding-top:2.5mm;color:#847466;font-size:7px}.cover footer{color:rgba(255,255,255,.72);border-color:rgba(255,255,255,.25)}' +
       '@media print{html,body{background:#fff}.toolbar{display:none}.page{margin:0;box-shadow:none;page-break-after:always}.page:last-child{page-break-after:auto}}' +
     '</style></head><body>' +
       '<div class="toolbar"><button class="primary" onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button><button class="secondary" onclick="window.close()">ปิด</button></div>' +
       '<section class="page cover">' +
-        '<div class="cover-photo"><img src="' + TOUR_IMAGES.cover + '" alt="Bhutan landscape"></div>' +
+        '<div class="cover-photo"><img src="' + COVER_IMAGE + '" alt="Bhutan landscape"></div>' +
         '<div class="cover-top">' +
           '<div class="cover-logo"><img src="/images/bhutan-center-logo.png" alt="Bhutan Center"><div><b>BHUTAN CENTER</b><span>OMG EXPERIENCE</span></div></div>' +
           '<div class="cover-badge">PRIVATE JOURNEY</div>' +
@@ -243,7 +251,7 @@ function fullProgramHtml(program: TourProgram) {
         '<div class="cover-info">' +
           '<div><h3>TRAVEL INFORMATION</h3><div class="info-list">' +
             '<div class="info-row"><b>Customer</b><span>' + escapeHtml(program.customerName || '-') + '</span></div>' +
-            '<div class="info-row"><b>Date of Travel</b><span>' + escapeHtml(formatTravelDate(program.startDate)) + ' - ' + escapeHtml(formatTravelDate(program.endDate)) + '</span></div>' +
+            '<div class="info-row"><b>Date of Travel</b><span>' + escapeHtml(formatTravelDate(program.startDate)) + ' – ' + escapeHtml(formatTravelDate(program.endDate)) + '</span></div>' +
             '<div class="info-row"><b>Guide</b><span>' + escapeHtml(program.guideName || '-') + '</span></div>' +
             '<div class="info-row"><b>Guide Contact</b><span>' + escapeHtml(program.guideContact || '-') + '</span></div>' +
             '<div class="info-row"><b>Room Type</b><span>' + escapeHtml(program.roomType || '-') + '</span></div>' +
@@ -255,7 +263,7 @@ function fullProgramHtml(program: TourProgram) {
         '</div>' +
         '<footer><span>BHUTAN CENTER</span><span>www.bhutancenter.com</span><span>LICENSE 11/07261</span></footer>' +
       '</section>' +
-      whyPage + dayPages +
+      journeyOverview + dayPages +
     '</body></html>';
 }
 

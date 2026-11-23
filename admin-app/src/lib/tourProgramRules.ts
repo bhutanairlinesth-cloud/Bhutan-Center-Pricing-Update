@@ -6,18 +6,19 @@ export const STANDARD_CITIES: Record<number, string[]> = {
   6: ['Paro', 'Thimphu', 'Punakha', 'Gangtey'],
 };
 
-type MainCity = 'Paro' | 'Thimphu' | 'Punakha' | 'Gangtey';
+type MainCity = 'Paro' | 'Thimphu' | 'Punakha' | 'Gangtey' | 'Haa';
 type ProgramInput = Pick<TourProgram, 'startDate' | 'endDate' | 'cities' | 'outboundFlight' | 'inboundFlight' | 'options' | 'selectedFestivalIds'>;
 export type PenultimateProgram = 'taktsang' | 'haa';
 type DaySeed = { city: string; title: string; activities: string[]; overnight: string; note?: string };
 
-const CITY_ORDER: MainCity[] = ['Paro', 'Thimphu', 'Punakha', 'Gangtey'];
+const CITY_ORDER: MainCity[] = ['Paro', 'Thimphu', 'Punakha', 'Gangtey', 'Haa'];
 
 const ATTRACTIONS: Record<MainCity, string[]> = {
   Paro: ['Rinpung Dzong', 'National Museum of Bhutan', 'Kyichu Lhakhang', 'Paro Street Shopping (City Center)'],
   Thimphu: ['Buddha Dordenma', 'Memorial Chorten', 'Tashichho Dzong', 'Takin Zoo', 'National Library', 'National Post Office', 'Sangaygang View Point'],
   Punakha: ['Chimi Lhakhang', 'Punakha Dzong', 'Punakha Suspension Bridge'],
   Gangtey: ['Gangtey Monastery', 'Phobjikha Valley', 'Black-necked Crane Centre'],
+  Haa: ['Chele La Pass', 'Haa Valley', 'Lhakhang Karpo'],
 };
 
 const DRIVE_HOURS: Record<string, number> = {
@@ -37,6 +38,15 @@ const DRIVE_HOURS: Record<string, number> = {
   'Paro>Punakha': 4,
   'Gangtey>Paro': 6,
   'Paro>Gangtey': 6,
+  'Paro>Haa': 3.5,
+  'Haa>Paro': 3.5,
+  'Haa>Haa': 0,
+  'Thimphu>Haa': 5,
+  'Haa>Thimphu': 5,
+  'Punakha>Haa': 6,
+  'Haa>Punakha': 6,
+  'Gangtey>Haa': 7,
+  'Haa>Gangtey': 7,
 };
 
 const uid = (prefix: string) => prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
@@ -365,29 +375,32 @@ function smartCustomSeeds(program: ProgramInput, totalDays: number, penultimateP
 
     activities.push(...transitActivities(currentCity, target, used));
 
+    const dayStartMinutes = isFirst && arrivalHour !== null ? Math.max(0, arrivalHour * 60 + 90) : 9 * 60;
+    const dayEndMinutes = 17 * 60 + 30;
+    let sightseeingBudget = Math.max(0, dayEndMinutes - dayStartMinutes - Math.round(travel * 60) - (isFestival ? 240 : 0));
+
     const requiredHere = requiredRemaining.get(target) || [];
     for (const item of requiredHere) {
       if (!used.has(item.name)) {
         activities.push(item.name);
         used.add(item.name);
+        sightseeingBudget = Math.max(0, sightseeingBudget - Math.max(15, item.durationMinutes || 90));
       }
     }
     requiredRemaining.delete(target);
 
-    let sightseeingSlots = isFestival ? 0 : travel >= 4 ? 1 : travel >= 2.5 ? 2 : 3;
-    if (isFirst && arrivalHour !== null) {
-      if (arrivalHour >= 14) sightseeingSlots = 0;
-      else if (arrivalHour >= 11) sightseeingSlots = Math.min(sightseeingSlots, 1);
-      else sightseeingSlots = Math.min(sightseeingSlots, 2);
-    }
-
     if (catalogByCity.size > 0) {
       const available = (catalogByCity.get(target) || []).filter((item) => !used.has(item.name));
-      for (const item of available.slice(0, Math.max(0, sightseeingSlots))) {
+      for (const item of available) {
+        const duration = Math.max(15, item.durationMinutes || 90);
+        if (duration > sightseeingBudget) continue;
         activities.push(item.name);
         used.add(item.name);
+        sightseeingBudget -= duration;
+        if (sightseeingBudget < 30) break;
       }
     } else {
+      const sightseeingSlots = isFestival ? 0 : travel >= 4 ? 1 : travel >= 2.5 ? 2 : 3;
       activities.push(...takeUnused(target, used, sightseeingSlots));
     }
 
@@ -407,6 +420,7 @@ function smartCustomSeeds(program: ProgramInput, totalDays: number, penultimateP
 
     const notes: string[] = [];
     if (travel > 0) notes.push('ใช้เวลาเดินทางประมาณ ' + travelTimeText(travel));
+    if (requiredHere.length) notes.push('จัดสถานที่ที่ลูกค้าระบุเป็นลำดับสำคัญก่อนสถานที่อื่น');
     if (isFestival) notes.push('จัดเทศกาลเป็นกิจกรรมหลักของวัน และลดจำนวนสถานที่เที่ยวเพื่อไม่ให้โปรแกรมแน่นเกินไป');
 
     seeds.push({

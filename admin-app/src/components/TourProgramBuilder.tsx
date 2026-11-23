@@ -287,6 +287,8 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
   const linkedTracking = useMemo(() => trackings.find((x) => x.id === editing.trackingId), [trackings, editing.trackingId]);
   const canFinalize = Boolean(linkedTracking?.bookingConfirmedAt && (linkedTracking?.visaReceivedAt || linkedTracking?.visaSentAt));
   const totalDays = Math.max(1, diffTourDays(editing.startDate, editing.endDate));
+  const festivalDate = String(editing.options.festivalDate || '');
+  const festivalDateInTrip = !festivalDate || (festivalDate >= editing.startDate && festivalDate <= editing.endDate);
 
   const set = <K extends keyof TourProgram>(key: K, value: TourProgram[K]) => setEditing((prev) => ({ ...prev, [key]: value, updatedAt: new Date().toISOString() }));
   const rebuild = (patch?: Partial<TourProgram>) => {
@@ -400,9 +402,18 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
     <section className="panel-card">
       <div className="panel-heading"><div><span>STEP 3</span><h3>เทศกาลพิเศษ</h3></div></div>
       <div className="editor-form">
-        <label className="tour-toggle"><input type="checkbox" checked={Boolean(editing.options.includeFestival)} onChange={(e) => set('options', { ...editing.options, includeFestival: e.target.checked })}/><span><b>ทริปนี้มีเทศกาลที่ลูกค้าต้องการชม</b><small>ระบบจะวางเทศกาลไว้ในวันจริงก่อนจัดสถานที่เที่ยวอื่น</small></span></label>
-        {Boolean(editing.options.includeFestival) && <div className="form-grid"><label className="field"><span>ชื่อเทศกาล</span><input value={String(editing.options.festivalName || '')} onChange={(e) => set('options', { ...editing.options, festivalName: e.target.value })}/></label><label className="field"><span>วันที่เทศกาล</span><input type="date" value={String(editing.options.festivalDate || '')} onChange={(e) => rebuild({ options: { ...editing.options, festivalDate: e.target.value } })}/></label></div>}
-        <button className="primary-button tour-generate" onClick={() => rebuild()}><Sparkles/>จัดโปรแกรม Day 1–{totalDays} ใหม่</button>
+        <label className="tour-toggle"><input type="checkbox" checked={Boolean(editing.options.includeFestival)} onChange={(e) => rebuild({ options: { ...editing.options, includeFestival: e.target.checked } })}/><span><b>ทริปนี้มีเทศกาลที่ลูกค้าต้องการชม</b><small>ระบบจะล็อกวันและเมืองของเทศกาลก่อน แล้วค่อยจัดเส้นทางและสถานที่เที่ยววันที่เหลือ</small></span></label>
+        {Boolean(editing.options.includeFestival) && <>
+          <div className="form-grid">
+            <label className="field"><span>ชื่อเทศกาล</span><input value={String(editing.options.festivalName || '')} onChange={(e) => set('options', { ...editing.options, festivalName: e.target.value })}/></label>
+            <label className="field"><span>เมืองที่จัดเทศกาล</span><select value={String(editing.options.festivalCity || 'Paro')} onChange={(e) => rebuild({ options: { ...editing.options, festivalCity: e.target.value } })}>{CITY_OPTIONS.map((city) => <option key={city} value={city}>{city}</option>)}</select></label>
+          </div>
+          <div className="form-grid">
+            <label className="field"><span>วันที่เทศกาล</span><input type="date" min={editing.startDate || undefined} max={editing.endDate || undefined} value={festivalDate} onChange={(e) => rebuild({ options: { ...editing.options, festivalDate: e.target.value } })}/>{!festivalDateInTrip && <small className="field-error">วันที่เทศกาลอยู่นอกช่วงเดินทาง กรุณาเลือกวันที่ภายในทริป</small>}</label>
+            <div className="tour-planner-note"><b>วิธีจัดโปรแกรม</b><span>วันเทศกาลจะใช้เทศกาลเป็นกิจกรรมหลัก ลดจำนวนสถานที่เที่ยวในวันนั้น และระบบจะพยายามพาคณะไปพักเมืองนั้นก่อนหน้าเพื่อลดเวลานั่งรถ</span></div>
+          </div>
+        </>}
+        <button className="primary-button tour-generate" disabled={Boolean(editing.options.includeFestival) && !festivalDateInTrip} onClick={() => rebuild()}><Sparkles/>จัดโปรแกรม Day 1–{totalDays} ใหม่</button>
       </div>
     </section>
 

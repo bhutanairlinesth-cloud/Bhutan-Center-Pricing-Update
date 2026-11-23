@@ -41,11 +41,11 @@ const sameCities = (a: string[], b: string[]) => a.length === b.length && b.ever
 
 export function programNameFor(totalDays: number, cities: string[]) {
   const standard = STANDARD_CITIES[totalDays];
-  if (!standard || !sameCities(cities, standard)) return 'CUSTOM TO BHUTAN';
+  if (!standard || !sameCities(cities, standard)) return 'Custom to Bhutan';
   if (totalDays === 4) return 'JOURNEY TO BHUTAN';
   if (totalDays === 5) return 'WONDERS OF BHUTAN';
   if (totalDays === 6) return 'THE ULTIMATE BHUTAN';
-  return 'CUSTOM TO BHUTAN';
+  return 'Custom to Bhutan';
 }
 
 function standardSeeds(totalDays: number): DaySeed[] | null {

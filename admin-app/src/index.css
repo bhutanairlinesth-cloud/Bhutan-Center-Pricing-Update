@@ -4867,3 +4867,165 @@ textarea{min-height:74px}
   .invoice-related-documents-copy strong { font-size: 13px !important; }
   .invoice-related-documents-copy span { font-size: 12.5px !important; }
 }
+
+
+/* Tour Program Builder */
+.tour-program-builder { max-width: 1440px; margin: 0 auto; }
+.tour-program-hero { align-items: flex-start; gap: 24px; }
+.tour-program-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.tour-program-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tour-program-presets > span { margin-right: 4px; color: var(--muted); font-size: 14px; font-weight: 700; }
+.tour-program-presets button,
+.tour-city-picker button {
+  min-height: 38px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: #52605a;
+  font-weight: 700;
+}
+.tour-program-presets button.active,
+.tour-city-picker button.active {
+  color: #fff;
+  border-color: var(--green-800);
+  background: var(--green-800);
+}
+.tour-city-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.tour-flight-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.tour-flight-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+.tour-flight-card > b { color: var(--green-950); font-size: 20px; }
+.tour-flight-card > small { margin-top: -9px; color: var(--muted); }
+.tour-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.tour-toggle input { margin-top: 4px; width: 18px; height: 18px; }
+.tour-toggle span { display: grid; gap: 3px; }
+.tour-toggle b { color: var(--green-950); }
+.tour-toggle small { color: var(--muted); }
+.tour-generate { justify-self: flex-start; }
+.tour-days { display: grid; gap: 16px; }
+.tour-day-card { overflow: hidden; }
+.tour-day-head {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin: -2px -2px 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.tour-day-head > svg { color: #8b9891; }
+.tour-day-head span { color: var(--muted); font-size: 13px; font-weight: 700; }
+.tour-day-head h3 { margin: 3px 0 0; color: var(--green-950); font-size: 21px; }
+.tour-day-number {
+  min-height: 62px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-radius: 14px;
+  color: #fff;
+  background: var(--green-900);
+  font-size: 11px;
+  line-height: 1.1;
+  letter-spacing: .14em;
+  font-weight: 800;
+}
+.tour-day-number b { margin-top: 3px; font-size: 22px; letter-spacing: 0; }
+.tour-meals { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.tour-meals > span { margin-right: 4px; color: #56625c; font-size: 14px; font-weight: 700; }
+.tour-meals label {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border-radius: 10px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 700;
+}
+.tour-meals input { width: 16px; height: 16px; }
+.tour-final-card .panel-heading > svg { color: var(--green-700); }
+.tour-final-status {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: #855c18;
+  background: var(--gold-soft);
+  border: 1px solid #f0d795;
+  font-size: 14px;
+  font-weight: 700;
+}
+.tour-final-status.ready {
+  color: var(--green-800);
+  background: var(--green-100);
+  border-color: #badacb;
+}
+.tour-list-heading { padding: 20px 22px; margin-bottom: 0; }
+.tour-program-list { display: grid; }
+.tour-program-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 12px 22px;
+  border-top: 1px solid var(--line);
+}
+.tour-program-open {
+  min-width: 0;
+  padding: 5px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+  background: transparent;
+}
+.tour-program-open > span { min-width: 0; display: grid; gap: 4px; }
+.tour-program-open b { color: var(--green-950); font-size: 15px; }
+.tour-program-open small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.tour-program-open em {
+  flex-shrink: 0;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #7c672b;
+  background: var(--gold-soft);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+.tour-program-open em.final { color: var(--green-800); background: var(--green-100); }
+
+@media (max-width: 900px) {
+  .tour-program-hero { display: grid; }
+  .tour-program-actions { justify-content: flex-start; }
+  .tour-flight-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .tour-program-actions { display: grid; grid-template-columns: 1fr; width: 100%; }
+  .tour-program-actions button { width: 100%; }
+  .tour-program-presets { align-items: stretch; }
+  .tour-program-presets > span { width: 100%; }
+  .tour-program-presets button { flex: 1 1 calc(50% - 8px); }
+  .tour-city-picker button { flex: 1 1 calc(50% - 8px); }
+  .tour-day-head { grid-template-columns: 56px minmax(0, 1fr); }
+  .tour-day-head > svg { display: none; }
+  .tour-day-number { min-height: 56px; }
+  .tour-program-row { padding-left: 16px; }
+  .tour-program-open { align-items: flex-start; flex-direction: column; }
+}

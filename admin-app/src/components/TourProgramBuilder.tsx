@@ -95,12 +95,20 @@ function fullProgramHtml(program: TourProgram) {
   const duration = total + ' วัน ' + Math.max(0, total - 1) + ' คืน';
   const route = programTitle === 'THE ULTIMATE BHUTAN'
     ? 'พาโร – ทิมพู – พูนาคา – กังเต – ทักซัง'
-    : programTitle === 'CUSTOM TO BHUTAN'
+    : programTitle === 'Custom to Bhutan'
       ? (program.cities.join(' – ') + ' – พาโร – ทักซัง')
       : 'พาโร – ทิมพู – พูนาคา – ทักซัง';
 
   const flightOut = (program.outboundFlight.flightNo || '-') + ' ' + (program.outboundFlight.departureTime || '-') + ' – ' + (program.outboundFlight.arrivalTime || '-');
   const flightBack = (program.inboundFlight.flightNo || '-') + ' ' + (program.inboundFlight.departureTime || '-') + ' – ' + (program.inboundFlight.arrivalTime || '-');
+
+  const whyPage = '<section class="page why-page">' +
+      '<div class="brand"><strong>BHUTAN CENTER</strong><span>บริการท่องเที่ยวภูฏานที่ใส่ใจทุกความต้องการของคุณ</span></div>' +
+      '<div class="why-title"><span>WHY?</span><h2>BHUTAN CENTER</h2></div>' +
+      '<div class="why-copy"><p>ภูฏานเซ็นเตอร์มีความชำนาญด้านเส้นทางท่องเที่ยวภูฏาน และออกแบบโปรแกรมให้สอดคล้องกับวันเดินทาง เวลาเที่ยวบิน เมืองที่ลูกค้าต้องการ และช่วงเวลาของเทศกาลสำคัญ โดยสามารถปรับรายละเอียดของแต่ละวันให้เหมาะกับคณะเดินทางได้</p>' +
+      '<p>การเดินทางในภูฏานมีข้อจำกัดด้านระยะทางและภูมิประเทศ โปรแกรมจึงจัดลำดับเมืองให้เดินทางต่อเนื่อง และกำหนดให้คืนสุดท้ายก่อนวันเดินทางกลับพักที่เมืองพาโรเสมอ เพื่อให้เหมาะกับการเดินทางสู่สนามบินนานาชาติพาโรในวันถัดไป</p>' +
+      '<p>วัดทักซัง หรือ Tiger’s Nest เป็นสถานที่สำคัญของทุกโปรแกรม และถูกจัดไว้ในวันก่อนเดินทางกลับ 1 วัน โดยพักค้างคืนที่พาโรหลังจบกิจกรรม</p></div>' +
+      '<footer>52/38 11th Floor, Soi Saladaeng 2, Silom, Bangrak, Bangkok 10500 · info@bhutancenter.com · www.bhutancenter.com · LICENSE NUMBER: 11/07261</footer></section>';
 
   const dayPages = program.days.map((day) => {
     const rows = day.activities.map((item) => '<p>• ' + escapeHtml(activityParagraph(item)) + '</p>').join('');
@@ -124,7 +132,7 @@ function fullProgramHtml(program: TourProgram) {
     '@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#e8e4dd;color:#2b2926;font-family:Tahoma,Arial,sans-serif}' +
     '.toolbar{position:sticky;top:0;z-index:3;display:flex;gap:10px;justify-content:center;padding:12px;background:#173d32}.toolbar button{border:0;border-radius:9px;padding:10px 18px;font-weight:700;cursor:pointer}.toolbar .primary{background:#c99b50;color:white}.toolbar .secondary{background:white;color:#173d32}' +
     '.page{width:210mm;min-height:297mm;margin:14px auto;padding:18mm 17mm 14mm;background:#fff;box-shadow:0 8px 28px rgba(0,0,0,.12);position:relative;page-break-after:always}.cover{display:flex;flex-direction:column;text-align:center}.cover .brand{margin-bottom:34mm}.brand{display:flex;flex-direction:column;gap:3px;color:#173d32}.brand strong{font-size:22px;letter-spacing:.05em}.brand span{font-size:12px;color:#6d675f}' +
-    '.cover h1{font-size:30px;margin:12px 0 4px;color:#173d32}.cover h2{font-size:24px;margin:0;color:#b2823c}.route{font-size:18px;font-weight:700;margin:16px 0}.summary{margin:24mm auto 0;width:100%;max-width:150mm;text-align:left;border-top:2px solid #173d32;padding-top:14px;display:grid;gap:8px;font-size:14px}' +
+    '.cover h1{font-size:30px;margin:12px 0 4px;color:#173d32}.cover h2{font-size:24px;margin:0;color:#b2823c}.route{font-size:18px;font-weight:700;margin:16px 0}.summary{margin:24mm auto 0;width:100%;max-width:150mm;text-align:left;border-top:2px solid #173d32;padding-top:14px;display:grid;gap:8px;font-size:14px}.why-title{margin:30mm 0 12mm}.why-title span{display:block;font-size:42px;font-weight:900;color:#c99b50}.why-title h2{margin:0;font-size:30px;color:#173d32}.why-copy{display:grid;gap:15px}.why-copy p{font-size:16px;line-height:1.9;margin:0}' +
     '.day-head{display:grid;grid-template-columns:32mm 1fr;gap:14px;align-items:center;margin:18mm 0 12mm;border-bottom:2px solid #173d32;padding-bottom:10px}.day-head>div:first-child{font-size:26px;font-weight:900;color:#b2823c}.day-head h2{margin:0;color:#173d32;font-size:22px}.day-head span{font-size:12px;color:#7b746c}.day-copy p{font-size:15px;line-height:1.75;margin:0 0 9px}.overnight{margin-top:18px;padding:13px 15px;border-left:4px solid #c99b50;background:#f7f2e9;font-size:14px}' +
     'footer{position:absolute;left:17mm;right:17mm;bottom:9mm;padding-top:7px;border-top:1px solid #d8d1c7;font-size:9px;color:#7c756d;text-align:center}@media print{body{background:white}.toolbar{display:none}.page{margin:0;box-shadow:none;page-break-after:always}.page:last-child{page-break-after:auto}}' +
     '</style></head><body>' +
@@ -141,7 +149,7 @@ function fullProgramHtml(program: TourProgram) {
     '<div><b>Outbound BKK → PBH:</b> ' + escapeHtml(flightOut) + '</div>' +
     '<div><b>Inbound PBH → BKK:</b> ' + escapeHtml(flightBack) + '</div>' +
     '</div><footer>52/38 11th Floor, Soi Saladaeng 2, Silom, Bangrak, Bangkok 10500 · info@bhutancenter.com · www.bhutancenter.com · LICENSE NUMBER: 11/07261</footer></section>' +
-    dayPages + '</body></html>';
+    whyPage + dayPages + '</body></html>';
 }
 
 function openFullProgram(program: TourProgram, autoPrint = false) {
@@ -228,7 +236,7 @@ export function TourProgramBuilder({ currentUser, trackings, programs, onSave, o
 
         <div className="form-grid">
           <label className="field"><span>ชื่อลูกค้า</span><input value={editing.customerName} onChange={(e) => set('customerName', e.target.value)}/></label>
-          <label className="field"><span>ชื่อโปรแกรม</span><input value={editing.title} readOnly/><small>4D3N = JOURNEY TO BHUTAN · 5D4N = WONDERS OF BHUTAN · 6D5N = THE ULTIMATE BHUTAN · ปรับเส้นทาง/จำนวนวัน = CUSTOM TO BHUTAN</small></label>
+          <label className="field"><span>ชื่อโปรแกรม</span><input value={editing.title} readOnly/><small>4D3N = JOURNEY TO BHUTAN · 5D4N = WONDERS OF BHUTAN · 6D5N = THE ULTIMATE BHUTAN · มากกว่า 6 วันหรือปรับเส้นทาง = Custom to Bhutan</small></label>
           <label className="field"><span>วันเดินทางไป</span><input type="date" value={editing.startDate} onChange={(e) => rebuild({ startDate: e.target.value })}/></label>
           <label className="field"><span>วันเดินทางกลับ</span><input type="date" value={editing.endDate} onChange={(e) => rebuild({ endDate: e.target.value })}/></label>
         </div>

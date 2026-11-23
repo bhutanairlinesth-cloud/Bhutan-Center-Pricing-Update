@@ -63,6 +63,60 @@ export interface TourPackage {
   singleSupplementsTHB?: SingleSupplementsTHB;
 }
 
+export type TourProgramStatus = 'draft' | 'final';
+
+export interface TourProgramFlight {
+  flightNo: string;
+  departureAirport: string;
+  arrivalAirport: string;
+  departureTime: string;
+  arrivalTime: string;
+}
+
+export interface TourProgramDayMeals {
+  breakfast: boolean;
+  lunch: boolean;
+  dinner: boolean;
+}
+
+export interface TourProgramDay {
+  id: string;
+  dayNumber: number;
+  date: string;
+  city: string;
+  title: string;
+  activities: string[];
+  meals: TourProgramDayMeals;
+  hotel: string;
+  note: string;
+}
+
+export interface TourProgram {
+  id: string;
+  trackingId: string;
+  customerName: string;
+  title: string;
+  status: TourProgramStatus;
+  startDate: string;
+  endDate: string;
+  cities: string[];
+  hotelCategory: HotelCategory;
+  outboundFlight: TourProgramFlight;
+  inboundFlight: TourProgramFlight;
+  options: Record<string, unknown>;
+  selectedFestivalIds: string[];
+  days: TourProgramDay[];
+  guideName: string;
+  guideContact: string;
+  roomType: string;
+  note: string;
+  createdById: string;
+  createdByName: string;
+  finalizedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface GlobalSettings {
   exchangeRateUSD: number;
   ticketPriceTHB: number;

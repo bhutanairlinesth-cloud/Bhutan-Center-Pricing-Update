@@ -372,6 +372,21 @@ export interface TravelerAddition {
   status: 'active' | 'cancelled';
 }
 
+export interface CustomerFlightSegment {
+  id: string;
+  travelDate: string;
+  flightNo: string;
+  origin: string;
+  destination: string;
+  departureTime: string;
+  arrivalTime: string;
+  pnr: string;
+  cabinClass: string;
+  farePerPersonTHB: number;
+  airportTaxPerPersonTHB: number;
+  baggageAllowanceKg: number;
+}
+
 export interface CustomerTracking {
   id: string;
   /** Source quotation when this journey was converted from the quotation archive. */
@@ -401,6 +416,9 @@ export interface CustomerTracking {
   /** How this customer will be billed: normal 2-stage, one-time full payment, or manual/custom. */
   paymentPlan: PaymentPlan;
   /** Total travellers includes children; these fields split the original group into ADT / CHD. */
+  /** Optional split of adult package selling prices; included in passengerCount. */
+  indianAdultCount?: number;
+  indianSellingPricePerPerson?: number;
   childPassengerCount: number;
   childSellingPricePerPerson: number;
   childTicketPricePerPerson: number;
@@ -458,6 +476,8 @@ export interface CustomerTracking {
   photoReceivedAt: string;
   passengerNames: string;
   flightPnr: string;
+  /** Multiple flight sectors with independent dates, routes, PNRs and fare/tax breakdowns. */
+  flightSegments?: CustomerFlightSegment[];
   flightReservedAt: string;
   invoice1SentAt: string;
   firstPaymentReceivedAt: string;
@@ -521,6 +541,13 @@ export interface InvoiceTicketFareLineSnapshot {
   totalTHB: number;
 }
 
+export interface InvoiceFlightSegmentSnapshot extends CustomerFlightSegment {
+  passengerCount: number;
+  fareTotalTHB: number;
+  airportTaxTotalTHB: number;
+  totalTHB: number;
+}
+
 export interface InvoiceTicketBatchSnapshot {
   batchLabelTh: string;
   batchLabelEn: string;
@@ -536,6 +563,8 @@ export interface InvoiceTicketBatchSnapshot {
   totalDueTHB: number;
   /** Optional split for mixed Economy / Business groups. */
   fareLines?: InvoiceTicketFareLineSnapshot[];
+  /** Frozen sector-by-sector itinerary and ticket pricing for Invoice 1 / Full Payment PDF. */
+  flightSegments?: InvoiceFlightSegmentSnapshot[];
 }
 
 export interface InvoiceDeductionSnapshot {

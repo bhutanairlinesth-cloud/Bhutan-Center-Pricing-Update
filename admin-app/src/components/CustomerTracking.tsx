@@ -456,6 +456,19 @@ function mergeInvoicePackageLines(lines: InvoicePackageLineSnapshot[]) {
   return Array.from(merged.values());
 }
 
+function indianAdults(item: CustomerTracking): number {
+  if (item.pricingMode === 'group_tl') return 0;
+  const adults = Math.max(0, Math.round(Number(item.passengerCount || 0)) - Math.round(Number(item.childPassengerCount || 0)));
+  return Math.min(adults, Math.max(0, Math.round(Number(item.indianAdultCount || 0))));
+}
+function indianRate(item: CustomerTracking): number {
+  return Math.max(0, Number(item.indianSellingPricePerPerson || 0));
+}
+function mixedRateReady(item: CustomerTracking): boolean {
+  const n = indianAdults(item);
+  const other = item.passengerCount - (item.childPassengerCount || 0) - n;
+  return n === 0 || (Number.isFinite(indianRate(item)) && indianRate(item) > 0 && (other <= 0 || Number(item.sellingPricePerPerson) > 0));
+}
 function buildPackageSnapshotRows(item: CustomerTracking): InvoicePackageLineSnapshot[] {
   const rows: InvoicePackageLineSnapshot[] = [];
   const add = (line: Omit<InvoicePackageLineSnapshot, 'id'>) => rows.push({ id: makeId('pkgrow'), ...line });
@@ -463,13 +476,19 @@ function buildPackageSnapshotRows(item: CustomerTracking): InvoicePackageLineSna
   const billedPax = originalChargeablePassengerCount(item);
   const tlCount = Math.max(0, Math.max(1, item.passengerCount || 1) - billedPax);
   const childCount = !isGroupTL ? Math.min(billedPax, Math.max(0, Math.round(Number(item.childPassengerCount || 0)))) : 0;
-  const adultBilledPax = Math.max(0, billedPax - childCount);
+  const indianCount = indianAdults(item);
+  const adultBilledPax = Math.max(0, billedPax - childCount - indianCount);
   if (adultBilledPax > 0) add({
-    descriptionTh: item.packageName || 'แพ็กเกจทัวร์', descriptionEn: item.packageName || 'Tour package',
+    descriptionTh: `${item.packageName || 'แพ็กเกจทัวร์'}${indianCount > 0 ? ' — ผู้ใหญ่ไทย' : ''}`, descriptionEn: `${item.packageName || 'Tour package'}${indianCount > 0 ? ' — Thai adults' : ''}`,
     detailTh: isGroupTL ? `${item.hotelCategory} · เดินทางจริง ${item.passengerCount} ท่าน · เรียกเก็บ ${billedPax}+${tlCount} TL` : `${item.hotelCategory}`,
     detailEn: isGroupTL ? `${item.hotelCategory} · ${item.passengerCount} actual travellers · billed ${billedPax}+${tlCount} TL` : `${item.hotelCategory}`,
     ptc: 'ADT', quantity: adultBilledPax, unitPriceTHB: Math.max(0, item.sellingPricePerPerson || 0),
     totalTHB: adultBilledPax * Math.max(0, item.sellingPricePerPerson || 0),
+  });
+  if (indianCount > 0) add({
+    descriptionTh: `${item.packageName || 'แพ็กเกจทัวร์'} — ผู้ใหญ่อินเดีย`, descriptionEn: `${item.packageName || 'Tour package'} — Indian adults`,
+    detailTh: item.hotelCategory, detailEn: item.hotelCategory, ptc: 'ADT', quantity: indianCount,
+    unitPriceTHB: indianRate(item), totalTHB: roundMoney(indianCount * indianRate(item)),
   });
   if (childCount > 0) add({
     descriptionTh: `${item.packageName || 'แพ็กเกจทัวร์'} — เด็ก`, descriptionEn: `${item.packageName || 'Tour package'} — Child`,
@@ -884,6 +903,7 @@ export function CustomerTrackingWorkspace(props: Props) {
   }
 
   async function issueInvoice(tracking: CustomerTracking, installment: InvoiceInstallment) {
+    if (!mixedRateReady(tracking)) { window.alert(th ? 'กรุณากรอกราคาขายผู้ใหญ่ไทยและอินเดียให้ครบก่อนออก Invoice' : 'Enter all applicable Thai and Indian adult selling prices before issuing an invoice.'); return; }
     const needsTicketVerification = installment === 'deposit' || installment === 'full';
     if (needsTicketVerification) {
       const passengerNames = (tracking.passengerNames || '')
@@ -1442,6 +1462,9 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     const pricingMode = next.pricingMode === 'group_tl' ? 'group_tl' : 'standard';
     const childPassengerCount = pricingMode === 'standard' ? Math.min(pax, Math.max(0, Math.round(Number(next.childPassengerCount || 0)))) : 0;
     const adultPassengerCount = Math.max(0, pax - childPassengerCount);
+    const indianAdultCount = indianAdults({ ...next, pricingMode, passengerCount: pax, childPassengerCount });
+    const indianSellingPricePerPerson = indianRate(next);
+    const nationalityFields = next.indianAdultCount !== undefined || next.indianSellingPricePerPerson !== undefined ? { indianAdultCount, indianSellingPricePerPerson } : {};
     const chargeablePassengerCount = pricingMode === 'group_tl'
       ? Math.min(pax, Math.max(1, Math.round(Number(next.chargeablePassengerCount || pax))))
       : pax;
@@ -1488,7 +1511,8 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         + additionalItemsTotal;
       groupPricingCostTotal = group.totalBeforeAverage;
     } else {
-      totalAmount = sellingPricePerPerson * adultPassengerCount + childSellingPricePerPerson * childPassengerCount + singleSupplementTotal + businessUpgradeTotal + additionalItemsTotal;
+      totalAmount = sellingPricePerPerson * (adultPassengerCount - indianAdultCount) + indianSellingPricePerPerson * indianAdultCount + childSellingPricePerPerson * childPassengerCount + singleSupplementTotal + businessUpgradeTotal + additionalItemsTotal;
+      if (indianAdultCount > 0) totalAmount = roundMoney(totalAmount);
     }
 
     const travelerAdditions = (next.travelerAdditions || []).map((entry) => normalizeTravelerAddition({
@@ -1502,6 +1526,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     const depositAmount = ticketAmount + airportTaxAmount;
     const recalculatedTracking = {
       ...next,
+      ...nationalityFields,
       pricingMode,
       passengerCount: pax,
       chargeablePassengerCount,
@@ -1531,6 +1556,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
       : 0;
     return {
       ...next,
+      ...nationalityFields,
       pricingMode,
       passengerCount: pax,
       chargeablePassengerCount,
@@ -1711,6 +1737,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
   }
   async function saveAndStay() {
     const normalized = normalizeBeforeSave();
+    if (!mixedRateReady(normalized)) { window.alert(th ? 'กรุณากรอกราคาขายตามสัญชาติให้ครบก่อนบันทึก' : 'Enter all applicable nationality selling prices before saving.'); return; }
     setForm(normalized);
     await onSave(normalized);
     baselineRef.current = JSON.stringify(normalized);
@@ -1721,6 +1748,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
     if (isNewRecord) clearTrackingDraft(NEW_TRACKING_DRAFT_KEY);
   }
   async function markToday(key: keyof CustomerTracking) {
+    if (!mixedRateReady(currentForm)) { window.alert(th ? 'กรุณากรอกราคาขายตามสัญชาติให้ครบก่อนบันทึก' : 'Enter all applicable nationality selling prices before saving.'); return; }
     let next = { ...currentForm, [key]: isoToday() } as CustomerTracking;
     if (key === 'landPaidAt') {
       const landPayment = next.landInvoiceAmountUSD > 0 && next.landExchangeRate > 0
@@ -1748,6 +1776,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
   }
 
   async function addPayment() {
+    if (!mixedRateReady(currentForm)) { window.alert(th ? 'กรุณากรอกราคาขายตามสัญชาติให้ครบก่อนรับชำระ' : 'Enter all applicable nationality selling prices before recording payment.'); return; }
     if (paymentDraft.amount <= 0 || !paymentDraft.paidAt || paymentBusy) return;
     if (paymentDraft.type === 'supplemental' && !paymentDraft.invoiceId) { window.alert(th ? 'กรุณาเลือก Invoice เพิ่มเติมที่รับชำระ' : 'Select the supplemental invoice being paid.'); return; }
     const now = new Date().toISOString();
@@ -2008,6 +2037,8 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
   const combinedPackageTotal = packageSalesTotal(form);
   const combinedPassengerCount = totalPackagePassengerCount(form);
   const originalBilledPax = originalChargeablePassengerCount(form);
+  const indianCount = indianAdults(form);
+  const mainAdultCount = Math.max(0, form.passengerCount - (form.childPassengerCount || 0) - indianCount);
   const originalBasePackageTotal = Math.max(0, (form.totalAmount || 0) - (form.businessUpgradeTotal || 0) - (form.singleSupplementTotal || 0) - (form.additionalItemsTotal || 0));
   const combinedBasePackageTotal = originalBasePackageTotal + addedBasePackageRevenue;
   const combinedBusinessUpgradeTotal = Math.max(0, form.businessUpgradeTotal || 0) + addedBusinessUpgradeRevenue;
@@ -2128,13 +2159,19 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
             : `The TL receives complimentary accommodation only. Economy fare and tax apply to all ${form.passengerCount} actual travellers. The ${form.businessUpgradeCount} Business Class passengers are included within this group and only their fare difference is added.`}</p>
         </section>}
         {form.pricingMode === 'standard' && <section className="tracking-child-pricing-panel">
-          <div className="tracking-child-pricing-title"><div><Users/><span><b>{th ? 'แยกราคาผู้ใหญ่ / เด็ก' : 'Adult / child pricing'}</b><small>{th ? 'จำนวนผู้เดินทางรวมด้านบนต้องรวมเด็กแล้ว ระบบจะใช้ราคานี้แยก ADT / CHD ใน Quotation, Invoice 1 และ Invoice 2' : 'The total traveller count above already includes children. These values are used separately for ADT / CHD on the quotation and invoices.'}</small></span></div></div>
-          <div className="tracking-passenger-pricing-grid">
+          <div className="tracking-child-pricing-title"><div><Users/><span><b>{th ? 'ราคาขายตามกลุ่มผู้เดินทาง' : 'Traveller pricing groups'}</b><small>{th ? 'จำนวนผู้เดินทางด้านบนรวมทุกคนแล้ว ระบุจำนวนเด็กและผู้ใหญ่อินเดียเฉพาะเมื่อมี ระบบแยกราคาบน Invoice โดยไม่คิดราคาเฉลี่ย' : 'The total above includes everyone. Enter children and Indian adults only when applicable. Invoices show separate rates without averaging.'}</small></span></div></div>
+          <div className="tracking-passenger-pricing-grid nationality-pricing-grid">
             <div className="tracking-passenger-price-card adult">
-              <div className="tracking-passenger-price-head"><span className="ptc-badge">ADT</span><div><b>{th ? 'ราคาผู้ใหญ่' : 'Adult pricing'}</b><small>{Math.max(0, form.passengerCount - (form.childPassengerCount || 0))} {th ? 'ท่าน' : 'pax'}</small></div></div>
-              <MoneyField label={th ? 'ราคาขายรวมผู้ใหญ่ / ท่าน' : 'Adult total selling / pax'} value={form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ sellingPricePerPerson: v })}/>
-              <MoneyField label={th ? 'ราคาตั๋วผู้ใหญ่ / ท่าน' : 'Adult airfare / pax'} value={form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ ticketPricePerPerson: v })}/>
+              <div className="tracking-passenger-price-head"><span className="ptc-badge">ADT</span><div><b>{indianCount > 0 ? (th ? 'ผู้ใหญ่ไทย' : 'Thai adults') : (th ? 'ผู้ใหญ่ (ราคาปกติ)' : 'Adults (standard rate)')}</b><small>{mainAdultCount} {th ? 'ท่าน' : 'pax'}</small></div></div>
+              <MoneyField label={indianCount > 0 ? (th ? 'ราคาขายไทย / ท่าน' : 'Thai package / pax') : (th ? 'ราคาขายผู้ใหญ่ / ท่าน' : 'Adult package / pax')} value={form.sellingPricePerPerson} onChange={(v) => updatePricingFields({ sellingPricePerPerson: v })}/>
+              <MoneyField label={th ? 'ค่าตั๋วผู้ใหญ่ทุกสัญชาติ / ท่าน' : 'Adult airfare (all nationalities) / pax'} value={form.ticketPricePerPerson} onChange={(v) => updatePricingFields({ ticketPricePerPerson: v })}/>
               <MoneyField label={th ? 'ภาษีสนามบินผู้ใหญ่ / ท่าน' : 'Adult airport tax / pax'} value={form.airportTaxPerPerson} onChange={(v) => updatePricingFields({ airportTaxPerPerson: v })}/>
+              <div className="tracking-child-total-preview"><span>{th ? 'รวมกลุ่มนี้' : 'Group subtotal'}</span><strong>{formatTHB(mainAdultCount * form.sellingPricePerPerson, language)}</strong></div>
+            </div>
+            <div className="tracking-passenger-price-card indian">
+              <div className="tracking-passenger-price-head"><span className="ptc-badge">IN</span><div><b>{th ? 'ผู้ใหญ่อินเดีย' : 'Indian adults'}</b><small>{th ? 'กรอกเมื่อมีผู้เดินทางอินเดีย' : 'Only when applicable'}</small></div></div>
+              <label className="field"><span>{th ? 'จำนวนผู้ใหญ่อินเดีย' : 'Indian adult count'}</span><input type="number" min="0" max={Math.max(0, form.passengerCount - (form.childPassengerCount || 0))} step="1" value={indianCount} onChange={(e) => updatePricingFields({ indianAdultCount: Math.max(0, Math.min(form.passengerCount - (form.childPassengerCount || 0), Math.round(Number(e.target.value) || 0))) })}/></label>
+              {indianCount > 0 ? <><MoneyField label={th ? 'ราคาขายอินเดีย / ท่าน' : 'Indian package / pax'} value={indianRate(form)} onChange={(v) => updatePricingFields({ indianSellingPricePerPerson: v })}/><div className="tracking-child-total-preview"><span>{th ? 'รวมกลุ่มอินเดีย' : 'Indian subtotal'}</span><strong>{formatTHB(indianCount * indianRate(form), language)}</strong><small>{indianCount} × {formatTHB(indianRate(form), language)}</small></div>{!mixedRateReady(form) && <small className="nationality-price-warning">{th ? 'กรุณากรอกราคาขายตามสัญชาติให้ครบ' : 'Enter all applicable selling prices.'}</small>}</> : <div className="tracking-child-empty">{th ? 'หากไม่มี ให้คงจำนวน 0' : 'Leave at zero if not applicable.'}</div>}
             </div>
             <div className={`tracking-passenger-price-card child ${(form.childPassengerCount || 0) > 0 ? 'active' : ''}`}>
               <div className="tracking-passenger-price-head child-head"><span className="ptc-badge">CHD</span><div><b>{th ? 'ราคาสำหรับเด็ก' : 'Child pricing'}</b><small>{th ? 'ระบุจำนวนเด็กก่อน แล้วกรอกราคาที่ต่างจากผู้ใหญ่' : 'Set the child count, then enter the child-specific prices.'}</small></div><label><span>{th ? 'จำนวนเด็ก' : 'Children'}</span><input type="number" min="0" max={form.passengerCount} value={form.childPassengerCount || 0} onChange={(e) => { const count = Math.min(form.passengerCount, Math.max(0, Number(e.target.value))); updatePricingFields({ childPassengerCount: count, ...(count > 0 ? { childSellingPricePerPerson: form.childSellingPricePerPerson || form.sellingPricePerPerson, childTicketPricePerPerson: form.childTicketPricePerPerson || form.ticketPricePerPerson, childAirportTaxPerPerson: form.childAirportTaxPerPerson || form.airportTaxPerPerson } : {}) }); }}/></label></div>
@@ -2158,7 +2195,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
         <div className="automatic-totals-panel">
           <div className="automatic-totals-head"><div><b>{th ? 'สรุปราคาอัตโนมัติ' : 'Automatic price summary'}</b><span>{th ? 'รวมผู้เดินทางชุดแรกและผู้เดินทางที่เพิ่มทุกชุดโดยอัตโนมัติ' : 'Automatically combines the original group and every added-traveller batch.'}</span></div><strong>{formatTHB(combinedPackageTotal, language)}</strong></div>
           <div className="automatic-totals-grid">
-            <AutoTotal label={form.pricingMode === 'group_tl' ? (th ? `ราคาเฉลี่ยกรุ๊ป ${form.passengerCount} ท่าน (${originalBilledPax}+${form.tourLeaderCount} TL)` : `Averaged group price — ${form.passengerCount} travellers (${originalBilledPax}+${form.tourLeaderCount} TL)`) : (th ? `แพ็กเกจพื้นฐานรวม ${combinedPassengerCount} ท่าน` : `Base package — ${combinedPassengerCount} pax`)} formula={form.pricingMode === 'group_tl' ? `${formatTHB(form.sellingPricePerPerson, language)} × ${originalBilledPax}` : (addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม` : `${form.passengerCount} original + ${addedPassengerCount(form)} added`) : (form.childPassengerCount || 0) > 0 ? (th ? `${form.passengerCount - form.childPassengerCount} ADT + ${form.childPassengerCount} CHD` : `${form.passengerCount - form.childPassengerCount} ADT + ${form.childPassengerCount} CHD`) : `${formatTHB(form.sellingPricePerPerson, language)} × ${form.passengerCount}`)} value={combinedBasePackageTotal} language={language}/>
+            <AutoTotal label={form.pricingMode === 'group_tl' ? (th ? `ราคาเฉลี่ยกรุ๊ป ${form.passengerCount} ท่าน (${originalBilledPax}+${form.tourLeaderCount} TL)` : `Averaged group price — ${form.passengerCount} travellers (${originalBilledPax}+${form.tourLeaderCount} TL)`) : (th ? `แพ็กเกจพื้นฐานรวม ${combinedPassengerCount} ท่าน` : `Base package — ${combinedPassengerCount} pax`)} formula={form.pricingMode === 'group_tl' ? `${formatTHB(form.sellingPricePerPerson, language)} × ${originalBilledPax}` : (addedPassengerCount(form) > 0 ? (th ? `${form.passengerCount} ท่านเดิม + ${addedPassengerCount(form)} ท่านเพิ่ม` : `${form.passengerCount} original + ${addedPassengerCount(form)} added`) : indianCount > 0 ? `${mainAdultCount} TH × ${formatTHB(form.sellingPricePerPerson, language)} + ${indianCount} IN × ${formatTHB(indianRate(form), language)}${form.childPassengerCount > 0 ? ` + ${form.childPassengerCount} CHD` : ''}` : (form.childPassengerCount || 0) > 0 ? (th ? `${form.passengerCount - form.childPassengerCount} ADT + ${form.childPassengerCount} CHD` : `${form.passengerCount - form.childPassengerCount} ADT + ${form.childPassengerCount} CHD`) : `${formatTHB(form.sellingPricePerPerson, language)} × ${form.passengerCount}`)} value={combinedBasePackageTotal} language={language}/>
             {addedPassengerCount(form) > 0 && <AutoTotal label={th ? 'มูลค่าแพ็กเกจของผู้เดินทางเพิ่ม' : 'Added-traveller package value'} formula={`${addedPassengerCount(form)} ${th ? 'ท่าน' : 'pax'}`} value={addedPackageRevenue} language={language}/>} 
             {combinedBusinessUpgradeTotal > 0 && <AutoTotal label={form.pricingMode === 'group_tl' ? (th ? `Business Class ${form.businessUpgradeCount} จากผู้เดินทางจริง ${form.passengerCount} ท่าน` : `Business Class ${form.businessUpgradeCount} of ${form.passengerCount} actual travellers`) : (th ? 'ส่วนเพิ่ม Business Class รวมทุกชุด' : 'Business Class surcharge — all groups')} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedBusinessUpgradeTotal} language={language}/>} 
             {combinedSingleSupplementTotal > 0 && <AutoTotal label={th ? 'พักเดี่ยวรวมทุกชุด' : 'Single supplements — all groups'} formula={th ? 'ชุดแรก + ผู้เดินทางเพิ่ม' : 'Original + added groups'} value={combinedSingleSupplementTotal} language={language}/>} 
@@ -2328,7 +2365,7 @@ function TrackingEditor({ open, item, isNewRecord, settings, packages, users, cu
 
       <div className="modal-actions tracking-modal-actions">
         <div className="tracking-modal-draft-actions"><button className="ghost-button" onClick={saveDraftNow}><FileText/>{th ? 'บันทึก Draft' : 'Save draft'}</button><button className="ghost-button" onClick={requestClose}>{th ? 'ปิด' : 'Close'}</button></div>
-        <button className="primary-button" disabled={!form.opportunityName.trim() || !form.customerName.trim()} onClick={saveAndStay}><BadgeCheck/>{th ? 'บันทึก Customer Journey' : 'Save customer journey'}</button>
+        <button className="primary-button" disabled={!form.opportunityName.trim() || !form.customerName.trim() || !mixedRateReady(form)} onClick={saveAndStay}><BadgeCheck/>{th ? 'บันทึก Customer Journey' : 'Save customer journey'}</button>
       </div>
 
       {supplementalPanelOpen && <div className="journey-submodal-layer" role="dialog" aria-modal="true" aria-label={th ? 'เรียกเก็บเพิ่มเติม' : 'Additional charge'}>

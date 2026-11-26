@@ -5084,3 +5084,26 @@ textarea{min-height:74px}
 }
 
 /* tour required-place compact ui */
+
+/* Customer Journey: compact, responsive nationality pricing */
+.nationality-pricing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:12px}
+.nationality-pricing-grid .tracking-passenger-price-card{min-width:0;align-content:start;padding:14px;gap:10px}
+.nationality-pricing-grid .tracking-passenger-price-card.child{grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr))}
+.nationality-pricing-grid .child .tracking-passenger-price-head,.nationality-pricing-grid .child .tracking-child-empty{grid-column:1/-1}
+.nationality-pricing-grid .tracking-passenger-price-head{min-width:0;flex-wrap:wrap;align-items:center;gap:8px}
+.nationality-pricing-grid .tracking-passenger-price-head>div{flex:1;min-width:100px}
+.nationality-pricing-grid .tracking-passenger-price-head b{font-size:15px;line-height:1.4}
+.nationality-pricing-grid .tracking-passenger-price-head small{font-size:12px;line-height:1.45}
+.nationality-pricing-grid .field{min-width:0;margin:0}
+.nationality-pricing-grid .field>span{font-size:13px;line-height:1.4;white-space:normal}
+.nationality-pricing-grid input{width:100%;min-width:0;min-height:42px;font-size:15px;box-sizing:border-box}
+.nationality-pricing-grid .money-input>div{min-width:0;min-height:42px}
+.nationality-pricing-grid .money-input>div input{flex:1;width:0;min-width:0}
+.nationality-pricing-grid .money-input em{flex:none;font-size:12px}
+.nationality-pricing-grid .child-head label{flex:0 1 140px;margin-left:0;min-width:0}
+.nationality-pricing-grid .child-head label input{width:72px;min-width:0;max-width:100%}
+.nationality-pricing-grid .indian{background:#fffcf5;border-color:#dfd0ad}
+.nationality-pricing-grid .indian .ptc-badge{background:#f4e7cb;color:#765824}
+.nationality-pricing-grid .tracking-child-total-preview{min-width:0;overflow-wrap:anywhere}
+.nationality-price-warning{color:#9a461c;font-size:12px;line-height:1.5}
+@media(max-width:650px){.nationality-pricing-grid,.nationality-pricing-grid .tracking-passenger-price-card.child{grid-template-columns:minmax(0,1fr)}.nationality-pricing-grid .child-head label{flex:1 1 100%}}

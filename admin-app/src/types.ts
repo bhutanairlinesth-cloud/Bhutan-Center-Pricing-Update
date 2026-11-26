@@ -401,6 +401,9 @@ export interface CustomerTracking {
   /** How this customer will be billed: normal 2-stage, one-time full payment, or manual/custom. */
   paymentPlan: PaymentPlan;
   /** Total travellers includes children; these fields split the original group into ADT / CHD. */
+  /** Optional split of adult package selling prices; included in passengerCount. */
+  indianAdultCount?: number;
+  indianSellingPricePerPerson?: number;
   childPassengerCount: number;
   childSellingPricePerPerson: number;
   childTicketPricePerPerson: number;
